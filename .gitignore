@@ -54,3 +54,4 @@ coverage/
 # Generated
 *.pdf
 node_modules
+.vercel
