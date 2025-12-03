@@ -1,7 +1,8 @@
 // api/generate.ts
 import { z } from 'zod'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { getAIProvider } from './_lib/ai-provider.ts'
+import { getAIProvider } from './_lib/ai-provider.js'
+import { buildPdf } from './_lib/pdf.js'
 import type { GeneratePayload, Worksheet } from '../shared/types'
 
 const InputSchema = z.object({
@@ -53,9 +54,16 @@ export default async function handler(
   try {
     const ai = getAIProvider()
     const worksheet = await ai.generateWorksheet(input as GeneratePayload)
-
-    // Временная заглушка: PDF пока не сохраняем
-    const pdfBase64: string | null = null
+    let pdfBase64: string | null = null
+    try {
+      pdfBase64 = await buildPdf(worksheet, input as GeneratePayload)
+    } catch (e) {
+      return res.status(500).json({
+        status: 'error',
+        code: 'PDF_ERROR',
+        message: 'Ошибка генерации PDF.',
+      })
+    }
 
     return res.status(200).json({
       status: 'ok',

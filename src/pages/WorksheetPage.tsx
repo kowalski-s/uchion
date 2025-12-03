@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useSessionStore } from '../store/session'
 
@@ -6,20 +6,28 @@ export default function WorksheetPage() {
   const { sessionId } = useParams()
   const navigate = useNavigate()
   const session = useSessionStore(s => (sessionId ? s.getSession(sessionId) : undefined))
+  const [pdfError, setPdfError] = useState<string | null>(null)
 
   const downloadPdf = useMemo(() => {
     return () => {
-      if (!session || !session.pdfBase64) return
-      const bytes = Uint8Array.from(atob(session.pdfBase64), c => c.charCodeAt(0))
-      const blob = new Blob([bytes], { type: 'application/pdf' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = 'worksheet.pdf'
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+      if (!session || !session.pdfBase64) {
+        setPdfError('PDF ещё не готов. Обновите страницу или сгенерируйте лист заново.')
+        return
+      }
+      try {
+        const bytes = Uint8Array.from(atob(session.pdfBase64), c => c.charCodeAt(0))
+        const blob = new Blob([bytes], { type: 'application/pdf' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = 'worksheet.pdf'
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+      } catch {
+        setPdfError('Не удалось подготовить PDF. Попробуйте снова.')
+      }
     }
   }, [session])
 
@@ -68,6 +76,9 @@ export default function WorksheetPage() {
           </aside>
           <main className="col-span-12 lg:col-span-9">
             <div className="mx-auto max-w-2xl">
+              {pdfError && (
+                <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-red-700">{pdfError}</div>
+              )}
               <section id="summary" className="mb-10 rounded-lg bg-white p-8 shadow-sm">
                 <h2 className="mb-4 text-xl font-semibold">Краткий конспект</h2>
                 <p className="leading-relaxed">{session.worksheet.summary}</p>

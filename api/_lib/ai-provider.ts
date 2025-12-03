@@ -1,7 +1,7 @@
 import type { Worksheet } from '../../shared/types'
 import { z } from 'zod'
 import OpenAI from 'openai'
-import { generatePrompt } from './prompt.ts'
+import { generatePrompt } from './prompt.js'
 import type { GeneratePayload } from '../../shared/types'
 
 export type GenerateParams = {
