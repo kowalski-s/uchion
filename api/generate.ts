@@ -1,55 +1,81 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node'
+// api/generate.ts
 import { z } from 'zod'
-import type { Worksheet, GenerateResponse } from '../shared/types'
-import type { GeneratePayload } from '../shared/types'
-import { getAIProvider } from './_lib/ai-provider'
-import { generatePrompt } from './_lib/prompt'
-import { buildPdf } from './_lib/pdf'
+import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { getAIProvider } from './_lib/ai-provider.ts'
+import type { GeneratePayload, Worksheet } from '../shared/types'
 
 const InputSchema = z.object({
   subject: z.enum(['математика', 'русский']),
   grade: z.number().int().min(1).max(4),
-  topic: z.string().min(3).max(200)
+  topic: z.string().min(3).max(200),
 })
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+type Input = z.infer<typeof InputSchema>
+
+type OkResponse = {
+  status: 'ok'
+  data: Worksheet & { pdfBase64: string | null }
+}
+
+type ErrorResponse = {
+  status: 'error'
+  code:
+    | 'VALIDATION_ERROR'
+    | 'AI_ERROR'
+    | 'PDF_ERROR'
+    | 'SERVER_ERROR'
+  message: string
+}
+
+export default async function handler(
+  req: VercelRequest,
+  res: VercelResponse
+) {
   if (req.method !== 'POST') {
-    res.status(405).json({ status: 'error', message: 'Метод не поддерживается', code: 'SERVER_ERROR' })
-    return
+    return res.status(405).json({
+      status: 'error',
+      code: 'SERVER_ERROR',
+      message: 'Метод не поддерживается.',
+    })
   }
 
+  const parse = InputSchema.safeParse(req.body)
+  if (!parse.success) {
+    return res.status(400).json({
+      status: 'error',
+      code: 'VALIDATION_ERROR',
+      message: 'Проверьте введённые данные.',
+    })
+  }
+
+  const input: Input = parse.data
+
   try {
-    let payload: GeneratePayload
-    try {
-      payload = InputSchema.parse(req.body) as GeneratePayload
-    } catch {
-      res.status(400).json({ status: 'error', message: 'Ошибка валидации входных данных', code: 'VALIDATION_ERROR' })
-      return
-    }
-    const prompt = generatePrompt(payload)
+    const ai = getAIProvider()
+    const worksheet = await ai.generateWorksheet(input as GeneratePayload)
 
-    try {
-      const provider = getAIProvider()
-      const worksheet: Worksheet = await provider.generateWorksheet(payload)
-      if (!worksheet || typeof worksheet.summary !== 'string' || !Array.isArray(worksheet.tasks) || !Array.isArray(worksheet.questions)) {
-        res.status(500).json({ status: 'error', message: 'Некорректный ответ модели', code: 'AI_ERROR' })
-        return
-      }
+    // Временная заглушка: PDF пока не сохраняем
+    const pdfBase64: string | null = null
 
-      try {
-        const pdfBase64 = await buildPdf(worksheet, payload)
-        const ok: GenerateResponse = { status: 'ok', data: { ...worksheet, pdfBase64 } }
-        res.status(200).json(ok)
-        return
-      } catch {
-        res.status(500).json({ status: 'error', message: 'Ошибка генерации PDF', code: 'PDF_ERROR' })
-        return
-      }
-    } catch {
-      res.status(500).json({ status: 'error', message: 'Ошибка вызова ИИ', code: 'AI_ERROR' })
-      return
-    }
-  } catch {
-    res.status(500).json({ status: 'error', message: 'Внутренняя ошибка сервера', code: 'SERVER_ERROR' })
+    return res.status(200).json({
+      status: 'ok',
+      data: {
+        ...worksheet,
+        pdfBase64,
+      },
+    })
+  } catch (err: any) {
+    const code =
+      err?.message === 'AI_ERROR'
+        ? 'AI_ERROR'
+        : err?.message === 'PDF_ERROR'
+        ? 'PDF_ERROR'
+        : 'SERVER_ERROR'
+
+    return res.status(500).json({
+      status: 'error',
+      code,
+      message: 'Не удалось сгенерировать лист. Попробуйте ещё раз.',
+    })
   }
 }
