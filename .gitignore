@@ -1,0 +1,56 @@
+
+---
+
+# 📄 **.gitignore (полностью готовый)**
+
+```gitignore
+# Node
+node_modules/
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+pnpm-debug.log
+
+# Build
+dist/
+build/
+out/
+.vercel/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Logs
+logs/
+*.log
+*.log.*
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# System
+.DS_Store
+Thumbs.db
+
+# TypeScript
+*.tsbuildinfo
+
+# Testing
+coverage/
+
+# Local cache
+.cache/
+.parcel-cache/
+
+# Generated
+*.pdf
+node_modules
