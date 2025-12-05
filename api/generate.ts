@@ -15,7 +15,7 @@ type Input = z.infer<typeof InputSchema>
 
 type OkResponse = {
   status: 'ok'
-  data: Worksheet & { pdfBase64: string | null }
+  data: { worksheet: Worksheet }
 }
 
 type ErrorResponse = {
@@ -64,13 +64,16 @@ export default async function handler(
         message: 'Ошибка генерации PDF.',
       })
     }
-
+    const id = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : String(Date.now())
+    const finalWorksheet: Worksheet = {
+      ...worksheet,
+      id,
+      grade: `${input.grade} класс`,
+      pdfBase64: pdfBase64 ?? ''
+    }
     return res.status(200).json({
       status: 'ok',
-      data: {
-        ...worksheet,
-        pdfBase64,
-      },
+      data: { worksheet: finalWorksheet },
     })
   } catch (err: any) {
     const code =

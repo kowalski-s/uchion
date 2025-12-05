@@ -26,14 +26,11 @@ export default function GeneratePage() {
         return
       }
       const sessionId = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : String(Date.now())
+      const worksheet = res.data.worksheet
       saveSession(sessionId, {
         payload: { subject: form.getValues('subject'), grade: form.getValues('grade'), topic: form.getValues('topic') },
-        worksheet: {
-          summary: res.data.summary,
-          tasks: res.data.tasks,
-          questions: res.data.questions
-        },
-        pdfBase64: res.data.pdfBase64
+        worksheet,
+        pdfBase64: worksheet.pdfBase64
       })
       setCurrent(sessionId)
       navigate('/worksheet/' + sessionId)
@@ -49,69 +46,114 @@ export default function GeneratePage() {
   }
 
   return (
-    <div className="min-h-screen bg-white">
-      <header className="border-b">
-        <div className="mx-auto max-w-4xl px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="text-xl font-semibold">УчиОн</div>
+    <div className="min-h-screen bg-gradient-to-b from-white via-purple-50 to-white font-sans text-slate-900 relative overflow-hidden">
+      {/* Decorative background element */}
+      <div className="absolute top-[-20%] left-[50%] w-[1000px] h-[1000px] -translate-x-1/2 rounded-full bg-gradient-to-b from-purple-100/40 to-transparent blur-3xl pointer-events-none" />
+
+      <header className="relative z-10 pt-6 pb-4">
+        <div className="mx-auto max-w-6xl px-6">
+          <div className="flex items-center text-2xl font-bold tracking-tight">
+            <span className="text-slate-900">Учи</span>
+            <span className="text-[#8C52FF] drop-shadow-[0_0_12px_rgba(140,82,255,0.4)]">Он</span>
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-4xl px-4 py-10">
-        <div className="mb-8">
-          <h1 className="text-2xl font-semibold">Сгенерируйте рабочий лист по теме урока</h1>
-          <p className="mt-2 text-gray-600">Подходит для 1–4 классов. Математика и русский язык.</p>
-        </div>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
-            <div>
-              <label className="mb-2 block text-sm font-medium">Предмет</label>
-              <select
-                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2"
-                {...form.register('subject')}
-              >
-                <option value="математика">Математика</option>
-                <option value="русский">Русский язык</option>
-              </select>
+
+      <main className="relative z-10 mx-auto flex max-w-3xl flex-col items-center px-4 py-12 text-center">
+        <h1 className="mb-3 text-4xl font-extrabold tracking-tight text-slate-900 sm:text-5xl">
+          Генератор для учителей будущего
+        </h1>
+        <h2 className="mb-10 text-xl text-slate-500 font-medium">
+          Создавайте рабочие листы для уроков за секунды
+        </h2>
+
+        <div className="w-full max-w-2xl rounded-[2rem] bg-white p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] ring-1 ring-purple-100">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-6">
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 text-left">
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-semibold text-slate-700">Предмет</label>
+                <div className="relative">
+                  <select
+                    className="h-12 w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-base text-slate-900 outline-none transition-all focus:border-[#8C52FF] focus:bg-white focus:ring-2 focus:ring-[#8C52FF]/20"
+                    {...form.register('subject')}
+                  >
+                    <option value="математика">Математика</option>
+                    <option value="русский">Русский язык</option>
+                  </select>
+                  <div className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400">
+                    <svg width="12" height="8" viewBox="0 0 12 8" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M1 1.5L6 6.5L11 1.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-semibold text-slate-700">Класс</label>
+                <div className="relative">
+                  <select
+                    className="h-12 w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-base text-slate-900 outline-none transition-all focus:border-[#8C52FF] focus:bg-white focus:ring-2 focus:ring-[#8C52FF]/20"
+                    {...form.register('grade', { valueAsNumber: true })}
+                  >
+                    <option value={1}>1 класс</option>
+                    <option value={2}>2 класс</option>
+                    <option value={3}>3 класс</option>
+                    <option value={4}>4 класс</option>
+                  </select>
+                  <div className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400">
+                    <svg width="12" height="8" viewBox="0 0 12 8" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M1 1.5L6 6.5L11 1.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div>
-              <label className="mb-2 block text-sm font-medium">Класс</label>
-              <select
-                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2"
-                {...form.register('grade', { valueAsNumber: true })}
-              >
-                <option value={1}>1 класс</option>
-                <option value={2}>2 класс</option>
-                <option value={3}>3 класс</option>
-                <option value={4}>4 класс</option>
-              </select>
-            </div>
-            <div className="sm:col-span-3">
-              <label className="mb-2 block text-sm font-medium">Тема урока</label>
+
+            <div className="flex flex-col gap-2 text-left">
+              <label className="text-sm font-semibold text-slate-700">Тема урока</label>
               <input
                 type="text"
-                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2"
+                className="h-14 w-full rounded-xl border border-slate-200 bg-white px-5 text-lg text-slate-900 placeholder:text-slate-400 outline-none transition-all focus:border-[#8C52FF] focus:ring-4 focus:ring-[#8C52FF]/10"
                 placeholder="Например: Сложение двузначных чисел"
                 {...form.register('topic')}
               />
               {form.formState.errors.topic && (
-                <p className="mt-2 text-sm text-red-600">{form.formState.errors.topic.message}</p>
+                <p className="text-sm text-red-500">{form.formState.errors.topic.message}</p>
               )}
             </div>
-          </div>
-          {errorText && <div className="rounded-md border border-red-200 bg-red-50 p-3 text-red-700">{errorText}</div>}
-          <button
-            type="submit"
-            disabled={mutation.isPending}
-            className="inline-flex h-11 items-center justify-center rounded-md bg-blue-600 px-6 text-white hover:bg-blue-700 disabled:opacity-50"
-          >
-            {mutation.isPending ? 'Генерируем…' : 'Сгенерировать рабочий лист'}
-          </button>
-        </form>
+
+            {errorText && (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                {errorText}
+              </div>
+            )}
+
+            <div className="mt-2 flex justify-center">
+              <button
+                type="submit"
+                disabled={mutation.isPending}
+                className="group relative inline-flex h-14 items-center justify-center overflow-hidden rounded-full bg-gradient-to-r from-[#8C52FF] to-[#A16BFF] px-10 text-lg font-bold text-white shadow-lg shadow-purple-500/30 transition-all hover:scale-[1.02] hover:shadow-purple-500/40 disabled:opacity-70 disabled:hover:scale-100"
+              >
+                {mutation.isPending ? (
+                  <span className="flex items-center gap-2">
+                    <svg className="h-5 w-5 animate-spin text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Генерируем...
+                  </span>
+                ) : (
+                  'Создать рабочий лист'
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <p className="mt-8 max-w-md text-center text-sm text-slate-400">
+          Этот сервис помогает экономить время учителю. Проверяйте материалы перед печатью.
+        </p>
       </main>
-      <footer className="mx-auto max-w-4xl px-4 py-12 text-sm text-gray-500">
-        <p>Этот сервис генерирует материалы автоматически. Проверяйте задания перед печатью.</p>
-      </footer>
     </div>
   )
 }

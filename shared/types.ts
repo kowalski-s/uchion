@@ -6,15 +6,64 @@ export type GeneratePayload = {
   topic: string
 }
 
-export type Task = {
-  type: string
+export interface ConspectStep {
+  title: string
   text: string
 }
 
-export type Worksheet = {
-  summary: string
-  tasks: Task[]
-  questions: string[]
+export interface Conspect {
+  lessonTitle: string
+  goal: string
+  introduction: string
+  steps: ConspectStep[]
+  miniPractice: string
+  analysisExample: string
+  miniConclusion: string
+}
+
+export type BloomLevel = 1 | 2 | 3 | 4 | 5
+
+export interface BloomTask {
+  level: BloomLevel
+  title: string
+  task: string
+}
+
+export type TestQuestionType = 'single' | 'multi_or_task' | 'open'
+
+export interface SingleChoiceQuestion {
+  type: 'single'
+  question: string
+  options: string[]
+  answer: number
+}
+
+export interface MultiOrTaskQuestion {
+  type: 'multi_or_task'
+  question: string
+  options: string[]
+  answers: number[]
+}
+
+export interface OpenQuestion {
+  type: 'open'
+  question: string
+}
+
+export type TestQuestion =
+  | SingleChoiceQuestion
+  | MultiOrTaskQuestion
+  | OpenQuestion
+
+export interface Worksheet {
+  id: string
+  subject: Subject
+  grade: string
+  topic: string
+  conspect: Conspect
+  bloomTasks: BloomTask[]
+  test: TestQuestion[]
+  pdfBase64: string
 }
 
 export type ApiErrorCode =
@@ -26,7 +75,7 @@ export type ApiErrorCode =
 
 export type GenerateResponseOk = {
   status: 'ok'
-  data: Worksheet & { pdfBase64: string | null }
+  data: { worksheet: Worksheet }
 }
 
 export type GenerateResponseError = {

@@ -53,8 +53,8 @@ export default function WorksheetPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-6">
               <div className="text-xl font-semibold">УчиОн</div>
-              <div className="text-gray-700">{session.payload.topic}</div>
-              <div className="text-sm text-gray-500">{session.payload.subject}, {session.payload.grade} класс</div>
+              <div className="text-gray-700">{session.worksheet.topic}</div>
+              <div className="text-sm text-gray-500">{session.worksheet.subject}, {session.worksheet.grade}</div>
             </div>
             <button
               onClick={downloadPdf}
@@ -69,9 +69,9 @@ export default function WorksheetPage() {
         <div className="grid grid-cols-12 gap-6 py-8">
           <aside className="col-span-12 lg:col-span-3">
             <nav className="sticky top-6 space-y-2">
-              <a href="#summary" className="block rounded-md bg-gray-100 px-3 py-2 hover:bg-gray-200">Чтение и конспект</a>
-              <a href="#tasks" className="block rounded-md bg-gray-100 px-3 py-2 hover:bg-gray-200">Задания</a>
-              <a href="#questions" className="block rounded-md bg-gray-100 px-3 py-2 hover:bg-gray-200">Вопросы для закрепления</a>
+              <a href="#conspect" className="block rounded-md bg-gray-100 px-3 py-2 hover:bg-gray-200">Конспект</a>
+              <a href="#bloom" className="block rounded-md bg-gray-100 px-3 py-2 hover:bg-gray-200">Задания по Блуму</a>
+              <a href="#test" className="block rounded-md bg-gray-100 px-3 py-2 hover:bg-gray-200">Мини‑тест</a>
             </nav>
           </aside>
           <main className="col-span-12 lg:col-span-9">
@@ -79,28 +79,69 @@ export default function WorksheetPage() {
               {pdfError && (
                 <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-red-700">{pdfError}</div>
               )}
-              <section id="summary" className="mb-10 rounded-lg bg-white p-8 shadow-sm">
-                <h2 className="mb-4 text-xl font-semibold">Краткий конспект</h2>
-                <p className="leading-relaxed">{session.worksheet.summary}</p>
+              <section id="conspect" className="mb-10 rounded-lg bg-white p-8 shadow-sm">
+                <h2 className="mb-4 text-xl font-semibold">Конспект</h2>
+                <div className="space-y-4">
+                  <div>
+                    <div className="text-sm text-gray-500">Цель урока</div>
+                    <p className="leading-relaxed">{session.worksheet.conspect.goal}</p>
+                  </div>
+                  <div>
+                    <div className="text-sm text-gray-500">Введение</div>
+                    <p className="leading-relaxed">{session.worksheet.conspect.introduction}</p>
+                  </div>
+                  <div>
+                    <div className="text-sm text-gray-500">Шаги объяснения</div>
+                    <ul className="list-disc space-y-2 pl-6">
+                      {session.worksheet.conspect.steps.map((s, i) => (
+                        <li key={i} className="leading-relaxed"><span className="font-medium">{s.title}:</span> {s.text}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div>
+                    <div className="text-sm text-gray-500">Мини‑практика</div>
+                    <p className="leading-relaxed">{session.worksheet.conspect.miniPractice}</p>
+                  </div>
+                  <div>
+                    <div className="text-sm text-gray-500">Пример с ошибкой</div>
+                    <p className="leading-relaxed">{session.worksheet.conspect.analysisExample}</p>
+                  </div>
+                  <div>
+                    <div className="text-sm text-gray-500">Мини‑вывод</div>
+                    <p className="leading-relaxed">{session.worksheet.conspect.miniConclusion}</p>
+                  </div>
+                </div>
               </section>
-              <section id="tasks" className="mb-10 rounded-lg bg-white p-8 shadow-sm">
-                <h2 className="mb-4 text-xl font-semibold">Задания</h2>
+              <section id="bloom" className="mb-10 rounded-lg bg-white p-8 shadow-sm">
+                <h2 className="mb-4 text-xl font-semibold">5 заданий по методу Блума</h2>
                 <ul className="space-y-4">
-                  {session.worksheet.tasks.map((t, i) => (
+                  {session.worksheet.bloomTasks.map((t, i) => (
                     <li key={i} className="rounded-md border border-gray-200 p-4">
-                      <div className="mb-1 text-sm text-gray-500">{t.type}</div>
-                      <div className="leading-relaxed">{t.text}</div>
+                      <div className="mb-1 text-sm text-gray-500">Уровень {t.level} — {t.title}</div>
+                      <div className="leading-relaxed">{t.task}</div>
                     </li>
                   ))}
                 </ul>
               </section>
-              <section id="questions" className="mb-10 rounded-lg bg-white p-8 shadow-sm">
-                <h2 className="mb-4 text-xl font-semibold">Вопросы для закрепления</h2>
-                <ul className="list-disc space-y-2 pl-6">
-                  {session.worksheet.questions.map((q, i) => (
-                    <li key={i} className="leading-relaxed">{q}</li>
+              <section id="test" className="mb-10 rounded-lg bg-white p-8 shadow-sm">
+                <h2 className="mb-4 text-xl font-semibold">Мини‑тест</h2>
+                <ol className="space-y-4">
+                  {session.worksheet.test.map((q, i) => (
+                    <li key={i} className="rounded-md border border-gray-200 p-4">
+                      <div className="font-medium">{q.question}</div>
+                      {q.type !== 'open' && q.options && q.options.length > 0 && (
+                        <ul className="mt-2 space-y-1">
+                          {q.options.map((opt, idx) => (
+                            <li key={idx} className="text-gray-700">{String.fromCharCode(1040 + idx)}. {opt}</li>
+                          ))}
+                        </ul>
+                      )}
+                      {q.type === 'open' && (
+                        <div className="mt-2 text-gray-500">Ответ: ________</div>
+                      )}
+                    </li>
                   ))}
-                </ul>
+                </ol>
               </section>
               <div className="flex items-center gap-3">
                 <Link to="/" className="text-blue-700 hover:underline">Сгенерировать новый лист</Link>
