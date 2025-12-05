@@ -76,6 +76,8 @@ export default async function handler(
       data: { worksheet: finalWorksheet },
     })
   } catch (err: any) {
+    console.error('[API] Generate error:', err) // Log full error for Vercel logs
+
     const code =
       err?.message === 'AI_ERROR'
         ? 'AI_ERROR'
