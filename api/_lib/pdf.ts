@@ -1,5 +1,5 @@
 import PDFDocument from 'pdfkit'
-import type { Worksheet, GeneratePayload, TestQuestion } from '../../shared/types'
+import type { Worksheet, GeneratePayload } from '../../shared/types'
 import path from 'path'
 import { fileURLToPath } from 'url'
 
@@ -21,73 +21,58 @@ export async function buildPdf(worksheet: Worksheet, meta: GeneratePayload): Pro
       doc.registerFont('Body', fontPath)
     } catch (e) {}
 
-    doc.font('Body').fontSize(18).text(worksheet.conspect.lessonTitle || meta.topic, { align: 'center' })
-    doc.moveDown()
-    doc.font('Body').fontSize(12).text(`Предмет: ${worksheet.subject}. Класс: ${worksheet.grade}.`)
+    // Title
+    doc.font('Body').fontSize(20).text(meta.topic, { align: 'center' })
+    doc.moveDown(0.5)
+    doc.font('Body').fontSize(12).text(`${worksheet.subject}, ${worksheet.grade}`, { align: 'center', color: 'grey' })
+    doc.moveDown(1.5)
+
+    // Goal
+    doc.font('Body').fontSize(12).text('Цель урока: ', { continued: true, stroke: true })
+    doc.font('Body').fontSize(12).text(worksheet.goal)
     doc.moveDown()
 
-    doc.font('Body').fontSize(14).text('Цель урока')
+    // Summary (Conspect)
+    doc.font('Body').fontSize(16).text('Конспект урока')
     doc.moveDown(0.5)
-    doc.font('Body').fontSize(12).text(worksheet.conspect.goal, { align: 'left' })
-    doc.moveDown()
+    doc.font('Body').fontSize(12).text(worksheet.summary, { align: 'justify', lineGap: 2 })
+    doc.moveDown(1.5)
 
-    doc.font('Body').fontSize(14).text('Введение')
+    // Examples
+    doc.font('Body').fontSize(16).text('Примеры')
     doc.moveDown(0.5)
-    doc.font('Body').fontSize(12).text(worksheet.conspect.introduction, { align: 'left' })
-    doc.moveDown()
-
-    doc.font('Body').fontSize(14).text('Шаги объяснения')
-    doc.moveDown(0.5)
-    worksheet.conspect.steps.forEach((step, idx) => {
-      doc.font('Body').fontSize(12).text(`Шаг ${idx + 1}. ${step.title}: ${step.text}`)
-      doc.moveDown(0.5)
+    worksheet.examples.forEach(ex => {
+      doc.font('Body').fontSize(12).text(`• ${ex}`, { indent: 10, lineGap: 2 })
     })
-    doc.moveDown()
+    doc.moveDown(1.5)
 
-    doc.font('Body').fontSize(14).text('Мини‑практика')
+    // Tasks
+    doc.font('Body').fontSize(16).text('Задания')
     doc.moveDown(0.5)
-    doc.font('Body').fontSize(12).text(worksheet.conspect.miniPractice)
-    doc.moveDown()
-
-    doc.font('Body').fontSize(14).text('Пример с ошибкой')
-    doc.moveDown(0.5)
-    doc.font('Body').fontSize(12).text(worksheet.conspect.analysisExample)
-    doc.moveDown()
-
-    doc.font('Body').fontSize(14).text('Мини‑вывод')
-    doc.moveDown(0.5)
-    doc.font('Body').fontSize(12).text(worksheet.conspect.miniConclusion)
-    doc.moveDown()
-
-    doc.font('Body').fontSize(14).text('Задания по методу Блума')
-    doc.moveDown(0.5)
-    worksheet.bloomTasks.forEach((t, i) => {
-      doc.font('Body').fontSize(12).text(`${i + 1}. [${t.title}] ${t.task}`)
-      doc.moveDown(0.5)
+    worksheet.tasks.forEach((task, i) => {
+      doc.font('Body').fontSize(12).text(`${i + 1}. ${task}`, { lineGap: 5 })
     })
-    doc.moveDown()
+    doc.moveDown(1.5)
 
-    doc.font('Body').fontSize(14).text('Мини‑тест')
+    // Test
+    doc.font('Body').fontSize(16).text('Мини-тест')
     doc.moveDown(0.5)
-    const letters = ['А', 'Б', 'В', 'Г', 'Д', 'Е']
+    const letters = ['A', 'B', 'C', 'D', 'E', 'F']
+    
     worksheet.test.forEach((q, i) => {
-      if (q.type === 'single') {
-        doc.font('Body').fontSize(12).text(`${i + 1}. ${q.question}`)
+      doc.font('Body').fontSize(12).text(`${i + 1}. ${q.question}`)
+      
+      if (q.options && q.options.length > 0) {
+        doc.moveDown(0.3)
+        // Grid layout simulation or just list
         q.options.forEach((opt, idx) => {
-          doc.font('Body').fontSize(12).text(`   ${letters[idx]}. ${opt}`)
+          doc.font('Body').fontSize(11).text(`   ${letters[idx]}) ${opt}`, { indent: 15 })
         })
-      } else if (q.type === 'multi_or_task') {
-        doc.font('Body').fontSize(12).text(`${i + 1}. ${q.question}`)
-        if (q.options && q.options.length > 0) {
-          q.options.forEach((opt, idx) => {
-            doc.font('Body').fontSize(12).text(`   ${letters[idx]}. ${opt}`)
-          })
-        }
       } else {
-        doc.font('Body').fontSize(12).text(`${i + 1}. ${q.question}`)
-        doc.font('Body').fontSize(12).text('   Ответ: ____________')
+        doc.moveDown(0.3)
+        doc.font('Body').fontSize(11).text('   Ответ: _______________', { indent: 15 })
       }
-      doc.moveDown(0.5)
+      doc.moveDown(1)
     })
 
     doc.end()

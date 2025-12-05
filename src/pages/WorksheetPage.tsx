@@ -47,105 +47,137 @@ export default function WorksheetPage() {
   }
 
   return (
-    <div className="min-h-screen">
-      <header className="border-b">
-        <div className="mx-auto max-w-6xl px-6 py-4">
+    <div className="min-h-screen bg-gray-50">
+      <header className="border-b bg-white shadow-sm">
+        <div className="mx-auto max-w-7xl px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-6">
-              <div className="text-xl font-semibold">УчиОн</div>
-              <div className="text-gray-700">{session.worksheet.topic}</div>
-              <div className="text-sm text-gray-500">{session.worksheet.subject}, {session.worksheet.grade}</div>
+              <Link to="/" className="text-xl font-bold text-indigo-600">УчиОн</Link>
+              <div>
+                <div className="text-lg font-medium text-gray-900">{session.worksheet.topic}</div>
+                <div className="text-sm text-gray-500">{session.worksheet.subject}, {session.worksheet.grade}</div>
+              </div>
             </div>
             <button
               onClick={downloadPdf}
-              className="inline-flex h-10 items-center justify-center rounded-md bg-blue-600 px-4 text-white hover:bg-blue-700"
+              className="group flex items-center gap-2 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 px-6 py-2.5 font-medium text-white shadow-md transition-all hover:shadow-lg hover:brightness-110 active:scale-95"
             >
+              <svg className="h-5 w-5 opacity-80 group-hover:opacity-100" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
               Скачать PDF
             </button>
           </div>
         </div>
       </header>
-      <div className="mx-auto max-w-6xl px-6">
-        <div className="grid grid-cols-12 gap-6 py-8">
+
+      <div className="mx-auto max-w-7xl px-6 py-10">
+        <div className="grid grid-cols-12 gap-8">
+          {/* LEFT SIDEBAR */}
           <aside className="col-span-12 lg:col-span-3">
-            <nav className="sticky top-6 space-y-2">
-              <a href="#conspect" className="block rounded-md bg-gray-100 px-3 py-2 hover:bg-gray-200">Конспект</a>
-              <a href="#bloom" className="block rounded-md bg-gray-100 px-3 py-2 hover:bg-gray-200">Задания по Блуму</a>
-              <a href="#test" className="block rounded-md bg-gray-100 px-3 py-2 hover:bg-gray-200">Мини‑тест</a>
+            <nav className="sticky top-6 space-y-1 rounded-xl bg-white p-4 shadow-sm">
+              <a href="#conspect" className="block rounded-lg px-4 py-3 font-medium text-gray-600 hover:bg-gray-50 hover:text-indigo-600 transition-colors">
+                📖 Конспект
+              </a>
+              <a href="#tasks" className="block rounded-lg px-4 py-3 font-medium text-gray-600 hover:bg-gray-50 hover:text-indigo-600 transition-colors">
+                ✏️ Задания
+              </a>
+              <a href="#test" className="block rounded-lg px-4 py-3 font-medium text-gray-600 hover:bg-gray-50 hover:text-indigo-600 transition-colors">
+                📝 Мини‑тест
+              </a>
             </nav>
           </aside>
+
+          {/* MAIN CONTENT */}
           <main className="col-span-12 lg:col-span-9">
-            <div className="mx-auto max-w-2xl">
+            <div className="mx-auto max-w-[820px]">
               {pdfError && (
-                <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-red-700">{pdfError}</div>
+                <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-red-700 shadow-sm">{pdfError}</div>
               )}
-              <section id="conspect" className="mb-10 rounded-lg bg-white p-8 shadow-sm">
-                <h2 className="mb-4 text-xl font-semibold">Конспект</h2>
-                <div className="space-y-4">
-                  <div>
-                    <div className="text-sm text-gray-500">Цель урока</div>
-                    <p className="leading-relaxed">{session.worksheet.conspect.goal}</p>
+
+              {/* CONSPECT & EXAMPLES */}
+              <section id="conspect" className="mb-8 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-200/50">
+                <div className="border-b border-gray-100 bg-gray-50/50 px-8 py-6">
+                  <h2 className="text-2xl font-bold text-gray-900">Конспект урока</h2>
+                  <p className="mt-2 text-lg text-gray-600 leading-relaxed">
+                    <span className="font-semibold text-indigo-600">Цель:</span> {session.worksheet.goal}
+                  </p>
+                </div>
+                
+                <div className="p-8">
+                  <div className="prose prose-lg max-w-none text-gray-800">
+                    <div className="whitespace-pre-wrap leading-loose">
+                      {session.worksheet.summary}
+                    </div>
                   </div>
-                  <div>
-                    <div className="text-sm text-gray-500">Введение</div>
-                    <p className="leading-relaxed">{session.worksheet.conspect.introduction}</p>
-                  </div>
-                  <div>
-                    <div className="text-sm text-gray-500">Шаги объяснения</div>
-                    <ul className="list-disc space-y-2 pl-6">
-                      {session.worksheet.conspect.steps.map((s, i) => (
-                        <li key={i} className="leading-relaxed"><span className="font-medium">{s.title}:</span> {s.text}</li>
+
+                  {/* EXAMPLES BLOCK */}
+                  <div className="mt-10 rounded-xl bg-indigo-50/60 p-6 ring-1 ring-indigo-100">
+                    <h3 className="mb-4 flex items-center gap-2 text-lg font-bold text-indigo-900">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-200 text-xs">💡</span>
+                      Примеры
+                    </h3>
+                    <ul className="space-y-3">
+                      {session.worksheet.examples.map((ex, i) => (
+                        <li key={i} className="flex gap-3 text-indigo-900">
+                          <span className="font-bold text-indigo-400">•</span>
+                          <span className="leading-relaxed">{ex}</span>
+                        </li>
                       ))}
                     </ul>
                   </div>
-                  <div>
-                    <div className="text-sm text-gray-500">Мини‑практика</div>
-                    <p className="leading-relaxed">{session.worksheet.conspect.miniPractice}</p>
-                  </div>
-                  <div>
-                    <div className="text-sm text-gray-500">Пример с ошибкой</div>
-                    <p className="leading-relaxed">{session.worksheet.conspect.analysisExample}</p>
-                  </div>
-                  <div>
-                    <div className="text-sm text-gray-500">Мини‑вывод</div>
-                    <p className="leading-relaxed">{session.worksheet.conspect.miniConclusion}</p>
-                  </div>
                 </div>
               </section>
-              <section id="bloom" className="mb-10 rounded-lg bg-white p-8 shadow-sm">
-                <h2 className="mb-4 text-xl font-semibold">5 заданий по методу Блума</h2>
-                <ul className="space-y-4">
-                  {session.worksheet.bloomTasks.map((t, i) => (
-                    <li key={i} className="rounded-md border border-gray-200 p-4">
-                      <div className="mb-1 text-sm text-gray-500">Уровень {t.level} — {t.title}</div>
-                      <div className="leading-relaxed">{t.task}</div>
-                    </li>
-                  ))}
-                </ul>
+
+              {/* TASKS */}
+              <section id="tasks" className="mb-8 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-200/50">
+                <div className="border-b border-gray-100 bg-gray-50/50 px-8 py-6">
+                  <h2 className="text-2xl font-bold text-gray-900">Задания</h2>
+                </div>
+                <div className="p-8">
+                  <ul className="space-y-6">
+                    {session.worksheet.tasks.map((task, i) => (
+                      <li key={i} className="relative pl-4">
+                        <div className="absolute left-0 top-2 h-2 w-2 rounded-full bg-indigo-400"></div>
+                        <div className="text-lg text-gray-800 leading-relaxed">{task}</div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </section>
-              <section id="test" className="mb-10 rounded-lg bg-white p-8 shadow-sm">
-                <h2 className="mb-4 text-xl font-semibold">Мини‑тест</h2>
-                <ol className="space-y-4">
-                  {session.worksheet.test.map((q, i) => (
-                    <li key={i} className="rounded-md border border-gray-200 p-4">
-                      <div className="font-medium">{q.question}</div>
-                      {q.type !== 'open' && q.options && q.options.length > 0 && (
-                        <ul className="mt-2 space-y-1">
-                          {q.options.map((opt, idx) => (
-                            <li key={idx} className="text-gray-700">{String.fromCharCode(1040 + idx)}. {opt}</li>
-                          ))}
-                        </ul>
-                      )}
-                      {q.type === 'open' && (
-                        <div className="mt-2 text-gray-500">Ответ: ________</div>
-                      )}
-                    </li>
-                  ))}
-                </ol>
+
+              {/* TEST */}
+              <section id="test" className="mb-12 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-200/50">
+                <div className="border-b border-gray-100 bg-gray-50/50 px-8 py-6">
+                  <h2 className="text-2xl font-bold text-gray-900">Мини‑тест</h2>
+                </div>
+                <div className="p-8">
+                  <ol className="space-y-8">
+                    {session.worksheet.test.map((q, i) => (
+                      <li key={i} className="rounded-xl border border-gray-100 bg-gray-50/30 p-6">
+                        <div className="mb-4 text-lg font-medium text-gray-900">{i + 1}. {q.question}</div>
+                        {q.options && q.options.length > 0 ? (
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            {q.options.map((opt, idx) => (
+                              <div key={idx} className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-3 text-gray-700 transition-colors hover:border-indigo-200 hover:bg-indigo-50/30">
+                                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-gray-300 bg-gray-50 text-xs font-medium text-gray-500">
+                                  {String.fromCharCode(65 + idx)}
+                                </div>
+                                <span>{opt}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="mt-2 border-b-2 border-gray-200 border-dashed py-2 text-gray-400 italic">
+                            Место для ответа...
+                          </div>
+                        )}
+                      </li>
+                    ))}
+                  </ol>
+                </div>
               </section>
-              <div className="flex items-center gap-3">
-                <Link to="/" className="text-blue-700 hover:underline">Сгенерировать новый лист</Link>
-              </div>
+              
             </div>
           </main>
         </div>

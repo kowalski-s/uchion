@@ -1,4 +1,4 @@
-import type { Worksheet, Subject, Conspect, BloomTask, TestQuestion } from '../../shared/types'
+import type { Worksheet, Subject, TestQuestion } from '../../shared/types'
 import { z } from 'zod'
 import OpenAI from 'openai'
 import { generatePrompt, SYSTEM_PROMPT } from './prompt.js'
@@ -18,48 +18,45 @@ export interface AIProvider {
 class DummyProvider implements AIProvider {
   async generateWorksheet(params: GenerateParams): Promise<Worksheet> {
     console.log('[УчиОн] DummyProvider.generateWorksheet called', params)
-    const conspect: Conspect = {
-      lessonTitle: params.topic,
-      goal: 'Понять тему и уметь применять правила на практике на уровне начальной школы.',
-      introduction: 'Сегодня разберём тему и научимся применять знания шаг за шагом.',
-      steps: [
-        { title: 'Что это', text: 'Это действие или правило, которое мы изучаем сегодня. Например, сложение помогает узнать общее количество.' },
-        { title: 'Почему важно', text: 'Если не знать это правило, можно допустить ошибку в расчётах или письме.' },
-        { title: 'Как применять', text: 'Внимательно прочитай задание, вспомни правило и используй его. Например: 2 + 2 = 4.' }
-      ],
-      miniPractice: 'Реши пример по шагам и проверь себя.',
-      analysisExample: 'Найдите ошибку в решении и объясните почему это ошибка.',
-      miniConclusion: 'Сделаем вывод и закрепим главное правило.'
-    }
-    const bloomTasks: BloomTask[] = [
-      { level: 1, title: 'Знание', task: 'Ответь одним числом: 7+5=' },
-      { level: 2, title: 'Понимание', task: 'Объясни, почему 12−4=8.' },
-      { level: 3, title: 'Применение', task: 'Реши: 16+9 и 20−7.' },
-      { level: 4, title: 'Анализ', task: 'Найди лишнее и объясни: 10, 12, 13, 14.' },
-      { level: 5, title: 'Синтез', task: 'Придумай свой пример на тему и реши его.' }
+    
+    const summary = 'Деление — это одна из основных операций в математике, как сложение, вычитание и умножение. Оно помогает нам разделить что-то на равные части. Представь, что у тебя есть 12 конфет, и ты хочешь поровну разделить их между тремя друзьями. Вот тут-то и приходит на помощь деление! Когда мы делим, мы используем три главных числа: Делимое (число, которое делим), Делитель (число, на которое делим) и Частное (результат). Знак деления выглядит так: : или /. Например, 12 : 3 = 4. Это значит, что каждый друг получит по 4 конфеты.'
+
+    const examples = [
+      '10 : 2 = 5 (10 яблок разложили по 2 в каждую тарелку, получилось 5 тарелок)',
+      '15 : 3 = 5 (15 рублей раздали трем детям поровну, каждому по 5 рублей)',
+      '8 : 4 = 2 (8 кусочков пиццы разделили на 4 человека)'
     ]
+
+    const tasks = [
+      'Решите примеры: 12 : 2, 18 : 3, 20 : 4.',
+      'Объясните своими словами, что такое "делимое".',
+      'В классе 24 ученика. Их нужно разделить на 4 команды. Сколько учеников будет в каждой команде?',
+      'Сравните (поставьте знак >,< или =): 10 : 2 ... 15 : 3.'
+    ]
+
     const test: TestQuestion[] = [
-      { type: 'single', question: 'Чему равно 9+6?', options: ['12', '14', '15', '16'], answer: 2 },
-      { type: 'single', question: 'Выбери правило для сложения двузначных чисел', options: ['Складываем десятки и единицы отдельно', 'Вычитаем десятки', 'Умножаем на 2', 'Делим пополам'], answer: 0 },
-      { type: 'multi_or_task', question: 'Выбери верные равенства', options: ['12+8=20', '25−5=21', '30−15=15', '9+4=13'], answers: [0,2,3] },
-      { type: 'multi_or_task', question: 'Реши примеры: 18−9, 7+6', options: ['Ответы: 9 и 13'], answers: [0] },
-      { type: 'open', question: 'Напиши свой пример на сложение и его решение' }
+      { question: 'Как называется число, которое мы делим?', options: ['Делимое', 'Делитель', 'Частное'], answer: 'Делимое' },
+      { question: 'Сколько будет 18 : 2?', options: ['6', '9', '8'], answer: '9' },
+      { question: 'Какой знак используется для деления?', options: ['+', '-', ':'], answer: ':' },
+      { question: 'Если разделить 20 на 5, что получится?', options: ['4', '5', '10'], answer: '4' },
+      { question: 'В каком примере ответ 3?', options: ['10 : 2', '9 : 3', '8 : 4'], answer: '9 : 3' }
     ]
+
     const gradeStr = `${params.grade} класс`
     return {
-      id: '',
+      id: 'dummy-id',
       subject: params.subject as Subject,
       grade: gradeStr,
       topic: params.topic,
-      conspect,
-      bloomTasks,
+      goal: 'научится понимать смысл действия деления, называть компоненты деления и выполнять простые вычисления.',
+      summary,
+      examples,
+      tasks,
       test,
       pdfBase64: ''
     }
   }
 }
-
- 
 
 class OpenAIProvider implements AIProvider {
   private client: OpenAI
@@ -102,36 +99,17 @@ class OpenAIProvider implements AIProvider {
     }
     const gradeStr = `${params.grade} класс`
     const ai = result.data
-    const bloomTasks: BloomTask[] = ai.bloomTasks.map(t => ({
-      level: t.level as 1 | 2 | 3 | 4 | 5,
-      title: t.title,
-      task: t.task,
-    }))
-    const test: TestQuestion[] = ai.test.map(q => {
-      if (q.type === 'single') {
-        return { type: 'single', question: q.question, options: q.options, answer: q.answer }
-      } else if (q.type === 'multi_or_task') {
-        return { type: 'multi_or_task', question: q.question, options: q.options, answers: q.answers }
-      }
-      return { type: 'open', question: q.question }
-    })
-    const conspect: Conspect = {
-      lessonTitle: ai.conspect.lessonTitle,
-      goal: ai.conspect.goal,
-      introduction: ai.conspect.introduction,
-      steps: ai.conspect.steps.map(s => ({ title: s.title, text: s.text })),
-      miniPractice: ai.conspect.miniPractice,
-      analysisExample: ai.conspect.analysisExample,
-      miniConclusion: ai.conspect.miniConclusion,
-    }
+    
     return {
       id: '',
       subject: params.subject as Subject,
       grade: gradeStr,
       topic: params.topic,
-      conspect,
-      bloomTasks,
-      test,
+      goal: ai.goal,
+      summary: ai.summary,
+      examples: ai.examples,
+      tasks: ai.tasks,
+      test: ai.test,
       pdfBase64: ''
     }
   }
