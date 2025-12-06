@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url'
 
 export async function buildPdf(worksheet: Worksheet, meta: GeneratePayload): Promise<string> {
   return await new Promise<string>((resolve, reject) => {
-    const doc = new PDFDocument({ size: 'A4', margin: 50 })
+    const doc = new PDFDocument({ size: 'A4', margin: 40 })
     const chunks: Buffer[] = []
     doc.on('data', d => chunks.push(Buffer.from(d)))
     doc.on('end', () => {
@@ -17,21 +17,20 @@ export async function buildPdf(worksheet: Worksheet, meta: GeneratePayload): Pro
     const __filename = fileURLToPath(import.meta.url)
     const __dirname = path.dirname(__filename)
     
-    // Try to find font in multiple locations
     const possiblePaths = [
       path.join(__dirname, '../_assets/fonts/Inter-Regular.ttf'),
       path.join(process.cwd(), 'api/_assets/fonts/Inter-Regular.ttf'),
       path.join(process.cwd(), '_assets/fonts/Inter-Regular.ttf'),
     ]
 
-    let fontName = 'Helvetica' // Fallback
+    let fontName = 'Helvetica'
     for (const p of possiblePaths) {
       try {
         doc.registerFont('CustomBody', p)
         fontName = 'CustomBody'
         break
       } catch (e) {
-        // Ignore error, try next path
+        // Ignore
       }
     }
 
@@ -39,58 +38,108 @@ export async function buildPdf(worksheet: Worksheet, meta: GeneratePayload): Pro
       console.warn('[PDF] Custom font not found, using Helvetica. Cyrillic may be broken.')
     }
 
-    // Title
-    doc.font(fontName).fontSize(20).text(meta.topic, { align: 'center' })
+    // --- PAGE 1: CONTENT ---
+
+    // Header (Name / Date) - No Grade
+    doc.font(fontName).fontSize(10).text('Имя: ___________________________________   Дата: ________________', { align: 'right' })
+    doc.moveDown(2)
+
+    // Topic
+    doc.font(fontName).fontSize(20).text(worksheet.topic, { align: 'center' })
+    doc.moveDown(1)
+
+    // Summary
+    doc.font(fontName).fontSize(14).text('Краткий конспект')
     doc.moveDown(0.5)
-    doc.font(fontName).fontSize(12).text(`${worksheet.subject}, ${worksheet.grade}`, { align: 'center', color: 'grey' })
+    doc.font(fontName).fontSize(11).text(worksheet.summary, { align: 'justify', lineGap: 3 })
     doc.moveDown(1.5)
 
-    // Goal
-    doc.font(fontName).fontSize(12).text('Цель урока: ', { continued: true, stroke: true })
-    doc.font(fontName).fontSize(12).text(worksheet.goal)
-    doc.moveDown()
+    // Cheatsheet
+    if (worksheet.cheatsheet && worksheet.cheatsheet.length > 0) {
+      doc.rect(doc.x, doc.y, 515, 15 + worksheet.cheatsheet.length * 20).fillAndStroke('#f3f4f6', '#e5e7eb')
+      doc.fill('#000000')
+      doc.moveDown(0.5)
+      doc.font(fontName).fontSize(12).text('⚡ Шпаргалка', { indent: 10 })
+      doc.moveDown(0.5)
+      worksheet.cheatsheet.forEach(item => {
+        doc.font(fontName).fontSize(10).text(`• ${item}`, { indent: 20, lineGap: 5 })
+      })
+      doc.moveDown(2)
+    }
 
-    // Summary (Conspect)
-    doc.font(fontName).fontSize(16).text('Конспект урока')
+    // Assignments
+    doc.font(fontName).fontSize(14).text('Задания')
     doc.moveDown(0.5)
-    doc.font(fontName).fontSize(12).text(worksheet.summary, { align: 'justify', lineGap: 2 })
-    doc.moveDown(1.5)
-
-    // Examples
-    doc.font(fontName).fontSize(16).text('Примеры')
-    doc.moveDown(0.5)
-    worksheet.examples.forEach(ex => {
-      doc.font(fontName).fontSize(12).text(`• ${ex}`, { indent: 10, lineGap: 2 })
+    worksheet.assignments.forEach((task, i) => {
+      doc.font(fontName).fontSize(11).text(`✏️ ${i + 1}. ${task.text}`, { lineGap: 5 })
+      doc.moveDown(0.5)
+      // Space for answer
+      doc.font(fontName).fontSize(10).text('__________________________________________________________________________', { color: '#9ca3af' })
+      doc.moveDown(1)
+      doc.fillColor('#000000')
     })
-    doc.moveDown(1.5)
+    
+    doc.addPage()
 
-    // Tasks
-    doc.font(fontName).fontSize(16).text('Задания')
-    doc.moveDown(0.5)
-    worksheet.tasks.forEach((task, i) => {
-      doc.font(fontName).fontSize(12).text(`${i + 1}. ${task}`, { lineGap: 5 })
-    })
-    doc.moveDown(1.5)
+    // --- PAGE 2: TEST & EVALUATION ---
 
     // Test
-    doc.font(fontName).fontSize(16).text('Мини-тест')
+    doc.font(fontName).fontSize(14).text('📝 Мини-тест')
     doc.moveDown(0.5)
-    const letters = ['A', 'B', 'C', 'D', 'E', 'F']
     
+    const letters = ['A', 'B', 'C', 'D']
     worksheet.test.forEach((q, i) => {
-      doc.font(fontName).fontSize(12).text(`${i + 1}. ${q.question}`)
-      
-      if (q.options && q.options.length > 0) {
-        doc.moveDown(0.3)
+      doc.font(fontName).fontSize(11).text(`${i + 1}. ${q.question}`)
+      doc.moveDown(0.3)
+      if (q.options) {
         q.options.forEach((opt, idx) => {
-          doc.font(fontName).fontSize(11).text(`   ${letters[idx]}) ${opt}`, { indent: 15 })
+           doc.font(fontName).fontSize(10).text(`   ${letters[idx]}) ${opt}`, { indent: 15 })
         })
-      } else {
-        doc.moveDown(0.3)
-        doc.font(fontName).fontSize(11).text('   Ответ: _______________', { indent: 15 })
       }
       doc.moveDown(1)
     })
+
+    doc.moveDown(2)
+
+    // Self Evaluation
+    doc.font(fontName).fontSize(12).text('😊 Самооценка:')
+    doc.moveDown(0.5)
+    doc.font(fontName).fontSize(10).text('[   ] Все понял', { indent: 20 })
+    doc.font(fontName).fontSize(10).text('[   ] Было немного сложно', { indent: 20 })
+    doc.font(fontName).fontSize(10).text('[   ] Нужна помощь', { indent: 20 })
+
+    doc.moveDown(2)
+
+    // Notes
+    doc.font(fontName).fontSize(12).text('📝 Заметки:')
+    doc.moveDown(0.5)
+    doc.font(fontName).fontSize(10).text('__________________________________________________________________________')
+    doc.moveDown(0.5)
+    doc.font(fontName).fontSize(10).text('__________________________________________________________________________')
+
+    doc.addPage()
+
+    // --- PAGE 3: TEACHER ANSWERS ---
+
+    doc.font(fontName).fontSize(16).text('🔍 Ответы для учителя', { align: 'center' })
+    doc.moveDown(2)
+
+    doc.font(fontName).fontSize(14).text('Задания')
+    doc.moveDown(0.5)
+    if (worksheet.answers && worksheet.answers.assignments) {
+      worksheet.answers.assignments.forEach((ans, i) => {
+        doc.font(fontName).fontSize(11).text(`${i + 1}: ${ans}`, { lineGap: 5 })
+      })
+    }
+    doc.moveDown(1.5)
+
+    doc.font(fontName).fontSize(14).text('Мини-тест')
+    doc.moveDown(0.5)
+    if (worksheet.answers && worksheet.answers.test) {
+      worksheet.answers.test.forEach((ans, i) => {
+        doc.font(fontName).fontSize(11).text(`${i + 1} — ${ans}`, { lineGap: 5 })
+      })
+    }
 
     doc.end()
   })

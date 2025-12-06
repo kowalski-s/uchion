@@ -6,10 +6,20 @@ export type GeneratePayload = {
   topic: string
 }
 
+export type Assignment = {
+  title: string
+  text: string
+}
+
 export type TestQuestion = {
   question: string
   options: string[]
-  answer: string // Теперь это строка, а не индекс
+  answer: string
+}
+
+export type WorksheetAnswers = {
+  assignments: string[]
+  test: string[]
 }
 
 export interface Worksheet {
@@ -17,11 +27,11 @@ export interface Worksheet {
   subject: Subject
   grade: string
   topic: string
-  goal: string
   summary: string
-  examples: string[]
-  tasks: string[]
+  cheatsheet: string[]
+  assignments: Assignment[]
   test: TestQuestion[]
+  answers: WorksheetAnswers
   pdfBase64: string
 }
 
