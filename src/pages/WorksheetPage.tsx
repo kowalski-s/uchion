@@ -184,9 +184,13 @@ export default function WorksheetPage() {
             <div className="flex items-center gap-2 text-indigo-600">
                <span className="text-2xl font-bold tracking-tight">УчиОн</span>
             </div>
-            <div className="text-right text-sm text-gray-500">
+            <div className="text-right text-sm text-gray-500 print:hidden">
               <div className="mb-2">Имя и фамилия: ____________________________________</div>
               <div>Дата: __________________</div>
+            </div>
+            {/* Print-only simplified header for Page 1 */}
+            <div className="hidden print:block text-right text-sm text-gray-500">
+              <div>Имя и фамилия: ____________________________________</div>
             </div>
           </div>
 
@@ -226,19 +230,24 @@ export default function WorksheetPage() {
         <PageContainer id="page2">
           {/* ASSIGNMENTS */}
           <section className="flex flex-col">
-            <h2 className="mb-6 flex items-center gap-3 text-xl font-bold text-gray-900">
+            <h2 className="mb-6 flex items-center gap-3 text-xl font-bold text-gray-900 print:hidden">
               <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-white">✏️</span>
               Задания
             </h2>
+            {/* Print-only simplified header for Assignments */}
+            <h2 className="hidden print:flex mb-4 text-lg font-bold text-gray-900 border-b pb-2">
+              Задания
+            </h2>
+
             <div className="flex flex-col gap-6">
               {session.worksheet.assignments.map((task, i) => (
                 <div key={i} className={`task-block break-inside-avoid ${i === 0 ? 'mt-2' : ''}`}>
                   <div className="mb-3 text-lg font-medium text-gray-900 leading-tight">
-                    <span className="mr-2 text-indigo-600">{i + 1}.</span>
+                    <span className="mr-2 text-indigo-600 print:text-black">{i + 1}.</span>
                     {task.text}
                   </div>
                   {shouldShowAnswerField(task.text) && (
-                    <div className="mt-3 h-48 w-full rounded-lg border-2 border-dashed border-gray-200 bg-gray-50/30"></div>
+                    <div className="mt-3 h-48 w-full rounded-lg border-2 border-dashed border-gray-200 bg-gray-50/30 print:border-gray-300 print:h-32"></div>
                   )}
                 </div>
               ))}
@@ -252,13 +261,18 @@ export default function WorksheetPage() {
         <PageContainer id="page3">
           {/* TEST */}
           <section className="h-full flex flex-col">
-            <h2 className="mb-6 flex items-center gap-3 text-xl font-bold text-gray-900">
+            <h2 className="mb-6 flex items-center gap-3 text-xl font-bold text-gray-900 print:hidden">
               <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-white">📝</span>
               Мини-тест
             </h2>
+            {/* Print-only simplified header for Test */}
+            <h2 className="hidden print:flex mb-4 text-lg font-bold text-gray-900 border-b pb-2">
+              Мини-тест
+            </h2>
+
             <div className="grid gap-6">
               {session.worksheet.test.map((q, i) => (
-                <div key={i} className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm break-inside-avoid">
+                <div key={i} className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm break-inside-avoid print:border print:border-gray-300 print:shadow-none print:p-4">
                   <div className="mb-3 font-medium text-gray-900">{i + 1}. {q.question}</div>
                   <div className="space-y-2">
                     {q.options.map((opt, idx) => (
