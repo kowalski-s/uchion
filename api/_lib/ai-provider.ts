@@ -162,7 +162,48 @@ C) вариант
 4) Структура листа выдержана полностью и в нужном порядке.
 5) Задания реально выполнимы для ученика указанного класса.
 
-Выводи ТОЛЬКО готовый рабочий лист по этой структуре, без комментариев и объяснений.`
+ТЫ ОБЯЗАН выводить ответ строго в этом формате:
+
+SUMMARY:
+[краткий конспект]
+
+CHEATSHEET:
+- пункт 1
+- пункт 2
+- пункт 3
+
+ASSIGNMENTS:
+1) текст задания 1
+2) текст задания 2
+3) текст задания 3
+4) текст задания 4
+
+TEST:
+1) вопрос?
+A) вариант
+B) вариант
+C) вариант
+2) вопрос?
+A) вариант
+B) вариант
+C) вариант
+3) ...
+4) ...
+5) ...
+
+ANSWERS_ASSIGNMENTS:
+1) ответ
+2) ответ
+3) ответ
+4) ответ
+
+ANSWERS_TEST:
+1) A — правильный ответ
+2) B — правильный ответ
+3) C — правильный ответ
+4) ...
+5) ...
+`
 
 class OpenAIProvider implements AIProvider {
   private client: OpenAI
@@ -265,14 +306,12 @@ ${textbooksContext}
   private parseWorksheetText(text: string, params: GenerateParams): Worksheet {
     // Simple parser based on headers
     // Expected headers: 
-    // 1. Тема урока
-    // 2. Краткий конспект
-    // 3. Шпаргалка
-    // 4. Задания
-    // 5. Мини-тест
-    // 6. Оценка урока
-    // 7. Заметки
-    // 8. Ответы
+    // SUMMARY:
+    // CHEATSHEET:
+    // ASSIGNMENTS:
+    // TEST:
+    // ANSWERS_ASSIGNMENTS:
+    // ANSWERS_TEST:
 
     const extractSection = (header: string, nextHeader: string | null): string => {
       const regex = nextHeader 
@@ -286,18 +325,18 @@ ${textbooksContext}
       return match[0].replace(new RegExp(`^.*?${header}\\s*`, 'i'), '').trim()
     }
 
-    const topic = extractSection('1\\. Тема урока', '2\\. Краткий конспект').replace(/\.$/, '') || params.topic
-    const summary = extractSection('2\\. Краткий конспект', '3\\. Шпаргалка')
-    const cheatsheetText = extractSection('3\\. Шпаргалка', '4\\. Задания')
-    const assignmentsText = extractSection('4\\. Задания', '5\\. Мини-тест')
-    const testText = extractSection('5\\. Мини-тест', '6\\. Оценка урока')
-    // 6. Оценка урока and 7. Заметки are ignored as they are static in UI or not stored
-    const answersText = extractSection('8\\. Ответы', null)
+    const topic = params.topic // Topic is not in the output anymore, use params
+    const summary = extractSection('SUMMARY:', 'CHEATSHEET:')
+    const cheatsheetText = extractSection('CHEATSHEET:', 'ASSIGNMENTS:')
+    const assignmentsText = extractSection('ASSIGNMENTS:', 'TEST:')
+    const testText = extractSection('TEST:', 'ANSWERS_ASSIGNMENTS:')
+    const answersAssignText = extractSection('ANSWERS_ASSIGNMENTS:', 'ANSWERS_TEST:')
+    const answersTestText = extractSection('ANSWERS_TEST:', null)
 
     // Parse Cheatsheet (split by newline, remove empty or bullets)
     const cheatsheet = cheatsheetText.split('\n')
       .map(l => l.trim())
-      .filter(l => l.length > 0 && !l.match(/^(3\.|Шпаргалка)/i)) // clean up if needed
+      .filter(l => l.length > 0 && !l.match(/^(CHEATSHEET:)/i)) // clean up if needed
       .map(l => l.replace(/^[-•*]\s*/, '')) // remove bullets
 
     // Parse Assignments
@@ -307,7 +346,7 @@ ${textbooksContext}
       .slice(0, 4) // Ensure exactly 4
       .map((text, i) => ({
         title: `Задание ${i + 1}`,
-        text: text.replace(/^\d+\.\s*/, '')
+        text: text.replace(/^\d+\)\s*/, '').replace(/^\d+\.\s*/, '')
       }))
 
     // Parse Test
@@ -333,7 +372,7 @@ ${textbooksContext}
           } as TestQuestion)
           currentOptions = []
         }
-        currentQuestion = { question: line.replace(/^\d+\.\s*/, '') }
+        currentQuestion = { question: line.replace(/^\d+\)\s*/, '').replace(/^\d+\.\s*/, '') }
       }
     }
     // Push last question
@@ -346,31 +385,35 @@ ${textbooksContext}
     }
 
     // Parse Answers
-    // Expected: Задания: ... Мини-тест: ...
-    // Simple split by keywords
     let answersAssignments: string[] = []
     let answersTest: string[] = []
 
-    if (answersText) {
-      const parts = answersText.split(/Мини-тест:/i)
-      const assignPart = parts[0]?.replace(/Задания:/i, '').trim() || ''
-      const testPart = parts[1]?.trim() || ''
+    if (answersAssignText) {
+       answersAssignments = answersAssignText.split('\n').map(l => l.trim()).filter(l => l).map(l => l.replace(/^\d+\)\s*/, '').replace(/^\d+\.\s*/, ''))
+    }
+    
+    if (answersTestText) {
+       answersTest = answersTestText.split('\n').map(l => l.trim()).filter(l => l).map(l => l.replace(/^\d+\)\s*/, '').replace(/^\d+\.\s*/, ''))
 
-      answersAssignments = assignPart.split('\n').map(l => l.trim()).filter(l => l).map(l => l.replace(/^\d+\.\s*/, ''))
-      answersTest = testPart.split('\n').map(l => l.trim()).filter(l => l)
-      
       // Try to map test answers to options if they are just letters (A, B, C)
-      // Or leave them as text. The existing interface expects string[] for answers.test
-      // But `TestQuestion` has `answer` field which is the full text usually.
-      // Let's update `test` array with correct answers if possible.
       test.forEach((q, i) => {
         if (answersTest[i]) {
-          // If answer is "A" or "A)", map to option text
+          // If answer starts with "A" or "A)", try to extract letter
           const letterMatch = answersTest[i].match(/^([A-C])\)?/i)
           if (letterMatch) {
             const idx = letterMatch[1].toUpperCase().charCodeAt(0) - 65
             if (q.options[idx]) {
-              q.answer = q.options[idx] // Set full text answer
+               // We found the option text corresponding to the letter
+               // But usually we want to display the full answer text in the answer key
+               // The UI might expect just the text.
+               // Let's keep what the model gave us but cleaned up slightly if it was just "A"
+               // Actually, if the model gave "A — answer text", we use that.
+               // If it just gave "A", we map it.
+               if (answersTest[i].length < 5) {
+                   q.answer = q.options[idx]
+               } else {
+                   q.answer = answersTest[i]
+               }
             } else {
                q.answer = answersTest[i]
             }
@@ -388,7 +431,6 @@ ${textbooksContext}
     }
 
     const safeTest = test.slice(0, 5)
-    // Ensure 5 questions
     
     return {
       id: '',
