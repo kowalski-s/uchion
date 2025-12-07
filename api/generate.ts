@@ -13,21 +13,6 @@ const InputSchema = z.object({
 
 type Input = z.infer<typeof InputSchema>
 
-type OkResponse = {
-  status: 'ok'
-  data: { worksheet: Worksheet }
-}
-
-type ErrorResponse = {
-  status: 'error'
-  code:
-    | 'VALIDATION_ERROR'
-    | 'AI_ERROR'
-    | 'PDF_ERROR'
-    | 'SERVER_ERROR'
-  message: string
-}
-
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse
@@ -51,19 +36,34 @@ export default async function handler(
 
   const input: Input = parse.data
 
+  // Setup SSE
+  res.setHeader('Content-Type', 'text/event-stream')
+  res.setHeader('Cache-Control', 'no-cache')
+  res.setHeader('Connection', 'keep-alive')
+  
+  const sendEvent = (data: any) => {
+    res.write(`data: ${JSON.stringify(data)}\n\n`)
+  }
+
   try {
     const ai = getAIProvider()
-    const worksheet = await ai.generateWorksheet(input as GeneratePayload)
+    
+    // Pass progress callback
+    const worksheet = await ai.generateWorksheet(input as GeneratePayload, (percent) => {
+      sendEvent({ type: 'progress', percent })
+    })
+
+    sendEvent({ type: 'progress', percent: 97 }) // PDF generation start
+    
     let pdfBase64: string | null = null
     try {
       pdfBase64 = await buildPdf(worksheet, input as GeneratePayload)
     } catch (e) {
-      return res.status(500).json({
-        status: 'error',
-        code: 'PDF_ERROR',
-        message: 'Ошибка генерации PDF.',
-      })
+      sendEvent({ type: 'error', code: 'PDF_ERROR', message: 'Ошибка генерации PDF.' })
+      res.end()
+      return
     }
+
     const id = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : String(Date.now())
     const finalWorksheet: Worksheet = {
       ...worksheet,
@@ -71,10 +71,10 @@ export default async function handler(
       grade: `${input.grade} класс`,
       pdfBase64: pdfBase64 ?? ''
     }
-    return res.status(200).json({
-      status: 'ok',
-      data: { worksheet: finalWorksheet },
-    })
+
+    sendEvent({ type: 'result', data: { worksheet: finalWorksheet } })
+    res.end()
+
   } catch (err: any) {
     console.error('[API] Generate error:', err) // Log full error for Vercel logs
 
@@ -85,10 +85,7 @@ export default async function handler(
         ? 'PDF_ERROR'
         : 'SERVER_ERROR'
 
-    return res.status(500).json({
-      status: 'error',
-      code,
-      message: 'Не удалось сгенерировать лист. Попробуйте ещё раз.',
-    })
+    sendEvent({ type: 'error', code, message: 'Не удалось сгенерировать лист. Попробуйте ещё раз.' })
+    res.end()
   }
 }

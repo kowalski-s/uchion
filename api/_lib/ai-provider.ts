@@ -506,8 +506,9 @@ class OpenAIProvider implements AIProvider {
     }
   }
 
-  async generateWorksheet(params: GenerateParams): Promise<Worksheet> {
+  async generateWorksheet(params: GenerateParams, onProgress?: (percent: number) => void): Promise<Worksheet> {
     console.log('[УчиОн] OpenAIProvider.generateWorksheet called', params)
+    onProgress?.(10) // Start
     
     const userPromptBase = `Сгенерируй рабочий лист.
 Предмет: ${params.subject}
@@ -520,6 +521,7 @@ class OpenAIProvider implements AIProvider {
 
     // Try to get context (optional)
     const context = await this.getTextbookContext(params)
+    onProgress?.(15) // Context retrieved
     if (context) {
       systemPrompt += `\n\nИСПОЛЬЗУЙ СЛЕДУЮЩИЕ МАТЕРИАЛЫ ИЗ УЧЕБНИКОВ:\n${context}`
     }
@@ -533,6 +535,7 @@ class OpenAIProvider implements AIProvider {
 
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       console.log(`[УчиОн] Generation attempt ${attempt}/${MAX_ATTEMPTS}`)
+      onProgress?.(attempt === 1 ? 20 : 65) // Generation start
       
       let currentUserPrompt = userPromptBase
       if (attempt > 1 && lastIssues.length > 0) {
@@ -555,17 +558,19 @@ class OpenAIProvider implements AIProvider {
         throw error
       }
 
-      const raw = extractTextFromResponse(completion)
-      const content = raw.trim()
+      const content = extractTextFromResponse(completion).trim()
       if (!content) {
         if (attempt === MAX_ATTEMPTS && !bestContent) throw new Error('AI_ERROR')
         continue
       }
+      
+      onProgress?.(attempt === 1 ? 50 : 80) // Generation done
 
       // Step 2: Validate
       console.log(`[УчиОн] Validating attempt ${attempt}...`)
       const validation = await this.validateWorksheet(content, params)
       console.log(`[УчиОн] Validation result: score=${validation.score}, issues=${validation.issues.length}`)
+      onProgress?.(attempt === 1 ? 60 : 90) // Validation done
 
       if (validation.score === 10) {
         console.log('[УчиОн] Perfect score! Returning result.')
@@ -588,6 +593,7 @@ class OpenAIProvider implements AIProvider {
        throw new Error('AI_ERROR')
     }
 
+    onProgress?.(95) // Final parsing
     return this.parseWorksheetText(bestContent, params)
   }
 

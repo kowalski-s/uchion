@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
@@ -20,7 +20,7 @@ export default function GeneratePage() {
   })
 
   const mutation = useMutation({
-    mutationFn: generateWorksheet,
+    mutationFn: (values: GenerateFormValues) => generateWorksheet(values, (p) => setProgress(p)),
     onSuccess: res => {
       if (res.status === 'error') {
         setErrorText(res.message)
@@ -41,28 +41,9 @@ export default function GeneratePage() {
     }
   })
 
-  useEffect(() => {
-    let interval: NodeJS.Timeout
-    if (mutation.isPending) {
-      setProgress(0)
-      const duration = 60000 // 60 seconds target for ~95%
-      const step = 200
-      const increment = (95 / (duration / step))
-      
-      interval = setInterval(() => {
-        setProgress(p => {
-          if (p >= 95) return 95
-          return Math.min(95, p + increment)
-        })
-      }, step)
-    } else {
-      setProgress(100)
-    }
-    return () => clearInterval(interval)
-  }, [mutation.isPending])
-
   const onSubmit = (values: GenerateFormValues) => {
     setErrorText(null)
+    setProgress(0)
     mutation.mutate({ subject: values.subject, grade: values.grade, topic: values.topic })
   }
 
@@ -183,7 +164,6 @@ export default function GeneratePage() {
             <h3 className="mb-4 text-2xl font-bold text-slate-800">Создаем материалы...</h3>
             <div className="mb-2 flex justify-between text-sm font-medium text-slate-600">
               <span>Готово: {Math.round(progress)}%</span>
-              <span>Примерно: {Math.max(1, Math.round((60 * (1 - progress / 100))))} сек</span>
             </div>
             <div className="h-4 w-full overflow-hidden rounded-full bg-slate-200 shadow-inner">
               <div 
@@ -191,9 +171,6 @@ export default function GeneratePage() {
                 style={{ width: `${progress}%` }}
               />
             </div>
-            <p className="mt-4 text-sm text-slate-500 animate-pulse">
-              Искусственный интеллект анализирует тему и составляет задания
-            </p>
           </div>
         </div>
       )}
