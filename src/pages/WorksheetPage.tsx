@@ -104,6 +104,17 @@ export default function WorksheetPage() {
     window.print()
   }
 
+  // Helper function to format text with bold markers
+  const formatText = (text: string) => {
+    if (!text) return null
+    return text.split(/(\*\*.*?\*\*)/g).map((part, i) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return <strong key={i} className="font-bold">{part.slice(2, -2)}</strong>
+      }
+      return part
+    })
+  }
+
   if (!session) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-10">
@@ -184,7 +195,7 @@ export default function WorksheetPage() {
             <h1 className="mb-4 text-center text-3xl font-bold text-gray-900">{session.worksheet.topic}</h1>
             <div className="rounded-xl border-l-4 border-indigo-500 bg-indigo-50/50 p-5 shadow-sm">
               <h2 className="mb-2 text-lg font-bold text-indigo-900">Краткий конспект</h2>
-              <p className="leading-snug text-gray-800 whitespace-pre-line text-sm">{session.worksheet.summary}</p>
+              <p className="leading-snug text-gray-800 whitespace-pre-line text-sm">{formatText(session.worksheet.summary)}</p>
             </div>
           </section>
 
