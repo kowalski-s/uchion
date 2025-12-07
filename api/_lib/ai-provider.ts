@@ -477,7 +477,6 @@ class OpenAIProvider implements AIProvider {
       // @ts-ignore - Using new responses API
       const completion = await (this.client as any).responses.create({
         model: 'gpt-5-mini',
-        temperature: 0.1,
         input: [
           { role: 'system', content: VALIDATOR_SYSTEM_PROMPT },
           { role: 'user', content: `Предмет: ${params.subject}\nКласс: ${params.grade}\nТема: ${params.topic}\n\n${content}` }
@@ -545,7 +544,6 @@ class OpenAIProvider implements AIProvider {
         // @ts-ignore - Using new responses API
         completion = await (this.client as any).responses.create({
           model: 'gpt-5-mini',
-          temperature: 0.2,
           input: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: currentUserPrompt }
