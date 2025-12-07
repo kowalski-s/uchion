@@ -377,7 +377,7 @@ ${textbooksContext}
     let completion
     try {
       completion = await this.client.chat.completions.create({
-        model: 'gpt-5-mini',
+        model: 'gpt-4.1-mini',
         temperature: 0.2,
         max_tokens: 6000,
         messages: [
