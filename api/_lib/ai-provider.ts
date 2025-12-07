@@ -403,7 +403,23 @@ const ValidatorResponseSchema = z.object({
 })
 
 function extractTextFromResponse(response: any): string {
-  return response.output?.[0]?.content?.[0]?.text ?? ""
+  if (!response) return "";
+
+  // Новый формат Responses API: output_text (если доступен)
+  if (typeof (response as any).output_text === "string") {
+    return (response as any).output_text;
+  }
+
+  // Запасной вариант через output[*].content[*].text
+  const output = (response as any).output;
+  if (Array.isArray(output)) {
+    const first = output[0];
+    const firstContent = first?.content?.[0];
+    const text = firstContent?.text;
+    if (typeof text === "string") return text;
+  }
+
+  return "";
 }
 
 class OpenAIProvider implements AIProvider {
@@ -529,8 +545,7 @@ class OpenAIProvider implements AIProvider {
         // @ts-ignore - Using new responses API
         completion = await (this.client as any).responses.create({
           model: 'gpt-5-mini',
-          temperature: 0.5,
-          // max_tokens: 4000,
+          temperature: 0.2,
           input: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: currentUserPrompt }
@@ -542,7 +557,8 @@ class OpenAIProvider implements AIProvider {
         throw error
       }
 
-      const content = extractTextFromResponse(completion).trim()
+      const raw = extractTextFromResponse(completion)
+      const content = raw.trim()
       if (!content) {
         if (attempt === MAX_ATTEMPTS && !bestContent) throw new Error('AI_ERROR')
         continue
