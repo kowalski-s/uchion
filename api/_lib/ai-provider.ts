@@ -402,6 +402,10 @@ const ValidatorResponseSchema = z.object({
   issues: z.array(z.string())
 })
 
+function extractTextFromResponse(response: any): string {
+  return response.output?.[0]?.content?.[0]?.text ?? ""
+}
+
 class OpenAIProvider implements AIProvider {
   private client: OpenAI
   constructor(apiKey: string) {
@@ -454,16 +458,19 @@ class OpenAIProvider implements AIProvider {
 
   private async validateWorksheet(content: string, params: GenerateParams): Promise<{ score: number, issues: string[] }> {
     try {
-      const completion = await this.client.chat.completions.create({
-        model: 'gpt-4o-mini',
+      // @ts-ignore - Using new responses API
+      const completion = await (this.client as any).responses.create({
+        model: 'gpt-5-mini',
         temperature: 0.1,
-        messages: [
+        input: [
           { role: 'system', content: VALIDATOR_SYSTEM_PROMPT },
           { role: 'user', content: `Предмет: ${params.subject}\nКласс: ${params.grade}\nТема: ${params.topic}\n\n${content}` }
         ]
       })
 
-      const responseContent = completion.choices[0]?.message?.content || ''
+      console.log('[Validator Response]', JSON.stringify(completion, null, 2))
+
+      const responseContent = extractTextFromResponse(completion)
       if (!responseContent) return { score: 0, issues: ['Validator: empty response'] }
 
       const statusMatch = responseContent.match(/STATUS:\s*(OK|FAIL)/i)
@@ -519,21 +526,23 @@ class OpenAIProvider implements AIProvider {
 
       let completion
       try {
-        completion = await this.client.chat.completions.create({
-          model: 'gpt-4o-mini',
+        // @ts-ignore - Using new responses API
+        completion = await (this.client as any).responses.create({
+          model: 'gpt-5-mini',
           temperature: 0.5,
-          max_tokens: 4000,
-          messages: [
+          // max_tokens: 4000,
+          input: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: currentUserPrompt }
           ]
         })
+        console.log('[Generator Response]', JSON.stringify(completion, null, 2))
       } catch (error) {
         console.error('[УчиОн] OpenAI API Error:', error)
         throw error
       }
 
-      const content = completion.choices?.[0]?.message?.content?.trim() ?? ''
+      const content = extractTextFromResponse(completion).trim()
       if (!content) {
         if (attempt === MAX_ATTEMPTS && !bestContent) throw new Error('AI_ERROR')
         continue
