@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
@@ -12,6 +12,7 @@ export default function GeneratePage() {
   const saveSession = useSessionStore(s => s.saveSession)
   const setCurrent = useSessionStore(s => s.setCurrent)
   const [errorText, setErrorText] = useState<string | null>(null)
+  const [progress, setProgress] = useState(0)
 
   const form = useForm<GenerateFormValues>({
     resolver: zodResolver(GenerateSchema),
@@ -39,6 +40,26 @@ export default function GeneratePage() {
       setErrorText('Не удалось сгенерировать лист. Попробуйте ещё раз.')
     }
   })
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout
+    if (mutation.isPending) {
+      setProgress(0)
+      const duration = 60000 // 60 seconds target for ~95%
+      const step = 200
+      const increment = (95 / (duration / step))
+      
+      interval = setInterval(() => {
+        setProgress(p => {
+          if (p >= 95) return 95
+          return Math.min(95, p + increment)
+        })
+      }, step)
+    } else {
+      setProgress(100)
+    }
+    return () => clearInterval(interval)
+  }, [mutation.isPending])
 
   const onSubmit = (values: GenerateFormValues) => {
     setErrorText(null)
@@ -154,6 +175,28 @@ export default function GeneratePage() {
           Этот сервис помогает экономить время учителю. Проверяйте материалы перед печатью.
         </p>
       </main>
+
+      {/* Loading Overlay */}
+      {mutation.isPending && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/60 backdrop-blur-md transition-all">
+          <div className="w-full max-w-md px-6 text-center">
+            <h3 className="mb-4 text-2xl font-bold text-slate-800">Создаем материалы...</h3>
+            <div className="mb-2 flex justify-between text-sm font-medium text-slate-600">
+              <span>Готово: {Math.round(progress)}%</span>
+              <span>Примерно: {Math.max(1, Math.round((60 * (1 - progress / 100))))} сек</span>
+            </div>
+            <div className="h-4 w-full overflow-hidden rounded-full bg-slate-200 shadow-inner">
+              <div 
+                className="h-full rounded-full bg-gradient-to-r from-[#8C52FF] to-[#A16BFF] transition-all duration-300 ease-out shadow-[0_0_10px_rgba(140,82,255,0.5)]"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+            <p className="mt-4 text-sm text-slate-500 animate-pulse">
+              Искусственный интеллект анализирует тему и составляет задания
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
