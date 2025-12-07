@@ -488,7 +488,7 @@ class OpenAIProvider implements AIProvider {
     let bestIssues: string[] = []
     let lastIssues: string[] = []
     
-    const MAX_ATTEMPTS = 3
+    const MAX_ATTEMPTS = 2
 
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       console.log(`[УчиОн] Generation attempt ${attempt}/${MAX_ATTEMPTS}`)
