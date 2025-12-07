@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useSessionStore } from '../store/session'
 
 const PageContainer = ({ children, id, className = '' }: { children: React.ReactNode, id?: string, className?: string }) => (
-  <div id={id} className={`mx-auto max-w-[210mm] bg-white p-[15mm] shadow-lg border border-gray-100 rounded-xl mb-12 last:mb-0 print:max-w-[210mm] print:shadow-none print:p-[10mm] print:border-2 print:border-gray-300 print:rounded-none print:mb-0 print:mx-auto print:h-[297mm] ${className}`}>
+  <div id={id} className={`mx-auto max-w-[210mm] bg-white p-[15mm] shadow-lg border border-gray-100 rounded-xl mb-12 last:mb-0 print:max-w-none print:w-full print:shadow-none print:p-[10mm] print:border-0 print:rounded-none print:mb-0 print:mx-0 ${className}`}>
     {children}
   </div>
 )
@@ -225,14 +225,14 @@ export default function WorksheetPage() {
         {/* PAGE 2 */}
         <PageContainer id="page2">
           {/* ASSIGNMENTS */}
-          <section className="h-full flex flex-col">
+          <section className="flex flex-col">
             <h2 className="mb-6 flex items-center gap-3 text-xl font-bold text-gray-900">
               <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-white">✏️</span>
               Задания
             </h2>
-            <div className="flex flex-col gap-6 flex-grow">
+            <div className="flex flex-col gap-6">
               {session.worksheet.assignments.map((task, i) => (
-                <div key={i} className={`break-inside-avoid ${i === 0 ? 'mt-2' : ''}`}>
+                <div key={i} className={`task-block break-inside-avoid ${i === 0 ? 'mt-2' : ''}`}>
                   <div className="mb-3 text-lg font-medium text-gray-900 leading-tight">
                     <span className="mr-2 text-indigo-600">{i + 1}.</span>
                     {task.text}
@@ -350,9 +350,27 @@ export default function WorksheetPage() {
       
       <style>{`
         @media print {
-          @page { margin: 0; size: auto; }
-          body { background: white; }
+          @page { margin: 10mm; size: auto; }
+          body { 
+            background: white; 
+            -webkit-print-color-adjust: exact; 
+            print-color-adjust: exact; 
+          }
           .page-break { page-break-before: always; }
+          
+          /* Prevent breaks inside tasks and cards */
+          .task-block, .card, .exercise, .break-inside-avoid { 
+            page-break-inside: avoid !important; 
+            break-inside: avoid !important; 
+          }
+
+          /* Ensure proper spacing */
+          .task-block { 
+             margin-bottom: 12px; 
+          }
+
+          /* Hide UI elements */
+          nav, header, button, .print\\:hidden { display: none !important; }
         }
       `}</style>
     </div>
