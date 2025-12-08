@@ -12,7 +12,7 @@ export type GenerateParams = {
 }
 
 export interface AIProvider {
-  generateWorksheet(params: GenerateParams): Promise<Worksheet>
+  generateWorksheet(params: GenerateParams, onProgress?: (percent: number) => void): Promise<Worksheet>
 }
 
 class DummyProvider implements AIProvider {
@@ -284,43 +284,45 @@ async function regenerateProblemBlocks(params: {
     (openai as any).responses.create({
       model: 'gpt-4.1-mini',
       max_output_tokens: 800,
-      response_format: {
-        type: 'json_schema',
-        json_schema: {
-          name: 'worksheet_blocks_patch',
-          schema: {
-            type: 'object',
-            properties: {
-              assignments: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  properties: {
-                    index: { type: 'integer' },
-                    type: { type: 'string', enum: ['theory','apply','error','creative'] },
-                    text: { type: 'string' }
-                  },
-                  required: ['index','type','text']
+      text: {
+        format: {
+          type: 'json_schema',
+          json_schema: {
+            name: 'worksheet_blocks_patch',
+            schema: {
+              type: 'object',
+              properties: {
+                assignments: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      index: { type: 'integer' },
+                      type: { type: 'string', enum: ['theory','apply','error','creative'] },
+                      text: { type: 'string' }
+                    },
+                    required: ['index','type','text']
+                  }
+                },
+                test: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      index: { type: 'integer' },
+                      question: { type: 'string' },
+                      options: {
+                        type: 'object',
+                        properties: { A: { type: 'string' }, B: { type: 'string' }, C: { type: 'string' } },
+                        required: ['A','B','C']
+                      }
+                    },
+                    required: ['index','question','options']
+                  }
                 }
               },
-              test: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  properties: {
-                    index: { type: 'integer' },
-                    question: { type: 'string' },
-                    options: {
-                      type: 'object',
-                      properties: { A: { type: 'string' }, B: { type: 'string' }, C: { type: 'string' } },
-                      required: ['A','B','C']
-                    }
-                  },
-                  required: ['index','question','options']
-                }
-              }
-            },
-            additionalProperties: false
+              additionalProperties: false
+            }
           }
         }
       },
@@ -526,6 +528,7 @@ class OpenAIProvider implements AIProvider {
     let lastIssues: string[] = []
     
     const MAX_ATTEMPTS = 1
+    let worksheetJson: WorksheetJson | null = null
 
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       console.log(`[УчиОн] Generation attempt ${attempt}/${MAX_ATTEMPTS}`)
@@ -548,54 +551,56 @@ class OpenAIProvider implements AIProvider {
               { role: 'user', content: currentUserPrompt }
             ],
             max_output_tokens: 2200,
-            response_format: {
-              type: 'json_schema',
-              json_schema: {
-                name: 'worksheet_json',
-                schema: {
-                  type: 'object',
-                  properties: {
-                    summary: { type: 'string' },
-                    cheatsheet: { type: 'array', items: { type: 'string' } },
-                    assignments: {
-                      type: 'array',
-                      items: {
-                        type: 'object',
-                        properties: {
-                          index: { type: 'integer' },
-                          type: { type: 'string', enum: ['theory','apply','error','creative'] },
-                          text: { type: 'string' }
-                        },
-                        required: ['index','type','text']
-                      }
-                    },
-                    test: {
-                      type: 'array',
-                      items: {
-                        type: 'object',
-                        properties: {
-                          index: { type: 'integer' },
-                          question: { type: 'string' },
-                          options: {
-                            type: 'object',
-                            properties: { A: { type: 'string' }, B: { type: 'string' }, C: { type: 'string' } },
-                            required: ['A','B','C']
-                          }
-                        },
-                        required: ['index','question','options']
-                      }
-                    },
-                    answers: {
-                      type: 'object',
-                      properties: {
-                        assignments: { type: 'array', items: { type: 'string' } },
-                        test: { type: 'array', items: { type: 'string', enum: ['A','B','C'] } }
+            text: {
+              format: {
+                type: 'json_schema',
+                json_schema: {
+                  name: 'worksheet_json',
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      summary: { type: 'string' },
+                      cheatsheet: { type: 'array', items: { type: 'string' } },
+                      assignments: {
+                        type: 'array',
+                        items: {
+                          type: 'object',
+                          properties: {
+                            index: { type: 'integer' },
+                            type: { type: 'string', enum: ['theory','apply','error','creative'] },
+                            text: { type: 'string' }
+                          },
+                          required: ['index','type','text']
+                        }
                       },
-                      required: ['assignments','test']
-                    }
-                  },
-                  required: ['summary','cheatsheet','assignments','test','answers'],
-                  additionalProperties: false
+                      test: {
+                        type: 'array',
+                        items: {
+                          type: 'object',
+                          properties: {
+                            index: { type: 'integer' },
+                            question: { type: 'string' },
+                            options: {
+                              type: 'object',
+                              properties: { A: { type: 'string' }, B: { type: 'string' }, C: { type: 'string' } },
+                              required: ['A','B','C']
+                            }
+                          },
+                          required: ['index','question','options']
+                        }
+                      },
+                      answers: {
+                        type: 'object',
+                        properties: {
+                          assignments: { type: 'array', items: { type: 'string' } },
+                          test: { type: 'array', items: { type: 'string', enum: ['A','B','C'] } }
+                        },
+                        required: ['assignments','test']
+                      }
+                    },
+                    required: ['summary','cheatsheet','assignments','test','answers'],
+                    additionalProperties: false
+                  }
                 }
               }
             },
@@ -609,7 +614,6 @@ class OpenAIProvider implements AIProvider {
       }
 
       let worksheetText = ''
-      let worksheetJson: WorksheetJson
       {
         const jsonText = extractTextFromResponse(completion).trim()
         try {
@@ -620,7 +624,7 @@ class OpenAIProvider implements AIProvider {
         }
         console.log('[GEN] WorksheetJson summary length:', worksheetJson.summary?.length ?? 0)
         console.log('[GEN] WorksheetJson assignments count:', worksheetJson.assignments?.length ?? 0)
-        worksheetText = buildWorksheetTextFromJson(worksheetJson)
+        worksheetText = buildWorksheetTextFromJson(worksheetJson as WorksheetJson)
       }
       if (!worksheetText) {
         if (attempt === MAX_ATTEMPTS && !bestContent) throw new Error('AI_ERROR')
@@ -662,7 +666,7 @@ class OpenAIProvider implements AIProvider {
         onProgress
       })
       worksheetJson = regenJson
-      worksheetText = buildWorksheetTextFromJson(worksheetJson)
+      worksheetText = buildWorksheetTextFromJson(worksheetJson as WorksheetJson)
 
       const validation2 = await this.validateWorksheet(worksheetText, params)
       console.log(`[УчиОн] Validation after CLEAN: score=${validation2.score}, issues=${validation2.issues.length}`)
@@ -671,7 +675,7 @@ class OpenAIProvider implements AIProvider {
         console.log('[УчиОн] Clean step succeeded.')
         console.log("[GENERATION] Total duration ms =", Date.now() - totalStart);
         const base = this.parseWorksheetText(worksheetText, params) as any
-        base.json = worksheetJson
+        base.json = worksheetJson ?? undefined
         base.validationStatus = 'OK'
         return base as Worksheet
       }
@@ -692,7 +696,7 @@ class OpenAIProvider implements AIProvider {
     onProgress?.(95)
     console.log("[GENERATION] Total duration ms =", Date.now() - totalStart);
     const base = this.parseWorksheetText(bestContent, params) as any
-    base.json = worksheetJson
+    base.json = worksheetJson ?? undefined
     base.validationStatus = 'FAIL'
     return base as Worksheet
   }
