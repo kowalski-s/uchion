@@ -481,6 +481,22 @@ function extractTextFromResponse(response: any): string {
   return "";
 }
 
+async function timedLLMCall(label: string, call: () => Promise<any>) {
+  const start = Date.now();
+  console.log(`[LLM][START] ${label}`);
+  const res = await call();
+  const end = Date.now();
+
+  console.log(`[LLM][END] ${label}`, {
+    duration_ms: end - start,
+    timestamp: new Date().toISOString(),
+    model: res?.model,
+    usage: res?.usage ?? null
+  });
+
+  return res;
+}
+
 class OpenAIProvider implements AIProvider {
   private client: OpenAI
   constructor(apiKey: string) {
@@ -534,13 +550,16 @@ class OpenAIProvider implements AIProvider {
   private async validateWorksheet(content: string, params: GenerateParams): Promise<{ score: number, issues: string[] }> {
     try {
       // @ts-ignore - Using new responses API
-      const completion = await (this.client as any).responses.create({
-        model: 'gpt-5-mini',
-        input: [
-          { role: 'system', content: VALIDATOR_SYSTEM_PROMPT },
-          { role: 'user', content: `Предмет: ${params.subject}\nКласс: ${params.grade}\nТема: ${params.topic}\n\n${content}` }
-        ]
-      })
+      const completion = await timedLLMCall(
+        "validator",
+        () => (this.client as any).responses.create({
+          model: 'gpt-4.1-mini', // faster validator
+          input: [
+            { role: 'system', content: VALIDATOR_SYSTEM_PROMPT },
+            { role: 'user', content: `Предмет: ${params.subject}\nКласс: ${params.grade}\nТема: ${params.topic}\n\n${content}` }
+          ]
+        })
+      )
 
       console.log('[Validator Response]', JSON.stringify(completion, null, 2))
 
@@ -567,6 +586,8 @@ class OpenAIProvider implements AIProvider {
 
   async generateWorksheet(params: GenerateParams, onProgress?: (percent: number) => void): Promise<Worksheet> {
     console.log('[УчиОн] OpenAIProvider.generateWorksheet called', params)
+    const totalStart = Date.now();
+    console.log("[GENERATION] Started at", new Date().toISOString());
     onProgress?.(10) // Start
     
     const userPromptBase = `Сгенерируй рабочий лист.
@@ -604,13 +625,16 @@ class OpenAIProvider implements AIProvider {
       let completion
       try {
         // @ts-ignore - Using new responses API
-        completion = await (this.client as any).responses.create({
-          model: 'gpt-5-mini',
-          input: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: currentUserPrompt }
-          ]
-        })
+        completion = await timedLLMCall(
+          "main-generation",
+          () => (this.client as any).responses.create({
+            model: 'gpt-5-mini',
+            input: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: currentUserPrompt }
+            ]
+          })
+        )
         console.log('[Generator Response]', JSON.stringify(completion, null, 2))
       } catch (error) {
         console.error('[УчиОн] OpenAI API Error:', error)
@@ -633,6 +657,7 @@ class OpenAIProvider implements AIProvider {
 
       if (validation.score === 10) {
         console.log('[УчиОн] Perfect score! Returning result.')
+        console.log("[GENERATION] Total duration ms =", Date.now() - totalStart);
         return this.parseWorksheetText(content, params)
       }
 
@@ -653,6 +678,7 @@ class OpenAIProvider implements AIProvider {
     }
 
     onProgress?.(95) // Final parsing
+    console.log("[GENERATION] Total duration ms =", Date.now() - totalStart);
     return this.parseWorksheetText(bestContent, params)
   }
 
