@@ -206,6 +206,24 @@ function extractWorksheetJsonFromResponse(response: any): WorksheetJson {
     }
   }
 
+  // Fallback: check output_text
+  if ('output_text' in response && typeof response.output_text === 'string' && response.output_text) {
+    let raw = response.output_text.trim();
+    const firstBrace = raw.indexOf('{');
+    const lastBrace = raw.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      raw = raw.slice(firstBrace, lastBrace + 1);
+      if (raw) {
+        try {
+          return JSON.parse(raw) as WorksheetJson;
+        } catch (e) {
+           console.error('[GEN] Failed to parse WorksheetJson from output_text', { rawSnippet: raw.slice(0, 200) });
+           throw e;
+        }
+      }
+    }
+  }
+
   console.error('[GEN] No json/text content in AI response', { response });
   throw new Error('AI response did not contain JSON content');
 }
@@ -586,7 +604,7 @@ class OpenAIProvider implements AIProvider {
               { role: 'system', content: systemPrompt },
               { role: 'user', content: currentUserPrompt }
             ],
-            max_output_tokens: 2200,
+            max_output_tokens: 3500,
             text: {
               format: {
                 type: 'json_schema',
