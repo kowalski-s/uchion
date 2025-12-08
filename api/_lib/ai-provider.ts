@@ -300,7 +300,8 @@ async function regenerateProblemBlocks(params: {
                     type: { type: 'string', enum: ['theory','apply','error','creative'] },
                     text: { type: 'string' }
                   },
-                  required: ['index','type','text']
+                  required: ['index','type','text'],
+                  additionalProperties: false
                 }
               },
               test: {
@@ -313,10 +314,12 @@ async function regenerateProblemBlocks(params: {
                     options: {
                       type: 'object',
                       properties: { A: { type: 'string' }, B: { type: 'string' }, C: { type: 'string' } },
-                      required: ['A','B','C']
+                      required: ['A','B','C'],
+                      additionalProperties: false
                     }
                   },
-                  required: ['index','question','options']
+                  required: ['index','question','options'],
+                  additionalProperties: false
                 }
               }
             },
@@ -567,7 +570,8 @@ class OpenAIProvider implements AIProvider {
                           type: { type: 'string', enum: ['theory','apply','error','creative'] },
                           text: { type: 'string' }
                         },
-                        required: ['index','type','text']
+                        required: ['index','type','text'],
+                        additionalProperties: false
                       }
                     },
                     test: {
@@ -580,10 +584,12 @@ class OpenAIProvider implements AIProvider {
                           options: {
                             type: 'object',
                             properties: { A: { type: 'string' }, B: { type: 'string' }, C: { type: 'string' } },
-                            required: ['A','B','C']
+                            required: ['A','B','C'],
+                            additionalProperties: false
                           }
                         },
-                        required: ['index','question','options']
+                        required: ['index','question','options'],
+                        additionalProperties: false
                       }
                     },
                     answers: {
@@ -592,7 +598,8 @@ class OpenAIProvider implements AIProvider {
                         assignments: { type: 'array', items: { type: 'string' } },
                         test: { type: 'array', items: { type: 'string', enum: ['A','B','C'] } }
                       },
-                      required: ['assignments','test']
+                      required: ['assignments','test'],
+                      additionalProperties: false
                     }
                   },
                   required: ['summary','cheatsheet','assignments','test','answers'],
