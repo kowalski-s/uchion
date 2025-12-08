@@ -472,8 +472,7 @@ class OpenAIProvider implements AIProvider {
             { role: 'system', content: SUBJECT_CONFIG[params.subject].validatorPrompt },
             { role: 'user', content: `Предмет: ${params.subject}\nКласс: ${params.grade}\nТема: ${params.topic}\n\n${content}` }
           ],
-          max_output_tokens: 600,
-          reasoning: { max_tokens: 150 }
+          max_output_tokens: 600
         })
       )
 
@@ -606,8 +605,7 @@ class OpenAIProvider implements AIProvider {
                   additionalProperties: false
                 }
               }
-            },
-            reasoning: { max_tokens: 300 }
+            }
           })
         )
         console.log('[Generator Response]', JSON.stringify(completion, null, 2))
