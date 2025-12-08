@@ -6,7 +6,7 @@ import { buildPdf } from './_lib/pdf.js'
 import type { GeneratePayload, Worksheet } from '../shared/types'
 
 const InputSchema = z.object({
-  subject: z.enum(['математика', 'русский']),
+  subject: z.enum(['math', 'russian']),
   grade: z.number().int().min(1).max(4),
   topic: z.string().min(3).max(200),
 })

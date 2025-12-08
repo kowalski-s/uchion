@@ -1,4 +1,29 @@
-export type Subject = 'математика' | 'русский'
+export type Subject = 'math' | 'russian'
+
+export type AssignmentType = 'theory' | 'apply' | 'error' | 'creative'
+
+export interface WorksheetJson {
+  summary: string
+  cheatsheet: string[]
+  assignments: {
+    index: number
+    type: AssignmentType
+    text: string
+  }[]
+  test: {
+    index: number
+    question: string
+    options: {
+      A: string
+      B: string
+      C: string
+    }
+  }[]
+  answers: {
+    assignments: string[]
+    test: ('A' | 'B' | 'C')[]
+  }
+}
 
 export type GeneratePayload = {
   subject: Subject
@@ -35,6 +60,11 @@ export interface Worksheet {
   pdfBase64: string
 }
 
+export interface WorksheetWithJson extends Worksheet {
+  json?: WorksheetJson
+  validationStatus?: 'OK' | 'FAIL'
+}
+
 export type ApiErrorCode =
   | 'VALIDATION_ERROR'
   | 'AI_ERROR'
@@ -54,3 +84,14 @@ export type GenerateResponseError = {
 }
 
 export type GenerateResponse = GenerateResponseOk | GenerateResponseError
+
+export interface ValidationResult {
+  status: 'OK' | 'FAIL'
+  issues: string[]
+}
+
+export interface ValidationIssueAnalysis {
+  hasStructureErrors: boolean
+  invalidAssignments: number[]
+  invalidTests: number[]
+}

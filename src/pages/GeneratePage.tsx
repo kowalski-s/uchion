@@ -16,7 +16,7 @@ export default function GeneratePage() {
 
   const form = useForm<GenerateFormValues>({
     resolver: zodResolver(GenerateSchema),
-    defaultValues: { subject: 'математика', grade: 3, topic: '' }
+    defaultValues: { subject: 'math', grade: 3, topic: '' }
   })
 
   const mutation = useMutation({
@@ -79,8 +79,8 @@ export default function GeneratePage() {
                     className="h-12 w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-base text-slate-900 outline-none transition-all focus:border-[#8C52FF] focus:bg-white focus:ring-2 focus:ring-[#8C52FF]/20"
                     {...form.register('subject')}
                   >
-                    <option value="математика">Математика</option>
-                    <option value="русский">Русский язык</option>
+                    <option value="math">Математика</option>
+                    <option value="russian">Русский язык</option>
                   </select>
                   <div className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400">
                     <svg width="12" height="8" viewBox="0 0 12 8" fill="none" xmlns="http://www.w3.org/2000/svg">
