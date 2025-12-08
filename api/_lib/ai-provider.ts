@@ -604,7 +604,7 @@ class OpenAIProvider implements AIProvider {
               { role: 'system', content: systemPrompt },
               { role: 'user', content: currentUserPrompt }
             ],
-            max_output_tokens: 3500,
+            max_output_tokens: 4500,
             text: {
               format: {
                 type: 'json_schema',
