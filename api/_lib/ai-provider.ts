@@ -174,6 +174,42 @@ const SUBJECT_CONFIG: Record<Subject, SubjectConfig> = {
   },
 }
 
+function extractWorksheetJsonFromResponse(response: any): WorksheetJson {
+  const output = response.output?.[0];
+  const content = output?.content?.[0];
+
+  if (content && 'json' in content && content.json) {
+    // API уже вернул структурированный JSON
+    return content.json as WorksheetJson;
+  }
+
+  if (content && 'text' in content && content.text?.value) {
+    let raw = content.text.value.trim();
+
+    // на случай, если модель добавила комментарий — вырезаем только JSON по { ... }
+    const firstBrace = raw.indexOf('{');
+    const lastBrace = raw.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      raw = raw.slice(firstBrace, lastBrace + 1);
+    }
+
+    if (!raw) {
+      console.error('[GEN] Empty JSON string in response');
+      throw new Error('Empty AI JSON response');
+    }
+
+    try {
+      return JSON.parse(raw) as WorksheetJson;
+    } catch (e) {
+      console.error('[GEN] Failed to parse WorksheetJson from text', { rawSnippet: raw.slice(0, 200) });
+      throw e;
+    }
+  }
+
+  console.error('[GEN] No json/text content in AI response', { response });
+  throw new Error('AI response did not contain JSON content');
+}
+
 function extractTextFromResponse(response: any): string {
   if (!response) return "";
 
@@ -616,13 +652,7 @@ class OpenAIProvider implements AIProvider {
 
       let worksheetText = ''
       {
-        const jsonText = extractTextFromResponse(completion).trim()
-        try {
-          worksheetJson = JSON.parse(jsonText) as WorksheetJson
-        } catch (e) {
-          console.error('[GEN] Failed to parse WorksheetJson', e)
-          throw new Error('Failed to parse AI JSON response')
-        }
+        worksheetJson = extractWorksheetJsonFromResponse(completion)
         console.log('[GEN] WorksheetJson summary length:', worksheetJson.summary?.length ?? 0)
         console.log('[GEN] WorksheetJson assignments count:', worksheetJson.assignments?.length ?? 0)
         worksheetText = buildWorksheetTextFromJson(worksheetJson as WorksheetJson)
