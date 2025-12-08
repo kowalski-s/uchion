@@ -30,14 +30,14 @@ export const SYSTEM_PROMPT = `Ты — опытный методист и авт
 export function generatePrompt({ subject, grade, topic }: GeneratePayload): string {
   let subjectSpecifics = '';
 
-  if (subject === 'русский') {
+  if (subject === 'russian') {
     subjectSpecifics = `
 СПЕЦИФИКА (РУССКИЙ ЯЗЫК):
 - Конспект должен включать примеры слов с орфограммами.
 - Шпаргалка: правила ("Жи-ши пиши с буквой И").
 - Задания: вставь буквы, найди ошибки, разбери предложение.
 `;
-  } else if (subject === 'математика') {
+  } else if (subject === 'math') {
     subjectSpecifics = `
 СПЕЦИФИКА (МАТЕМАТИКА):
 - Конспект с пошаговым разбором решения примера.

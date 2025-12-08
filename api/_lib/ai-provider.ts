@@ -287,6 +287,7 @@ async function regenerateProblemBlocks(params: {
       text: {
         format: {
           type: 'json_schema',
+          name: 'worksheet_blocks_patch',
           json_schema: {
             name: 'worksheet_blocks_patch',
             schema: {
@@ -554,6 +555,7 @@ class OpenAIProvider implements AIProvider {
             text: {
               format: {
                 type: 'json_schema',
+                name: 'worksheet_json',
                 json_schema: {
                   name: 'worksheet_json',
                   schema: {

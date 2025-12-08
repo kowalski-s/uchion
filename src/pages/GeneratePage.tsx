@@ -20,7 +20,7 @@ export default function GeneratePage() {
   })
 
   const mutation = useMutation({
-    mutationFn: (values: GenerateFormValues) => generateWorksheet(values, (p) => setProgress(p)),
+    mutationFn: (values: GenerateFormValues) => generateWorksheet(values as unknown as import('../../shared/types').GeneratePayload, (p) => setProgress(p)),
     onSuccess: res => {
       if (res.status === 'error') {
         setErrorText(res.message)

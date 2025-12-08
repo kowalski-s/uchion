@@ -6,6 +6,8 @@ export const GenerateSchema = z.object({
   topic: z.string().min(3).max(200),
 })
 
+export type GenerateFormValues = z.infer<typeof GenerateSchema>
+
 export const AssignmentSchema = z.object({
   title: z.string(),
   text: z.string(),
