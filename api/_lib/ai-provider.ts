@@ -288,42 +288,39 @@ async function regenerateProblemBlocks(params: {
         format: {
           type: 'json_schema',
           name: 'worksheet_blocks_patch',
-          json_schema: {
-            name: 'worksheet_blocks_patch',
-            schema: {
-              type: 'object',
-              properties: {
-                assignments: {
-                  type: 'array',
-                  items: {
-                    type: 'object',
-                    properties: {
-                      index: { type: 'integer' },
-                      type: { type: 'string', enum: ['theory','apply','error','creative'] },
-                      text: { type: 'string' }
-                    },
-                    required: ['index','type','text']
-                  }
-                },
-                test: {
-                  type: 'array',
-                  items: {
-                    type: 'object',
-                    properties: {
-                      index: { type: 'integer' },
-                      question: { type: 'string' },
-                      options: {
-                        type: 'object',
-                        properties: { A: { type: 'string' }, B: { type: 'string' }, C: { type: 'string' } },
-                        required: ['A','B','C']
-                      }
-                    },
-                    required: ['index','question','options']
-                  }
+          schema: {
+            type: 'object',
+            properties: {
+              assignments: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    index: { type: 'integer' },
+                    type: { type: 'string', enum: ['theory','apply','error','creative'] },
+                    text: { type: 'string' }
+                  },
+                  required: ['index','type','text']
                 }
               },
-              additionalProperties: false
-            }
+              test: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    index: { type: 'integer' },
+                    question: { type: 'string' },
+                    options: {
+                      type: 'object',
+                      properties: { A: { type: 'string' }, B: { type: 'string' }, C: { type: 'string' } },
+                      required: ['A','B','C']
+                    }
+                  },
+                  required: ['index','question','options']
+                }
+              }
+            },
+            additionalProperties: false
           }
         }
       },
@@ -556,53 +553,50 @@ class OpenAIProvider implements AIProvider {
               format: {
                 type: 'json_schema',
                 name: 'worksheet_json',
-                json_schema: {
-                  name: 'worksheet_json',
-                  schema: {
-                    type: 'object',
-                    properties: {
-                      summary: { type: 'string' },
-                      cheatsheet: { type: 'array', items: { type: 'string' } },
-                      assignments: {
-                        type: 'array',
-                        items: {
-                          type: 'object',
-                          properties: {
-                            index: { type: 'integer' },
-                            type: { type: 'string', enum: ['theory','apply','error','creative'] },
-                            text: { type: 'string' }
-                          },
-                          required: ['index','type','text']
-                        }
-                      },
-                      test: {
-                        type: 'array',
-                        items: {
-                          type: 'object',
-                          properties: {
-                            index: { type: 'integer' },
-                            question: { type: 'string' },
-                            options: {
-                              type: 'object',
-                              properties: { A: { type: 'string' }, B: { type: 'string' }, C: { type: 'string' } },
-                              required: ['A','B','C']
-                            }
-                          },
-                          required: ['index','question','options']
-                        }
-                      },
-                      answers: {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    summary: { type: 'string' },
+                    cheatsheet: { type: 'array', items: { type: 'string' } },
+                    assignments: {
+                      type: 'array',
+                      items: {
                         type: 'object',
                         properties: {
-                          assignments: { type: 'array', items: { type: 'string' } },
-                          test: { type: 'array', items: { type: 'string', enum: ['A','B','C'] } }
+                          index: { type: 'integer' },
+                          type: { type: 'string', enum: ['theory','apply','error','creative'] },
+                          text: { type: 'string' }
                         },
-                        required: ['assignments','test']
+                        required: ['index','type','text']
                       }
                     },
-                    required: ['summary','cheatsheet','assignments','test','answers'],
-                    additionalProperties: false
-                  }
+                    test: {
+                      type: 'array',
+                      items: {
+                        type: 'object',
+                        properties: {
+                          index: { type: 'integer' },
+                          question: { type: 'string' },
+                          options: {
+                            type: 'object',
+                            properties: { A: { type: 'string' }, B: { type: 'string' }, C: { type: 'string' } },
+                            required: ['A','B','C']
+                          }
+                        },
+                        required: ['index','question','options']
+                      }
+                    },
+                    answers: {
+                      type: 'object',
+                      properties: {
+                        assignments: { type: 'array', items: { type: 'string' } },
+                        test: { type: 'array', items: { type: 'string', enum: ['A','B','C'] } }
+                      },
+                      required: ['assignments','test']
+                    }
+                  },
+                  required: ['summary','cheatsheet','assignments','test','answers'],
+                  additionalProperties: false
                 }
               }
             },
