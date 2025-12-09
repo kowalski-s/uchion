@@ -21,7 +21,7 @@ export const AIResponseSchema = z.object({
   topic: z.string().optional(), // Model might refine topic
   summary: z.string(),
   cheatsheet: z.array(z.string()),
-  assignments: z.array(AssignmentSchema).length(4),
+  assignments: z.array(AssignmentSchema).length(8),
   test: z.array(TestQuestionSchema).length(5),
   answers: AnswersSchema,
 })
@@ -34,7 +34,7 @@ export const WorksheetSchema = z.object({
   topic: z.string(),
   summary: z.string(),
   cheatsheet: z.array(z.string()),
-  assignments: z.array(AssignmentSchema).length(4),
+  assignments: z.array(AssignmentSchema).length(8),
   test: z.array(TestQuestionSchema).length(5),
   answers: AnswersSchema,
   pdfBase64: z.string(),

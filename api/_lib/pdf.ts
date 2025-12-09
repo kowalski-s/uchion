@@ -40,10 +40,6 @@ export async function buildPdf(worksheet: Worksheet, meta: GeneratePayload): Pro
 
     // --- PAGE 1: CONTENT ---
 
-    // Header (Name / Date) - No Grade
-    doc.font(fontName).fontSize(10).text('Имя: ___________________________________   Дата: ________________', { align: 'right' })
-    doc.moveDown(2)
-
     // Topic
     doc.font(fontName).fontSize(20).text(worksheet.topic, { align: 'center' })
     doc.moveDown(1)
@@ -68,6 +64,9 @@ export async function buildPdf(worksheet: Worksheet, meta: GeneratePayload): Pro
     }
 
     // Assignments
+    doc.moveDown(1)
+    doc.font(fontName).fontSize(10).text('Имя: ___________________________________   Дата: ________________', { align: 'right' })
+    doc.moveDown(1)
     doc.font(fontName).fontSize(14).text('Задания')
     doc.moveDown(0.5)
     worksheet.assignments.forEach((task, i) => {

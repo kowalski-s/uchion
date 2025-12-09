@@ -180,17 +180,9 @@ export default function WorksheetPage() {
         {/* PAGE 1 */}
         <PageContainer id="page1">
           {/* HEADER */}
-          <div className="mb-8 flex items-end justify-between border-b-2 border-gray-100 pb-4">
+          <div className="mb-8 flex items-center justify-between border-b-2 border-gray-100 pb-4">
             <div className="flex items-center gap-2 text-indigo-600">
                <span className="text-2xl font-bold tracking-tight">УчиОн</span>
-            </div>
-            <div className="text-right text-sm text-gray-500 print:hidden">
-              <div className="mb-2">Имя и фамилия: ____________________________________</div>
-              <div>Дата: __________________</div>
-            </div>
-            {/* Print-only simplified header for Page 1 */}
-            <div className="hidden print:block text-right text-sm text-gray-500">
-              <div>Имя и фамилия: ____________________________________</div>
             </div>
           </div>
 
@@ -228,6 +220,14 @@ export default function WorksheetPage() {
 
         {/* PAGE 2 */}
         <PageContainer id="page2">
+          {/* HEADER (Name/Date) */}
+          <div className="mb-6 flex justify-end text-sm text-gray-500">
+             <div className="text-right">
+               <div className="mb-2">Имя и фамилия: ____________________________________</div>
+               <div>Дата: __________________</div>
+             </div>
+          </div>
+
           {/* ASSIGNMENTS */}
           <section className="flex flex-col">
             <h2 className="mb-6 flex items-center gap-3 text-xl font-bold text-gray-900 print:hidden">
