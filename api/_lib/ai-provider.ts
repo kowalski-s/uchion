@@ -116,6 +116,10 @@ ANSWERS_TEST — 10 букв (A/B/C) или однозначные ответы,
 - корректность формулировок и правил;
 - соответствие уровню класса;
 - совпадение количества заданий и ответов (8 и 10).
+
+Ответь ТОЛЬКО ОДНИМ JSON-объектом без комментариев, пояснений и markdown.
+Не используй json, или любой другой markdown.
+Не оставляй запятые после последнего элемента массива или объекта.
 `.trim();
 
 const MATH_SYSTEM_PROMPT = `
@@ -170,6 +174,10 @@ ANSWERS_TEST — 10 ответов (обычно буквы A/B/C или чис�
 - корректность формата заданий,
 - что в ASSIGNMENTS ровно 8 заданий,
 - что в TEST ровно 10 вопросов и ответы соответствуют.
+
+Ответь ТОЛЬКО ОДНИМ JSON-объектом без комментариев, пояснений и markdown.
+Не используй json, или любой другой markdown.
+Не оставляй запятые после последнего элемента массива или объекта.
 `.trim();
 
 const RUSSIAN_VALIDATOR_PROMPT = `
@@ -285,7 +293,7 @@ function extractWorksheetJsonFromResponse(response: any): WorksheetJson {
     try {
       return JSON.parse(raw) as WorksheetJson;
     } catch (e) {
-      console.error('[GEN] Failed to parse WorksheetJson from text', { rawSnippet: raw.slice(0, 200) });
+      console.error('[GEN] Failed to parse WorksheetJson from text', { rawSnippet: raw });
       throw e;
     }
   }
@@ -301,7 +309,7 @@ function extractWorksheetJsonFromResponse(response: any): WorksheetJson {
         try {
           return JSON.parse(raw) as WorksheetJson;
         } catch (e) {
-           console.error('[GEN] Failed to parse WorksheetJson from output_text', { rawSnippet: raw.slice(0, 200) });
+           console.error('[GEN] Failed to parse WorksheetJson from output_text', { rawSnippet: raw });
            throw e;
         }
       }
