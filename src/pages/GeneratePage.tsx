@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
-import { useForm } from 'react-hook-form'
+import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { GenerateSchema, GenerateFormValues } from '../lib/schemas'
 import { generateWorksheet } from '../lib/api'
 import { useSessionStore } from '../store/session'
+import CustomSelect from '../components/ui/CustomSelect'
 
 export default function GeneratePage() {
   const navigate = useNavigate()
@@ -72,43 +73,39 @@ export default function GeneratePage() {
         <div className="w-full max-w-2xl rounded-[2rem] bg-white p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] ring-1 ring-purple-100">
           <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-6">
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 text-left">
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-semibold text-slate-700">Предмет</label>
-                <div className="relative">
-                  <select
-                    className="h-12 w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-base text-slate-900 outline-none transition-all focus:border-[#8C52FF] focus:bg-white focus:ring-2 focus:ring-[#8C52FF]/20"
-                    {...form.register('subject')}
-                  >
-                    <option value="math">Математика</option>
-                    <option value="russian">Русский язык</option>
-                  </select>
-                  <div className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400">
-                    <svg width="12" height="8" viewBox="0 0 12 8" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M1 1.5L6 6.5L11 1.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  </div>
-                </div>
-              </div>
+              <Controller
+                control={form.control}
+                name="subject"
+                render={({ field }) => (
+                  <CustomSelect
+                    label="Предмет"
+                    value={field.value}
+                    onChange={field.onChange}
+                    options={[
+                      { label: 'Математика', value: 'math' },
+                      { label: 'Русский язык', value: 'russian' },
+                    ]}
+                  />
+                )}
+              />
 
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-semibold text-slate-700">Класс</label>
-                <div className="relative">
-                  <select
-                    className="h-12 w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-base text-slate-900 outline-none transition-all focus:border-[#8C52FF] focus:bg-white focus:ring-2 focus:ring-[#8C52FF]/20"
-                    {...form.register('grade', { valueAsNumber: true })}
-                  >
-                    <option value={1}>1 класс</option>
-                    <option value={2}>2 класс</option>
-                    <option value={3}>3 класс</option>
-                    <option value={4}>4 класс</option>
-                  </select>
-                  <div className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400">
-                    <svg width="12" height="8" viewBox="0 0 12 8" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M1 1.5L6 6.5L11 1.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  </div>
-                </div>
-              </div>
+              <Controller
+                control={form.control}
+                name="grade"
+                render={({ field }) => (
+                  <CustomSelect
+                    label="Класс"
+                    value={field.value}
+                    onChange={field.onChange}
+                    options={[
+                      { label: '1 класс', value: 1 },
+                      { label: '2 класс', value: 2 },
+                      { label: '3 класс', value: 3 },
+                      { label: '4 класс', value: 4 },
+                    ]}
+                  />
+                )}
+              />
             </div>
 
             <div className="flex flex-col gap-2 text-left">
@@ -160,16 +157,20 @@ export default function GeneratePage() {
       {/* Loading Overlay */}
       {mutation.isPending && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/60 backdrop-blur-md transition-all">
-          <div className="w-full max-w-md px-6 text-center">
-            <h3 className="mb-4 text-2xl font-bold text-slate-800">Создаем материалы...</h3>
-            <div className="mb-2 flex justify-between text-sm font-medium text-slate-600">
-              <span>Готово: {Math.round(progress)}%</span>
-            </div>
-            <div className="h-4 w-full overflow-hidden rounded-full bg-slate-200 shadow-inner">
-              <div 
-                className="h-full rounded-full bg-gradient-to-r from-[#8C52FF] to-[#A16BFF] transition-all duration-300 ease-out shadow-[0_0_10px_rgba(140,82,255,0.5)]"
-                style={{ width: `${progress}%` }}
-              />
+          <div className="w-full max-w-xl px-6 text-center">
+            <h3 className="mb-6 text-2xl font-bold text-slate-800">Создаем материалы...</h3>
+            
+            <div className="w-full text-left">
+              <div className="mb-2 flex justify-between items-end text-sm font-medium">
+                <span className="text-slate-600">Готово: {Math.round(progress)}%</span>
+                <span className="text-xs text-slate-400">Генерация занимает 2–3 минуты</span>
+              </div>
+              <div className="h-4 w-full overflow-hidden rounded-full bg-slate-200 shadow-inner">
+                <div 
+                  className="h-full rounded-full bg-gradient-to-r from-[#8C52FF] to-[#A16BFF] transition-all duration-300 ease-out shadow-[0_0_10px_rgba(140,82,255,0.5)]"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
             </div>
           </div>
         </div>
