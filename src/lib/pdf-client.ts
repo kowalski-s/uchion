@@ -137,7 +137,7 @@ export async function buildWorksheetPdf(worksheet: Worksheet) {
   }
 
   // Debug flag to visualize block boundaries
-  const DEBUG_LAYOUT = true
+  const DEBUG_LAYOUT = false
 
   const drawDebugRect = (height: number) => {
     if (!DEBUG_LAYOUT) return
