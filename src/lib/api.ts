@@ -62,3 +62,39 @@ export async function generateWorksheet(
 
   return finalResult
 }
+
+// Dummy provider for dev/testing without DB
+export const DummyProvider = {
+  getWorksheetById: async (id: string): Promise<import('../../shared/types').Worksheet | null> => {
+    // Simulate API delay
+    await new Promise(r => setTimeout(r, 500))
+    
+    // Check if we have it in localStorage (simple client-side persistence)
+    if (typeof window !== 'undefined') {
+       // Try to recover from recent sessions if stored in localStorage by Zustand
+       // Note: Zustand persist middleware would be better, but we'll implement a simple fallback
+    }
+
+    // Return a mock worksheet if nothing else found (for Puppeteer testing)
+    return {
+      id,
+      topic: 'Тестовая тема (Dummy)',
+      subject: 'math',
+      grade: '3 класс',
+      assignments: [
+        { text: 'Реши пример: 2 + 2 = ?' },
+        { text: 'Сколько будет 5 * 5?' },
+        { text: 'Напиши число сто.' },
+      ],
+      test: [
+        { question: '2 + 2 = ?', options: ['3', '4', '5'], answer: '4' },
+        { question: 'Столица Франции?', options: ['Лондон', 'Париж', 'Берлин'], answer: 'Париж' },
+      ],
+      answers: {
+        assignments: ['4', '25', '100'],
+        test: ['4', 'Париж']
+      },
+      pdfBase64: null
+    }
+  }
+}

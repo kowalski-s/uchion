@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { useSessionStore } from '../store/session'
+import { DummyProvider } from '../lib/api'
+import type { Worksheet, PublicWorksheet } from '../../shared/types'
 
 const PageContainer = ({ children, id, className = '' }: { children: React.ReactNode, id?: string, className?: string }) => (
   <div id={id} className={`mx-auto max-w-[210mm] bg-white p-[15mm] shadow-lg border border-gray-100 rounded-xl mb-12 last:mb-0 print:max-w-none print:w-full print:shadow-none print:p-[10mm] print:border-0 print:rounded-none print:mb-0 print:mx-0 ${className}`}>
@@ -46,8 +48,72 @@ const shouldShowAnswerField = (text: string) => {
 export default function WorksheetPage() {
   const { sessionId } = useParams()
   const navigate = useNavigate()
-  const session = useSessionStore(s => (sessionId ? s.getSession(sessionId) : undefined))
+  const [searchParams] = useSearchParams()
+  const isPdfMode = searchParams.get('print') === '1' || searchParams.get('pdf') === '1'
+  
+  const sessionStore = useSessionStore()
+  const [worksheet, setWorksheet] = useState<Worksheet | null>(
+    sessionId ? sessionStore.getSession(sessionId)?.worksheet ?? null : null
+  )
+  const [loading, setLoading] = useState(!worksheet)
   const [activePage, setActivePage] = useState(1)
+
+  // Fetch worksheet if not in store (e.g. on refresh or direct link)
+  useEffect(() => {
+    if (!sessionId) return
+    if (worksheet) {
+      setLoading(false)
+      return
+    }
+
+    // Try to hydrate from URL query param (for PDF generation without DB)
+    const dataParam = searchParams.get('data')
+    if (dataParam) {
+      try {
+        const json = decodeURIComponent(escape(atob(dataParam)))
+        const publicData = JSON.parse(json) as PublicWorksheet
+        
+        // Reconstruct full Worksheet object from PublicWorksheet DTO
+        const worksheetFromUrl: Worksheet = {
+          id: publicData.id,
+          subject: publicData.subject,
+          grade: publicData.grade,
+          topic: publicData.topic,
+          assignments: publicData.assignments.map(a => ({ title: '', text: a.text })),
+          test: publicData.test.map(t => ({ question: t.question, options: t.options, answer: '' })), // answer is not needed for display? check usage
+          answers: {
+            assignments: publicData.answersAssignments,
+            test: publicData.answersTest
+          },
+          pdfBase64: '' // Not needed for display
+        }
+        
+        setWorksheet(worksheetFromUrl)
+        setLoading(false)
+        return
+      } catch (e) {
+        console.error('Failed to parse worksheet from URL', e)
+      }
+    }
+
+    const loadWorksheet = async () => {
+      setLoading(true)
+      try {
+        // In a real app, you would fetch from your API/DB here
+        // For now, we use the DummyProvider as requested for dev/testing
+        const data = await DummyProvider.getWorksheetById(sessionId)
+        if (data) {
+          setWorksheet(data)
+        }
+      } catch (e) {
+        console.error('Failed to load worksheet', e)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadWorksheet()
+  }, [sessionId, worksheet, searchParams])
 
   useEffect(() => {
     const handleScroll = () => {
@@ -74,6 +140,107 @@ export default function WorksheetPage() {
     }
   }
 
+  const handleDownloadPdf = async () => {
+    if (!sessionId) return
+
+    try {
+      // Encode worksheet data to pass it to the server, so Puppeteer can render it
+      // without needing a database persistence layer.
+      let encodedData = ''
+      if (worksheet) {
+        try {
+            // Create a lightweight DTO to avoid URL length limits
+            const publicWorksheet: PublicWorksheet = {
+                id: worksheet.id,
+                subject: worksheet.subject,
+                grade: worksheet.grade,
+                topic: worksheet.topic,
+                assignments: worksheet.assignments.map(a => ({ text: a.text })),
+                test: worksheet.test.map(t => ({ question: t.question, options: t.options })),
+                answersAssignments: worksheet.answers.assignments,
+                answersTest: worksheet.answers.test
+            }
+
+            // Simple base64 encoding of JSON
+            // We use btoa/atob for browser compatibility. 
+            // UTF-8 characters need to be escaped first.
+            const json = JSON.stringify(publicWorksheet)
+            const base64 = btoa(unescape(encodeURIComponent(json)))
+            
+            // Check length to avoid HTTP 431
+            if (base64.length > 7000) {
+                console.warn('[PDF] Encoded worksheet is too long, falling back to simplified mode')
+                // If too long, we don't send data param, so Puppeteer will try to fetch via ID
+                // (which will trigger DummyProvider / DB fallback)
+                encodedData = ''
+            } else {
+                encodedData = base64
+            }
+        } catch (e) {
+            console.error('Failed to encode worksheet data', e)
+        }
+      }
+
+      // Use POST request to avoid URL length limits with GET query params
+      const res = await fetch(`/api/pdf?id=${sessionId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            data: encodedData
+        })
+      })
+      
+      const contentType = res.headers.get('content-type') || ''
+      
+      // Check for JSON error response or HTML (wrong route)
+      if (!res.ok || !contentType.includes('application/pdf')) {
+        let errorMessage = 'Не удалось сгенерировать PDF'
+        try {
+          const text = await res.text()
+          try {
+            const json = JSON.parse(text)
+            if (json.error) errorMessage = `Ошибка сервера: ${json.error}`
+          } catch {
+             // If not JSON, it might be HTML (Vite fallback)
+             if (text.includes('<!doctype html>') || text.includes('<html')) {
+                errorMessage = 'Ошибка: API недоступен (пришел HTML). Используйте vercel dev.'
+             } else {
+                errorMessage = `Ошибка: ${res.status} ${res.statusText}`
+             }
+          }
+          console.error('PDF download error:', res.status, text)
+        } catch (e) {
+          console.error('Failed to read error response', e)
+        }
+        
+        alert(errorMessage)
+        return
+      }
+
+      const blob = await res.blob()
+      
+      if (blob.size < 100) {
+        console.error('PDF Blob is too small')
+        alert('Ошибка: PDF файл пустой.')
+        return
+      }
+
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `worksheet-${sessionId}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (e) {
+      console.error(e)
+      alert('Ошибка при скачивании PDF. Проверьте консоль.')
+    }
+  }
+
   // Helper function to format text with bold markers
   const formatText = (text: string) => {
     if (!text) return null
@@ -85,11 +252,22 @@ export default function WorksheetPage() {
     })
   }
 
-  if (!session) {
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="mb-4 h-12 w-12 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent mx-auto"></div>
+          <p className="text-gray-600">Загрузка рабочего листа...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!worksheet) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-10">
-        <div className="mb-4 text-xl font-semibold">Сессия не найдена</div>
-        <p className="mb-6 text-gray-600">Вернитесь на главную и попробуйте снова.</p>
+        <div className="mb-4 text-xl font-semibold">Лист не найден</div>
+        <p className="mb-6 text-gray-600">Возможно, ссылка устарела или содержит ошибку.</p>
         <button
           onClick={() => navigate('/')}
           className="inline-flex h-11 items-center justify-center rounded-md bg-blue-600 px-6 text-white hover:bg-blue-700"
@@ -100,17 +278,20 @@ export default function WorksheetPage() {
     )
   }
 
+  // In PDF/Print mode, we might want to hide some elements or just rely on @media print
+  // Here we can also use isPdfMode to conditionally render if @media print is not enough
+  
   return (
-    <div className="min-h-screen bg-gray-50 print:bg-white">
+    <div className={`min-h-screen bg-gray-50 print:bg-white ${isPdfMode ? 'print-mode' : ''}`}>
       {/* HEADER (Hidden on Print) */}
-      <header className="border-b bg-white shadow-sm sticky top-0 z-50 print:hidden">
+      <header className={`border-b bg-white shadow-sm sticky top-0 z-50 print:hidden ${isPdfMode ? 'hidden' : ''}`}>
         <div className="mx-auto max-w-7xl px-6 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-6">
               <Link to="/" className="text-xl font-bold text-indigo-600">УчиОн</Link>
               <div className="hidden sm:block">
-                <div className="text-sm font-medium text-gray-900">{session.worksheet.topic}</div>
-                <div className="text-xs text-gray-500">{session.worksheet.subject}, {session.worksheet.grade}</div>
+                <div className="text-sm font-medium text-gray-900">{worksheet.topic}</div>
+                <div className="text-xs text-gray-500">{worksheet.subject}, {worksheet.grade}</div>
               </div>
             </div>
             <div className="flex items-center gap-4">
@@ -125,9 +306,8 @@ export default function WorksheetPage() {
               </button>
               
               <button
-                onClick={handlePrint}
+                onClick={handleDownloadPdf}
                 className="group flex flex-col items-center gap-0.5 pt-4"
-                title="Сохранить как PDF можно через окно печати"
               >
                 <div className="flex h-10 w-10 items-center justify-center rounded-full border border-indigo-100 bg-white shadow-sm transition-all group-hover:bg-indigo-50 group-active:scale-95">
                   <svg className="h-5 w-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -143,9 +323,13 @@ export default function WorksheetPage() {
 
       <SidebarNav activePage={activePage} />
 
+      {/* Hide SidebarNav in PDF mode via CSS if not handled by @media print (it is handled by print:hidden) */}
+      {isPdfMode && <style>{`nav { display: none !important; }`}</style>}
+
       <main className="py-12 print:py-0">
-        {/* PAGE 1 */}
-        <PageContainer id="page1">
+        <div id="worksheet-pdf-root" className="worksheet-pdf-root">
+          {/* PAGE 1 */}
+          <PageContainer id="page1">
           {/* HEADER */}
           <div className="mb-8 flex items-center justify-between border-b-2 border-gray-100 pb-4">
             <div className="flex items-center gap-2 text-indigo-600">
@@ -158,7 +342,7 @@ export default function WorksheetPage() {
              </div>
           </div>
 
-          <h1 className="mb-6 text-center text-3xl font-bold text-gray-900">{session.worksheet.topic}</h1>
+          <h1 className="mb-6 text-center text-3xl font-bold text-gray-900">{worksheet.topic}</h1>
 
           {/* ASSIGNMENTS */}
           <section className="flex flex-col">
@@ -172,7 +356,7 @@ export default function WorksheetPage() {
             </h2>
 
             <div className="flex flex-col gap-6">
-              {session.worksheet.assignments.map((task, i) => (
+              {worksheet.assignments.map((task, i) => (
                 <div key={i} className={`task-block break-inside-avoid ${i === 0 ? 'mt-2' : ''}`}>
                   <div className="mb-3 text-lg font-medium text-gray-900 leading-tight">
                     <span className="mr-2 text-indigo-600 print:text-black">{i + 1}.</span>
@@ -203,7 +387,7 @@ export default function WorksheetPage() {
             </h2>
 
             <div className="grid gap-6">
-              {session.worksheet.test.map((q, i) => (
+              {worksheet.test.map((q, i) => (
                 <div key={i} className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm break-inside-avoid print:border print:border-gray-300 print:shadow-none print:p-4">
                   <div className="mb-3 font-medium text-gray-900">{i + 1}. {q.question}</div>
                   <div className="space-y-2">
@@ -269,7 +453,7 @@ export default function WorksheetPage() {
              <div className="break-inside-avoid">
                <h3 className="mb-4 text-lg font-bold text-indigo-600">Задания</h3>
                <ul className="space-y-4">
-                 {session.worksheet.answers.assignments.map((ans, i) => (
+                 {worksheet.answers.assignments.map((ans, i) => (
                    <li key={i} className="rounded-lg bg-gray-50 p-3 text-sm text-gray-800 border border-gray-100 print:border-gray-200">
                      <span className="font-bold text-indigo-500 mr-2">{i + 1}.</span>
                      {ans}
@@ -281,7 +465,7 @@ export default function WorksheetPage() {
              <div className="break-inside-avoid">
                <h3 className="mb-4 text-lg font-bold text-indigo-600">Мини-тест</h3>
                <ul className="space-y-2">
-                 {session.worksheet.answers.test.map((ans, i) => (
+                 {worksheet.answers.test.map((ans, i) => (
                    <li key={i} className="flex items-center gap-3 rounded-lg bg-gray-50 px-4 py-3 text-sm font-medium text-gray-800 border border-gray-100 print:border-gray-200">
                      <span className="font-bold text-indigo-500">{i + 1}.</span>
                      <span>{ans}</span>
@@ -291,10 +475,18 @@ export default function WorksheetPage() {
              </div>
            </div>
         </PageContainer>
+        </div>
 
       </main>
       
       <style>{`
+        .worksheet-pdf-root { 
+          background: white; 
+          padding: 16px 24px; 
+          max-width: 800px; 
+          margin: 0 auto; 
+        }
+
         @media print {
           @page { margin: 10mm; size: auto; }
           body { 

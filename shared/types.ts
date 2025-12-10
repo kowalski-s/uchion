@@ -91,3 +91,19 @@ export interface ValidationIssueAnalysis {
   invalidAssignments: number[]
   invalidTests: number[]
 }
+
+export type PublicWorksheet = {
+  id: string
+  subject: Subject
+  grade: string
+  topic: string
+  assignments: {
+    text: string
+  }[]
+  test: {
+    question: string
+    options: string[]
+  }[]
+  answersAssignments: string[]
+  answersTest: string[]
+}
