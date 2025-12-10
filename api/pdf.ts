@@ -1,48 +1,54 @@
-import chromium from "chrome-aws-lambda";
-import puppeteer from "puppeteer-core";
-import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 export const config = {
-  runtime: "nodejs",
-};
+  runtime: 'nodejs',
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  try {
-    const { url } = req.query;
+  const { url } = req.query
+  if (!url || typeof url !== 'string') {
+    res.status(400).json({ error: 'Missing url query param' })
+    return
+  }
 
-    if (!url || typeof url !== "string") {
-      return res.status(400).send("Missing ?url parameter");
+  const isProd = !!process.env.VERCEL
+  let browser: any
+
+  try {
+    if (isProd) {
+      const chromiumMod: any = await import('@sparticuz/chromium')
+      const chromium = chromiumMod.default ?? chromiumMod
+      const puppeteerCore = (await import('puppeteer-core')).default
+
+      browser = await puppeteerCore.launch({
+        args: chromium.args,
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath(),
+        headless: chromium.headless,
+      })
+    } else {
+      const puppeteerLocal = (await import('puppeteer')).default
+      browser = await puppeteerLocal.launch({ headless: true })
     }
 
-    const executablePath = await chromium.executablePath;
+    const page = await browser.newPage()
+    await page.goto(url, { waitUntil: 'networkidle0' })
 
-    const browser = await puppeteer.launch({
-      args: chromium.args,
-      defaultViewport: chromium.defaultViewport,
-      executablePath,
-      headless: chromium.headless,
-      ignoreHTTPSErrors: true,
-    });
-
-    const page = await browser.newPage();
-
-    await page.goto(url as string, {
-      waitUntil: "networkidle0",
-    });
-
-    const pdf = await page.pdf({
-      format: "A4",
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
       printBackground: true,
-    });
+      margin: { top: '10mm', right: '10mm', bottom: '10mm', left: '10mm' },
+    })
 
-    await browser.close();
-
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", "attachment; filename=worksheet.pdf");
-
-    return res.send(pdf);
-  } catch (error: any) {
-    console.error("PDF Generation Error:", error);
-    return res.status(500).send("PDF generation failed: " + error.message);
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', 'attachment; filename="worksheet.pdf"')
+    res.status(200).send(pdfBuffer)
+  } catch (error) {
+    console.error('PDF Generation Error:', error)
+    res.status(500).json({ error: 'Failed to generate PDF' })
+  } finally {
+    if (browser) {
+      await browser.close().catch(() => {})
+    }
   }
 }
