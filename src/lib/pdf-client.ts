@@ -106,57 +106,47 @@ export async function buildWorksheetPdf(worksheet: Worksheet) {
     cursorY -= 32
   }
 
+  const calculateBlockHeight = (type: 'assignment' | 'test' | 'note' | 'answer', data: any, font: any) => {
+    if (type === 'assignment') {
+      // data is assignment object
+      const lines = wrapText(font, `${data.index + 1}. ${data.text}`, 12, contentWidth)
+      const textHeight = lines.length * (12 + 6)
+      return textHeight + 80 + 16 // text + field + margin
+    } else if (type === 'test') {
+      // data is test question object
+      const lines = wrapText(font, `${data.index + 1}. ${data.question}`, 12, contentWidth)
+      const textHeight = lines.length * (12 + 6)
+      const optionsHeight = data.options.length * 22
+      return textHeight + optionsHeight + 20 // text + options + margin
+    } else if (type === 'note') {
+      return 300 + 40 // fixed block height
+    } else if (type === 'answer') {
+        return 20 // simplified
+    }
+    return 0
+  }
+
+  const checkPageBreak = (needed: number) => {
+    if (cursorY - needed < margin) {
+      page = addPage()
+      cursorY = h - margin
+      return true
+    }
+    return false
+  }
+
   const drawAssignments = () => {
-    // Page 1: Header + Assignments 1-4
-    // We assume drawHeader() has already run and cursorY is set.
-    
+    // Header is already drawn.
     drawSectionTitle('Задания', 'assignment')
     
-    const fieldHeight = 80 // Reduced for compactness
-    
-    // Calculate total height needed for the first 4 items to see if they fit
-    let heightPage1 = 0
-    worksheet.assignments.slice(0, 4).forEach((a, i) => {
-       const lines = wrapText(regular, `${i + 1}. ${a.text}`, 12, contentWidth)
-       const textHeight = lines.length * (12 + 6)
-       heightPage1 += textHeight + fieldHeight + 16
-    })
-
-    // If page 1 content is too tall (e.g. > available space ~600pt), we split differently
-    // Available space roughly: 842 (A4) - 120 (header) - 80 (margin) - 32 (title) = ~610pt
-    const availableH = 610 
-    
-    let itemsPerPage1 = 4
-    if (heightPage1 > availableH) {
-      // Try 3 items
-      itemsPerPage1 = 3
-    }
-    
-    // Draw first batch (itemsPerPage1)
-    worksheet.assignments.slice(0, itemsPerPage1).forEach((a, i) => {
+    worksheet.assignments.forEach((a, i) => {
+      const height = calculateBlockHeight('assignment', { ...a, index: i }, regular)
+      checkPageBreak(height)
+      
       const maxWidth = contentWidth
       const lines = wrapText(regular, `${i + 1}. ${a.text}`, 12, maxWidth)
-      
-      let y = cursorY
-      lines.forEach(line => {
-        page.drawText(line, { x: margin, y: y - 12, size: 12, font: regular })
-        y -= 18
-      })
-      cursorY = y - 6
-      page.drawRectangle({ x: margin, y: cursorY - fieldHeight, width: contentWidth, height: fieldHeight, borderColor: rgb(0.8, 0.8, 0.85), borderWidth: 1, color: rgb(0.97, 0.97, 0.98) })
-      cursorY -= fieldHeight + 16
-    })
+      const fieldHeight = 80
 
-    // Force Page Break
-    page = addPage()
-    cursorY = h - margin
-    
-    // Draw remaining items (from itemsPerPage1 to end)
-    worksheet.assignments.slice(itemsPerPage1).forEach((a, i) => {
-      const idx = itemsPerPage1 + i
-      const maxWidth = contentWidth
-      const lines = wrapText(regular, `${idx + 1}. ${a.text}`, 12, maxWidth)
-      
       let y = cursorY
       lines.forEach(line => {
         page.drawText(line, { x: margin, y: y - 12, size: 12, font: regular })
@@ -169,63 +159,30 @@ export async function buildWorksheetPdf(worksheet: Worksheet) {
   }
 
   const drawTest = () => {
-    // Force new page for Test
-    page = addPage()
-    cursorY = h - margin
+    // Force new page for Test if requested, or just flow it?
+    // User requested "Unit height check". 
+    // Let's first check if we need a new page for the Title itself
     
-    drawSectionTitle('Мини-тест', 'test')
-    
-    // Calculate if we can fit all 10 on one page, or 5/5
-    // Each question: text height + options height + gap
-    // Options: 3 options * 22 = 66pt
-    // Gap: 12pt
-    // Text: variable
-    
-    let heightAll = 0
-    const qHeights = worksheet.test.map((q, i) => {
-       const lines = wrapText(regular, `${i + 1}. ${q.question}`, 12, contentWidth)
-       const textHeight = lines.length * (12 + 6)
-       const blockH = textHeight + (q.options.length * 22) + 12
-       heightAll += blockH
-       return blockH
-    })
-    
-    // Available space ~ 842 - 80 - 32 = 730pt
-    const availableH = 730
-    
-    // Determine split point
-    let splitIndex = 5 // Default split at 5
-    let currentH = 0
-    for(let i=0; i<worksheet.test.length; i++) {
-        currentH += qHeights[i]
-        if (currentH > availableH) {
-            splitIndex = i
-            break
-        }
-    }
-    // If we can fit everything on one page, splitIndex will be > length (or 10)
-    // But user prefers splitting if it's tight.
-    // Let's stick to 5/5 split if total > page, or if questions are large.
-    
-    // If very short questions, maybe 10 fit. 
-    // If long questions, maybe only 3 fit.
-    
-    // User requested: "2-3 on one, 3-5 on next..." for assignments.
-    // For test: "if impossible to fit on 1, split 5/5".
-    // Let's keep strict 5/5 split for consistency unless they are tiny.
-    
-    const itemsPerPage = 5
-    
-    worksheet.test.forEach((q, i) => {
-      if (i === itemsPerPage) {
+    if (checkPageBreak(50)) {
+        // Title on new page
+    } else {
+        // Maybe force new page for test start as per previous design?
+        // User said "All 8 tasks, mini-test ... should be processed equally".
+        // But previously we had "Force new page for Test". 
+        // Let's keep "Force new page" for the *section start* to keep it clean, then flow questions.
         page = addPage()
         cursorY = h - margin
-      }
+    }
+
+    drawSectionTitle('Мини-тест', 'test')
+    
+    worksheet.test.forEach((q, i) => {
+      const height = calculateBlockHeight('test', { ...q, index: i }, regular)
+      checkPageBreak(height)
 
       const maxWidth = contentWidth
       const lines = wrapText(regular, `${i + 1}. ${q.question}`, 12, maxWidth)
-      const textHeight = lines.length * (12 + 6)
-      ensure(textHeight + 22 * q.options.length + 12)
+      
       let y = cursorY
       lines.forEach(line => {
         page.drawText(line, { x: margin, y: y - 12, size: 12, font: regular })
@@ -244,7 +201,11 @@ export async function buildWorksheetPdf(worksheet: Worksheet) {
   }
 
   const drawEvaluationNotes = () => {
-    // Force new page for Evaluation + Notes
+    // Evaluation block height ~ 100
+    // Notes block height ~ 300
+    // Total ~ 400
+    
+    // Force new page if it doesn't fit heavily, but usually we put it on new page
     page = addPage()
     cursorY = h - margin
     
@@ -258,8 +219,13 @@ export async function buildWorksheetPdf(worksheet: Worksheet) {
     })
     cursorY = y - 20
     
+    // Notes block
+    // Check if fits
+    const notesHeight = 300
+    checkPageBreak(notesHeight + 40)
+
     drawSectionTitle('Заметки', 'other')
-    const lines = 20 // More lines since it's a separate page
+    const lines = 20 
     let ly = cursorY - 10
     for (let i = 0; i < lines; i++) {
       page.drawLine({ start: { x: margin, y: ly }, end: { x: margin + contentWidth, y: ly }, color: rgb(0.85, 0.85, 0.9), thickness: 1 })
