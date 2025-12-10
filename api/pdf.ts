@@ -1,5 +1,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import puppeteer from 'puppeteer'
+import puppeteer from 'puppeteer-core'
+import chromium from '@sparticuz/chromium'
+
+export const config = {
+  runtime: 'nodejs18.x',
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { id } = req.query
@@ -33,10 +38,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   let browser
   try {
-    browser = await puppeteer.launch({
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-      headless: 'new',
-    })
+    const isProd = !!process.env.VERCEL || process.env.NODE_ENV === 'production'
+
+    if (isProd) {
+      // Production: use @sparticuz/chromium
+      browser = await puppeteer.launch({
+        args: chromium.args,
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath(),
+        headless: chromium.headless,
+      })
+    } else {
+      // Development: use local Chrome
+      // Note: We need to specify 'channel' or 'executablePath' for puppeteer-core to find Chrome locally
+      // If you have 'puppeteer' installed as a dev dependency, it downloads Chrome to a known location.
+      // If not, you might need to point to your local Chrome installation.
+      // Here we assume standard local Chrome availability or 'puppeteer' dev dependency.
+      try {
+          browser = await puppeteer.launch({
+            channel: 'chrome',
+            headless: true,
+          })
+      } catch (e) {
+          // Fallback: try without channel (relies on CHROMIUM_PATH or similar)
+          console.warn('Could not launch local Chrome with channel "chrome", trying default...', e)
+          browser = await puppeteer.launch({
+            headless: true,
+          })
+      }
+    }
 
     const page = await browser.newPage()
 
