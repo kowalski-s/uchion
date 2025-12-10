@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useSessionStore } from '../store/session'
 
@@ -14,29 +14,23 @@ const SidebarNav = ({ activePage }: { activePage: number }) => (
       href="#page1" 
       className={`px-3 py-2 rounded-md transition-colors ${activePage === 1 ? 'text-indigo-600 font-semibold bg-indigo-50' : 'text-gray-500 hover:text-indigo-500 hover:bg-gray-50'}`}
     >
-      Конспект
+      Задания
     </a>
     <a 
       href="#page2" 
       className={`px-3 py-2 rounded-md transition-colors ${activePage === 2 ? 'text-indigo-600 font-semibold bg-indigo-50' : 'text-gray-500 hover:text-indigo-500 hover:bg-gray-50'}`}
     >
-      Задания
+      Тест
     </a>
     <a 
       href="#page3" 
       className={`px-3 py-2 rounded-md transition-colors ${activePage === 3 ? 'text-indigo-600 font-semibold bg-indigo-50' : 'text-gray-500 hover:text-indigo-500 hover:bg-gray-50'}`}
     >
-      Тест
+      Заметки
     </a>
     <a 
       href="#page4" 
       className={`px-3 py-2 rounded-md transition-colors ${activePage === 4 ? 'text-indigo-600 font-semibold bg-indigo-50' : 'text-gray-500 hover:text-indigo-500 hover:bg-gray-50'}`}
-    >
-      Заметки
-    </a>
-    <a 
-      href="#page5" 
-      className={`px-3 py-2 rounded-md transition-colors ${activePage === 5 ? 'text-indigo-600 font-semibold bg-indigo-50' : 'text-gray-500 hover:text-indigo-500 hover:bg-gray-50'}`}
     >
       Ответы
     </a>
@@ -53,7 +47,6 @@ export default function WorksheetPage() {
   const { sessionId } = useParams()
   const navigate = useNavigate()
   const session = useSessionStore(s => (sessionId ? s.getSession(sessionId) : undefined))
-  const [pdfError, setPdfError] = useState<string | null>(null)
   const [activePage, setActivePage] = useState(1)
 
   useEffect(() => {
@@ -62,12 +55,10 @@ export default function WorksheetPage() {
       const p2 = document.getElementById('page2')
       const p3 = document.getElementById('page3')
       const p4 = document.getElementById('page4')
-      const p5 = document.getElementById('page5')
       
       const scrollY = window.scrollY + 200 // offset
 
-      if (p5 && scrollY >= p5.offsetTop) setActivePage(5)
-      else if (p4 && scrollY >= p4.offsetTop) setActivePage(4)
+      if (p4 && scrollY >= p4.offsetTop) setActivePage(4)
       else if (p3 && scrollY >= p3.offsetTop) setActivePage(3)
       else if (p2 && scrollY >= p2.offsetTop) setActivePage(2)
       else setActivePage(1)
@@ -77,31 +68,10 @@ export default function WorksheetPage() {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
-  const downloadPdf = useMemo(() => {
-    return () => {
-      if (!session || !session.pdfBase64) {
-        setPdfError('PDF ещё не готов. Обновите страницу или сгенерируйте лист заново.')
-        return
-      }
-      try {
-        const bytes = Uint8Array.from(atob(session.pdfBase64), c => c.charCodeAt(0))
-        const blob = new Blob([bytes], { type: 'application/pdf' })
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = 'worksheet.pdf'
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
-        URL.revokeObjectURL(url)
-      } catch {
-        setPdfError('Не удалось подготовить PDF. Попробуйте снова.')
-      }
-    }
-  }, [session])
-
   const handlePrint = () => {
-    window.print()
+    if (typeof window !== 'undefined') {
+      window.print()
+    }
   }
 
   // Helper function to format text with bold markers
@@ -155,8 +125,9 @@ export default function WorksheetPage() {
               </button>
               
               <button
-                onClick={downloadPdf}
+                onClick={handlePrint}
                 className="group flex flex-col items-center gap-0.5 pt-4"
+                title="Сохранить как PDF можно через окно печати"
               >
                 <div className="flex h-10 w-10 items-center justify-center rounded-full border border-indigo-100 bg-white shadow-sm transition-all group-hover:bg-indigo-50 group-active:scale-95">
                   <svg className="h-5 w-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -173,10 +144,6 @@ export default function WorksheetPage() {
       <SidebarNav activePage={activePage} />
 
       <main className="py-12 print:py-0">
-        {pdfError && (
-          <div className="mx-auto max-w-[210mm] mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-red-700 shadow-sm print:hidden">{pdfError}</div>
-        )}
-
         {/* PAGE 1 */}
         <PageContainer id="page1">
           {/* HEADER */}
@@ -184,49 +151,14 @@ export default function WorksheetPage() {
             <div className="flex items-center gap-2 text-indigo-600">
                <span className="text-2xl font-bold tracking-tight">УчиОн</span>
             </div>
-          </div>
-
-          {/* TOPIC & SUMMARY */}
-          <section className="mb-6">
-            <h1 className="mb-4 text-center text-3xl font-bold text-gray-900">{session.worksheet.topic}</h1>
-            <div className="rounded-xl border-l-4 border-indigo-500 bg-indigo-50/50 p-5 shadow-sm">
-              <h2 className="mb-2 text-lg font-bold text-indigo-900">Краткий конспект</h2>
-              <p className="leading-snug text-gray-800 whitespace-pre-line text-sm">{formatText(session.worksheet.summary)}</p>
-            </div>
-          </section>
-
-          {/* CHEATSHEET */}
-          {session.worksheet.cheatsheet && session.worksheet.cheatsheet.length > 0 && (
-            <section>
-               <div className="rounded-xl border border-indigo-100 bg-white p-4 shadow-sm">
-                  <h3 className="mb-2 flex items-center gap-2 font-bold text-indigo-600">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-100 text-xs">⚡</span>
-                    Шпаргалка
-                  </h3>
-                  <div className="flex flex-col gap-1.5">
-                    {session.worksheet.cheatsheet.map((item, i) => (
-                      <div key={i} className="flex items-start gap-2 text-sm text-gray-700 leading-tight">
-                        <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-indigo-400" />
-                        <span>{item}</span>
-                      </div>
-                    ))}
-                  </div>
-               </div>
-            </section>
-          )}
-        </PageContainer>
-
-        <div className="page-break"></div>
-
-        {/* PAGE 2 */}
-        <PageContainer id="page2">
-          {/* HEADER (Name/Date) */}
-          <div className="mb-6 flex justify-end text-sm text-gray-500">
-             <div className="text-right">
+            {/* Name/Date Header for First Page */}
+             <div className="text-sm text-gray-500 text-right">
                <div className="mb-2">Имя и фамилия: ____________________________________</div>
                <div>Дата: __________________</div>
              </div>
           </div>
+
+          <h1 className="mb-6 text-center text-3xl font-bold text-gray-900">{session.worksheet.topic}</h1>
 
           {/* ASSIGNMENTS */}
           <section className="flex flex-col">
@@ -257,8 +189,8 @@ export default function WorksheetPage() {
 
         <div className="page-break"></div>
 
-        {/* PAGE 3 */}
-        <PageContainer id="page3">
+        {/* PAGE 2 */}
+        <PageContainer id="page2">
           {/* TEST */}
           <section className="h-full flex flex-col">
             <h2 className="mb-6 flex items-center gap-3 text-xl font-bold text-gray-900 print:hidden">
@@ -292,8 +224,8 @@ export default function WorksheetPage() {
 
         <div className="page-break"></div>
 
-        {/* PAGE 4 */}
-        <PageContainer id="page4" className="flex flex-col">
+        {/* PAGE 3 */}
+        <PageContainer id="page3" className="flex flex-col">
           {/* EVALUATION & NOTES */}
           <section className="mb-8 break-inside-avoid">
             <div className="rounded-xl bg-gray-50 p-6">
@@ -329,16 +261,16 @@ export default function WorksheetPage() {
 
         <div className="page-break"></div>
 
-        {/* PAGE 5: ANSWERS */}
-        <PageContainer id="page5">
+        {/* PAGE 4: ANSWERS */}
+        <PageContainer id="page4">
            <h2 className="mb-8 text-center text-2xl font-bold text-gray-900">🔍 Ответы</h2>
            
-           <div className="grid gap-8 md:grid-cols-2">
-             <div>
+           <div className="grid gap-8 md:grid-cols-2 answers-grid">
+             <div className="break-inside-avoid">
                <h3 className="mb-4 text-lg font-bold text-indigo-600">Задания</h3>
                <ul className="space-y-4">
                  {session.worksheet.answers.assignments.map((ans, i) => (
-                   <li key={i} className="rounded-lg bg-gray-50 p-3 text-sm text-gray-800">
+                   <li key={i} className="rounded-lg bg-gray-50 p-3 text-sm text-gray-800 border border-gray-100 print:border-gray-200">
                      <span className="font-bold text-indigo-500 mr-2">{i + 1}.</span>
                      {ans}
                    </li>
@@ -346,11 +278,11 @@ export default function WorksheetPage() {
                </ul>
              </div>
 
-             <div>
+             <div className="break-inside-avoid">
                <h3 className="mb-4 text-lg font-bold text-indigo-600">Мини-тест</h3>
                <ul className="space-y-2">
                  {session.worksheet.answers.test.map((ans, i) => (
-                   <li key={i} className="flex items-center gap-3 rounded-lg bg-gray-50 px-4 py-3 text-sm font-medium text-gray-800">
+                   <li key={i} className="flex items-center gap-3 rounded-lg bg-gray-50 px-4 py-3 text-sm font-medium text-gray-800 border border-gray-100 print:border-gray-200">
                      <span className="font-bold text-indigo-500">{i + 1}.</span>
                      <span>{ans}</span>
                    </li>
@@ -367,9 +299,34 @@ export default function WorksheetPage() {
           @page { margin: 10mm; size: auto; }
           body { 
             background: white; 
+            margin: 0;
+            padding: 0;
             -webkit-print-color-adjust: exact; 
             print-color-adjust: exact; 
           }
+          
+          /* Основной контейнер */
+          main {
+            padding: 0 !important;
+            margin: 0 !important;
+          }
+
+          /* Сброс стилей для контейнеров страниц */
+          .mx-auto.max-w-\\[210mm\\] {
+            max-width: none !important;
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            border: none !important;
+            box-shadow: none !important;
+            border-radius: 0 !important;
+          }
+
+          /* Убираем отступы у заголовков на первой странице */
+          #page1 {
+            padding-top: 0 !important;
+          }
+
           .page-break { page-break-before: always; }
           
           /* Prevent breaks inside tasks and cards */
@@ -381,6 +338,14 @@ export default function WorksheetPage() {
           /* Ensure proper spacing */
           .task-block { 
              margin-bottom: 12px; 
+          }
+
+          /* Two columns for answers */
+          .answers-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            column-gap: 8mm;
+            row-gap: 2mm;
           }
 
           /* Hide UI elements */

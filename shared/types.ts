@@ -3,8 +3,6 @@ export type Subject = 'math' | 'russian'
 export type AssignmentType = 'theory' | 'apply' | 'error' | 'creative'
 
 export interface WorksheetJson {
-  summary: string
-  cheatsheet: string[]
   assignments: {
     index: number
     type: AssignmentType
@@ -52,8 +50,6 @@ export interface Worksheet {
   subject: Subject
   grade: string
   topic: string
-  summary: string
-  cheatsheet: string[]
   assignments: Assignment[]
   test: TestQuestion[]
   answers: WorksheetAnswers

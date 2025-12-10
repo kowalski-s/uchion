@@ -42,31 +42,13 @@ export async function buildPdf(worksheet: Worksheet, meta: GeneratePayload): Pro
 
     // Topic
     doc.font(fontName).fontSize(20).text(worksheet.topic, { align: 'center' })
-    doc.moveDown(1)
-
-    // Summary
-    doc.font(fontName).fontSize(14).text('Краткий конспект')
     doc.moveDown(0.5)
-    doc.font(fontName).fontSize(11).text(worksheet.summary, { align: 'justify', lineGap: 3 })
-    doc.moveDown(1.5)
 
-    // Cheatsheet
-    if (worksheet.cheatsheet && worksheet.cheatsheet.length > 0) {
-      doc.rect(doc.x, doc.y, 515, 15 + worksheet.cheatsheet.length * 20).fillAndStroke('#f3f4f6', '#e5e7eb')
-      doc.fill('#000000')
-      doc.moveDown(0.5)
-      doc.font(fontName).fontSize(12).text('⚡ Шпаргалка', { indent: 10 })
-      doc.moveDown(0.5)
-      worksheet.cheatsheet.forEach(item => {
-        doc.font(fontName).fontSize(10).text(`• ${item}`, { indent: 20, lineGap: 5 })
-      })
-      doc.moveDown(2)
-    }
-
-    // Assignments
-    doc.moveDown(1)
+    // Name/Date
     doc.font(fontName).fontSize(10).text('Имя: ___________________________________   Дата: ________________', { align: 'right' })
     doc.moveDown(1)
+
+    // Assignments
     doc.font(fontName).fontSize(14).text('Задания')
     doc.moveDown(0.5)
     worksheet.assignments.forEach((task, i) => {
@@ -78,9 +60,14 @@ export async function buildPdf(worksheet: Worksheet, meta: GeneratePayload): Pro
       doc.fillColor('#000000')
     })
     
-    doc.addPage()
+    // Check if we need a new page for Test (simple heuristic)
+    if (doc.y > 650) {
+      doc.addPage()
+    } else {
+      doc.moveDown(2)
+    }
 
-    // --- PAGE 2: TEST & EVALUATION ---
+    // --- TEST & EVALUATION ---
 
     // Test
     doc.font(fontName).fontSize(14).text('📝 Мини-тест')
@@ -88,6 +75,9 @@ export async function buildPdf(worksheet: Worksheet, meta: GeneratePayload): Pro
     
     const letters = ['A', 'B', 'C', 'D']
     worksheet.test.forEach((q, i) => {
+      // Check for page break inside test
+      if (doc.y > 720) doc.addPage()
+
       doc.font(fontName).fontSize(11).text(`${i + 1}. ${q.question}`)
       doc.moveDown(0.3)
       if (q.options) {
@@ -98,6 +88,7 @@ export async function buildPdf(worksheet: Worksheet, meta: GeneratePayload): Pro
       doc.moveDown(1)
     })
 
+    if (doc.y > 650) doc.addPage()
     doc.moveDown(2)
 
     // Self Evaluation
@@ -118,25 +109,32 @@ export async function buildPdf(worksheet: Worksheet, meta: GeneratePayload): Pro
 
     doc.addPage()
 
-    // --- PAGE 3: TEACHER ANSWERS ---
+    // --- TEACHER ANSWERS (2 Columns) ---
 
     doc.font(fontName).fontSize(16).text('🔍 Ответы для учителя', { align: 'center' })
     doc.moveDown(2)
 
-    doc.font(fontName).fontSize(14).text('Задания')
+    const startY = doc.y
+    const colWidth = 250
+    const gap = 20
+
+    // Column 1: Assignments
+    doc.text('Задания', 40, startY, { width: colWidth, align: 'left' })
     doc.moveDown(0.5)
     if (worksheet.answers && worksheet.answers.assignments) {
       worksheet.answers.assignments.forEach((ans, i) => {
-        doc.font(fontName).fontSize(11).text(`${i + 1}: ${ans}`, { lineGap: 5 })
+        doc.font(fontName).fontSize(11).text(`${i + 1}: ${ans}`, { lineGap: 5, width: colWidth })
       })
     }
-    doc.moveDown(1.5)
 
-    doc.font(fontName).fontSize(14).text('Мини-тест')
+    // Column 2: Test
+    // Reset Y to top of columns
+    doc.y = startY
+    doc.text('Мини-тест', 40 + colWidth + gap, startY, { width: colWidth, align: 'left' })
     doc.moveDown(0.5)
     if (worksheet.answers && worksheet.answers.test) {
       worksheet.answers.test.forEach((ans, i) => {
-        doc.font(fontName).fontSize(11).text(`${i + 1} — ${ans}`, { lineGap: 5 })
+        doc.text(`${i + 1} — ${ans}`, 40 + colWidth + gap, doc.y, { lineGap: 5, width: colWidth })
       })
     }
 
