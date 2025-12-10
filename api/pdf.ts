@@ -2,8 +2,10 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import puppeteer from 'puppeteer-core'
 import chromium from '@sparticuz/chromium'
 
+// Vercel Functions only support 'nodejs' (latest LTS) or 'edge'.
+// Specific versions like 'nodejs18.x' are deprecated/unsupported in the config object.
 export const config = {
-  runtime: 'nodejs18.x',
+  maxDuration: 60, // Increase timeout for PDF generation
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
