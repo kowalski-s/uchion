@@ -113,16 +113,29 @@ export async function buildWorksheetPdf(worksheet: Worksheet) {
     drawSectionTitle('Задания', 'assignment')
     
     const fieldHeight = 80 // Reduced for compactness
-    const itemsPerPage1 = 4
     
-    // Draw first 4 items
+    // Calculate total height needed for the first 4 items to see if they fit
+    let heightPage1 = 0
+    worksheet.assignments.slice(0, 4).forEach((a, i) => {
+       const lines = wrapText(regular, `${i + 1}. ${a.text}`, 12, contentWidth)
+       const textHeight = lines.length * (12 + 6)
+       heightPage1 += textHeight + fieldHeight + 16
+    })
+
+    // If page 1 content is too tall (e.g. > available space ~600pt), we split differently
+    // Available space roughly: 842 (A4) - 120 (header) - 80 (margin) - 32 (title) = ~610pt
+    const availableH = 610 
+    
+    let itemsPerPage1 = 4
+    if (heightPage1 > availableH) {
+      // Try 3 items
+      itemsPerPage1 = 3
+    }
+    
+    // Draw first batch (itemsPerPage1)
     worksheet.assignments.slice(0, itemsPerPage1).forEach((a, i) => {
       const maxWidth = contentWidth
       const lines = wrapText(regular, `${i + 1}. ${a.text}`, 12, maxWidth)
-      // Check if text is too long, if so, limit it or just let it flow (but might overflow page)
-      // Since we force 4 items, we hope they fit. 
-      // Typically 4 items * (fieldHeight + textHeight) ~ 4 * 120 = 480pt.
-      // Page height 842 - 120 (header) - 80 (margin) = 640pt. Should fit.
       
       let y = cursorY
       lines.forEach(line => {
@@ -134,11 +147,11 @@ export async function buildWorksheetPdf(worksheet: Worksheet) {
       cursorY -= fieldHeight + 16
     })
 
-    // Force Page Break for next 4 items
+    // Force Page Break
     page = addPage()
     cursorY = h - margin
     
-    // Draw next 4 items (5-8)
+    // Draw remaining items (from itemsPerPage1 to end)
     worksheet.assignments.slice(itemsPerPage1).forEach((a, i) => {
       const idx = itemsPerPage1 + i
       const maxWidth = contentWidth
@@ -162,10 +175,44 @@ export async function buildWorksheetPdf(worksheet: Worksheet) {
     
     drawSectionTitle('Мини-тест', 'test')
     
-    // Calculate if we can fit all 10 on one page
-    // Approx height per question: 3 lines text (50pt) + 3 options (66pt) + gap (12pt) ~ 130pt.
-    // 10 questions = 1300pt > 842pt. So likely need 2 pages.
-    // User wants: if impossible to fit on 1, split evenly (5 and 5).
+    // Calculate if we can fit all 10 on one page, or 5/5
+    // Each question: text height + options height + gap
+    // Options: 3 options * 22 = 66pt
+    // Gap: 12pt
+    // Text: variable
+    
+    let heightAll = 0
+    const qHeights = worksheet.test.map((q, i) => {
+       const lines = wrapText(regular, `${i + 1}. ${q.question}`, 12, contentWidth)
+       const textHeight = lines.length * (12 + 6)
+       const blockH = textHeight + (q.options.length * 22) + 12
+       heightAll += blockH
+       return blockH
+    })
+    
+    // Available space ~ 842 - 80 - 32 = 730pt
+    const availableH = 730
+    
+    // Determine split point
+    let splitIndex = 5 // Default split at 5
+    let currentH = 0
+    for(let i=0; i<worksheet.test.length; i++) {
+        currentH += qHeights[i]
+        if (currentH > availableH) {
+            splitIndex = i
+            break
+        }
+    }
+    // If we can fit everything on one page, splitIndex will be > length (or 10)
+    // But user prefers splitting if it's tight.
+    // Let's stick to 5/5 split if total > page, or if questions are large.
+    
+    // If very short questions, maybe 10 fit. 
+    // If long questions, maybe only 3 fit.
+    
+    // User requested: "2-3 on one, 3-5 on next..." for assignments.
+    // For test: "if impossible to fit on 1, split 5/5".
+    // Let's keep strict 5/5 split for consistency unless they are tiny.
     
     const itemsPerPage = 5
     
