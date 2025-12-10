@@ -111,7 +111,8 @@ export async function buildWorksheetPdf(worksheet: Worksheet) {
       // data is assignment object
       const lines = wrapText(font, `${data.index + 1}. ${data.text}`, 12, contentWidth)
       const textHeight = lines.length * (12 + 6)
-      return textHeight + 80 + 16 // text + field + margin
+      const fieldHeight = data.fieldHeight || 80
+      return textHeight + fieldHeight + 16 // text + field + margin
     } else if (type === 'test') {
       // data is test question object
       const lines = wrapText(font, `${data.index + 1}. ${data.question}`, 12, contentWidth)
@@ -135,17 +136,60 @@ export async function buildWorksheetPdf(worksheet: Worksheet) {
     return false
   }
 
+  // Debug flag to visualize block boundaries
+  const DEBUG_LAYOUT = true
+
+  const drawDebugRect = (height: number) => {
+    if (!DEBUG_LAYOUT) return
+    page.drawRectangle({
+      x: margin - 2,
+      y: cursorY - height,
+      width: contentWidth + 4,
+      height: height,
+      borderColor: rgb(0.8, 0.8, 0.8), // light grey
+      borderWidth: 1,
+      color: undefined,
+    })
+  }
+
   const drawAssignments = () => {
     // Header is already drawn.
     drawSectionTitle('Задания', 'assignment')
     
+    const standardFieldHeight = 80
+    const MIN_FIELD_HEIGHT = 40
+
     worksheet.assignments.forEach((a, i) => {
-      const height = calculateBlockHeight('assignment', { ...a, index: i }, regular)
+      // Calculate standard height
+      let fieldHeight = standardFieldHeight
+      let height = calculateBlockHeight('assignment', { ...a, index: i, fieldHeight }, regular)
+      
+      // Flexible Last Assignment Logic
+      // If this is the last assignment in the list, and it doesn't fit...
+      if (i === worksheet.assignments.length - 1) {
+         if (cursorY - height < margin) {
+             // It doesn't fit. Can we shrink the field?
+             const remainingSpace = cursorY - margin
+             const textOnlyHeight = calculateBlockHeight('assignment', { ...a, index: i, fieldHeight: 0 }, regular)
+             // height = textHeight + fieldHeight + 16
+             // textOnlyHeight = textHeight + 0 + 16
+             
+             // We need: textOnlyHeight + adjustedFieldHeight <= remainingSpace
+             const maxPossibleField = remainingSpace - textOnlyHeight
+             
+             if (maxPossibleField >= MIN_FIELD_HEIGHT) {
+                 // We can fit it by shrinking!
+                 fieldHeight = maxPossibleField
+                 height = calculateBlockHeight('assignment', { ...a, index: i, fieldHeight }, regular)
+             }
+         }
+      }
+
       checkPageBreak(height)
+      drawDebugRect(height)
       
       const maxWidth = contentWidth
       const lines = wrapText(regular, `${i + 1}. ${a.text}`, 12, maxWidth)
-      const fieldHeight = 80
 
       let y = cursorY
       lines.forEach(line => {
@@ -179,6 +223,7 @@ export async function buildWorksheetPdf(worksheet: Worksheet) {
     worksheet.test.forEach((q, i) => {
       const height = calculateBlockHeight('test', { ...q, index: i }, regular)
       checkPageBreak(height)
+      drawDebugRect(height)
 
       const maxWidth = contentWidth
       const lines = wrapText(regular, `${i + 1}. ${q.question}`, 12, maxWidth)
@@ -223,6 +268,7 @@ export async function buildWorksheetPdf(worksheet: Worksheet) {
     // Check if fits
     const notesHeight = 300
     checkPageBreak(notesHeight + 40)
+    drawDebugRect(notesHeight + 40)
 
     drawSectionTitle('Заметки', 'other')
     const lines = 20 
