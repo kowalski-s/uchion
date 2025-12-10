@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react'
-import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom'
+import React, { useState, useEffect, useRef } from 'react'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useSessionStore } from '../store/session'
 import { DummyProvider } from '../lib/api'
 import type { Worksheet, PublicWorksheet } from '../../shared/types'
+import { buildWorksheetPdf } from '../lib/pdf-client'
 
 const PageContainer = ({ children, id, className = '' }: { children: React.ReactNode, id?: string, className?: string }) => (
   <div id={id} className={`mx-auto max-w-[210mm] bg-white p-[15mm] shadow-lg border border-gray-100 rounded-xl mb-12 last:mb-0 print:max-w-none print:w-full print:shadow-none print:p-[10mm] print:border-0 print:rounded-none print:mb-0 print:mx-0 ${className}`}>
@@ -48,8 +49,7 @@ const shouldShowAnswerField = (text: string) => {
 export default function WorksheetPage() {
   const { sessionId } = useParams()
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
-  const isPdfMode = searchParams.get('print') === '1' || searchParams.get('pdf') === '1'
+  const worksheetRef = useRef<HTMLDivElement | null>(null)
   
   const sessionStore = useSessionStore()
   const [worksheet, setWorksheet] = useState<Worksheet | null>(
@@ -66,35 +66,7 @@ export default function WorksheetPage() {
       return
     }
 
-    // Try to hydrate from URL query param (for PDF generation without DB)
-    const dataParam = searchParams.get('data')
-    if (dataParam) {
-      try {
-        const json = decodeURIComponent(escape(atob(dataParam)))
-        const publicData = JSON.parse(json) as PublicWorksheet
-        
-        // Reconstruct full Worksheet object from PublicWorksheet DTO
-        const worksheetFromUrl: Worksheet = {
-          id: publicData.id,
-          subject: publicData.subject,
-          grade: publicData.grade,
-          topic: publicData.topic,
-          assignments: publicData.assignments.map(a => ({ title: '', text: a.text })),
-          test: publicData.test.map(t => ({ question: t.question, options: t.options, answer: '' })), // answer is not needed for display? check usage
-          answers: {
-            assignments: publicData.answersAssignments,
-            test: publicData.answersTest
-          },
-          pdfBase64: '' // Not needed for display
-        }
-        
-        setWorksheet(worksheetFromUrl)
-        setLoading(false)
-        return
-      } catch (e) {
-        console.error('Failed to parse worksheet from URL', e)
-      }
-    }
+    // No server PDF now; hydrate only from store or DummyProvider
 
     const loadWorksheet = async () => {
       setLoading(true)
@@ -113,7 +85,7 @@ export default function WorksheetPage() {
     }
 
     loadWorksheet()
-  }, [sessionId, worksheet, searchParams])
+  }, [sessionId, worksheet])
 
   useEffect(() => {
     const handleScroll = () => {
@@ -141,107 +113,20 @@ export default function WorksheetPage() {
   }
 
   const handleDownloadPdf = async () => {
-    if (!sessionId) return
-
+    if (!worksheet) return
     try {
-      // Encode worksheet data to pass it to the server, so Puppeteer can render it
-      // without needing a database persistence layer.
-      let encodedData = ''
-      if (worksheet) {
-        try {
-            // Create a lightweight DTO to avoid URL length limits
-            const publicWorksheet: PublicWorksheet = {
-                id: worksheet.id,
-                subject: worksheet.subject,
-                grade: worksheet.grade,
-                topic: worksheet.topic,
-                assignments: worksheet.assignments.map(a => ({ text: a.text })),
-                test: worksheet.test.map(t => ({ question: t.question, options: t.options })),
-                answersAssignments: worksheet.answers.assignments,
-                answersTest: worksheet.answers.test
-            }
-
-            // Simple base64 encoding of JSON
-            // We use btoa/atob for browser compatibility. 
-            // UTF-8 characters need to be escaped first.
-            const json = JSON.stringify(publicWorksheet)
-            const base64 = btoa(unescape(encodeURIComponent(json)))
-            
-            // Check length to avoid HTTP 431
-            if (base64.length > 7000) {
-                console.warn('[PDF] Encoded worksheet is too long, falling back to simplified mode')
-                // If too long, we don't send data param, so Puppeteer will try to fetch via ID
-                // (which will trigger DummyProvider / DB fallback)
-                encodedData = ''
-            } else {
-                encodedData = base64
-            }
-        } catch (e) {
-            console.error('Failed to encode worksheet data', e)
-        }
-      }
-
-      // Use POST request to avoid URL length limits with GET query params
-      // However, Puppeteer on Vercel needs a GET request URL to visit.
-      // So we need to construct the FULL URL that Puppeteer will visit.
-      
-      const currentUrl = new URL(window.location.href)
-      currentUrl.searchParams.set('print', '1')
-      currentUrl.searchParams.set('pdf', '1')
-      if (encodedData) {
-        currentUrl.searchParams.set('data', encodedData)
-      }
-      
-      const targetUrl = currentUrl.toString()
-      
-      const res = await fetch(`/api/pdf?url=${encodeURIComponent(targetUrl)}`)
-      
-      const contentType = res.headers.get('content-type') || ''
-      
-      // Check for JSON error response or HTML (wrong route)
-      if (!res.ok || !contentType.includes('application/pdf')) {
-        let errorMessage = 'Не удалось сгенерировать PDF'
-        try {
-          const text = await res.text()
-          try {
-            const json = JSON.parse(text)
-            if (json.error) errorMessage = `Ошибка сервера: ${json.error}`
-          } catch {
-             // If not JSON, it might be HTML (Vite fallback)
-             if (text.includes('<!doctype html>') || text.includes('<html')) {
-                errorMessage = 'Ошибка: API недоступен (пришел HTML). Используйте vercel dev.'
-             } else {
-                errorMessage = `Ошибка: ${res.status} ${res.statusText}`
-             }
-          }
-          console.error('PDF download error:', res.status, text)
-        } catch (e) {
-          console.error('Failed to read error response', e)
-        }
-        
-        alert(errorMessage)
-        return
-      }
-
-      const blob = await res.blob()
-      
-      if (blob.size < 100) {
-        console.error('PDF Blob is too small')
-        alert('Ошибка: PDF файл пустой.')
-        return
-      }
-
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement("a")
+      const blob = await buildWorksheetPdf(worksheet)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
       a.href = url
-      a.download = `worksheet-${sessionId}.pdf`
+      a.download = `${(worksheet.topic || 'worksheet').replace(/\s+/g, '-')}.pdf`
       document.body.appendChild(a)
       a.click()
       a.remove()
-      window.URL.revokeObjectURL(url)
-    } catch (e) {
-      console.error(e)
-      alert('Ошибка при скачивании PDF. Проверьте консоль.')
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('PDF download error:', err)
+      alert('Не удалось создать PDF. Попробуйте еще раз.')
     }
   }
 
@@ -286,9 +171,9 @@ export default function WorksheetPage() {
   // Here we can also use isPdfMode to conditionally render if @media print is not enough
   
   return (
-    <div className={`min-h-screen bg-gray-50 print:bg-white ${isPdfMode ? 'print-mode' : ''}`}>
+    <div className={`min-h-screen bg-gray-50 print:bg-white`}>
       {/* HEADER (Hidden on Print) */}
-      <header className={`border-b bg-white shadow-sm sticky top-0 z-50 print:hidden ${isPdfMode ? 'hidden' : ''}`}>
+      <header className={`border-b bg-white shadow-sm sticky top-0 z-50 print:hidden`}>
         <div className="mx-auto max-w-7xl px-6 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-6">
@@ -327,11 +212,9 @@ export default function WorksheetPage() {
 
       <SidebarNav activePage={activePage} />
 
-      {/* Hide SidebarNav in PDF mode via CSS if not handled by @media print (it is handled by print:hidden) */}
-      {isPdfMode && <style>{`nav { display: none !important; }`}</style>}
-
       <main className="py-12 print:py-0">
         <div id="worksheet-pdf-root" className="worksheet-pdf-root">
+          <div ref={worksheetRef}>
           {/* PAGE 1 */}
           <PageContainer id="page1">
           {/* HEADER */}
@@ -446,13 +329,13 @@ export default function WorksheetPage() {
             </div>
           </section>
         </PageContainer>
-
+          </div>
+        
         <div className="page-break"></div>
-
-        {/* PAGE 4: ANSWERS */}
+        
+        {/* PAGE 4: ANSWERS (не включаем в PDF) */}
         <PageContainer id="page4">
            <h2 className="mb-8 text-center text-2xl font-bold text-gray-900">🔍 Ответы</h2>
-           
            <div className="grid gap-8 md:grid-cols-2 answers-grid">
              <div className="break-inside-avoid">
                <h3 className="mb-4 text-lg font-bold text-indigo-600">Задания</h3>
@@ -465,7 +348,6 @@ export default function WorksheetPage() {
                  ))}
                </ul>
              </div>
-
              <div className="break-inside-avoid">
                <h3 className="mb-4 text-lg font-bold text-indigo-600">Мини-тест</h3>
                <ul className="space-y-2">

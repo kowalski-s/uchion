@@ -82,9 +82,9 @@ export const DummyProvider = {
       subject: 'math',
       grade: '3 класс',
       assignments: [
-        { text: 'Реши пример: 2 + 2 = ?' },
-        { text: 'Сколько будет 5 * 5?' },
-        { text: 'Напиши число сто.' },
+        { title: 'Задание 1', text: 'Реши пример: 2 + 2 = ?' },
+        { title: 'Задание 2', text: 'Сколько будет 5 * 5?' },
+        { title: 'Задание 3', text: 'Напиши число сто.' },
       ],
       test: [
         { question: '2 + 2 = ?', options: ['3', '4', '5'], answer: '4' },
