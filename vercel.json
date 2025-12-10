@@ -4,5 +4,9 @@
       "maxDuration": 300,
       "includeFiles": "api/_assets/**"
     }
-  }
+  },
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/$1" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
 }
