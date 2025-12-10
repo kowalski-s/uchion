@@ -90,15 +90,65 @@ export async function buildWorksheetPdf(worksheet: Worksheet) {
     cursorY -= titleSize + 16
   }
 
+  const drawSectionTitle = (text: string, type: 'assignment' | 'test' | 'other') => {
+    // Draw icon background
+    const iconSize = 28
+    const iconX = margin
+    const iconY = cursorY - iconSize + 6 // Adjust alignment
+    const color = rgb(0.35, 0.2, 0.85) // Purple
+
+    if (type !== 'other') {
+      page.drawRectangle({
+        x: iconX,
+        y: iconY,
+        width: iconSize,
+        height: iconSize,
+        color: color,
+        borderColor: color,
+        borderWidth: 0,
+      })
+
+      // Draw simple white icon inside
+      if (type === 'assignment') {
+        // Pencil icon (diagonal line with thickness)
+        page.drawLine({
+          start: { x: iconX + 6, y: iconY + 6 },
+          end: { x: iconX + 22, y: iconY + 22 },
+          color: rgb(1, 1, 1),
+          thickness: 3
+        })
+      } else if (type === 'test') {
+        // Document icon (lines)
+        const lineX = iconX + 6
+        page.drawLine({ start: { x: lineX, y: iconY + 20 }, end: { x: lineX + 16, y: iconY + 20 }, color: rgb(1, 1, 1), thickness: 2 })
+        page.drawLine({ start: { x: lineX, y: iconY + 14 }, end: { x: lineX + 16, y: iconY + 14 }, color: rgb(1, 1, 1), thickness: 2 })
+        page.drawLine({ start: { x: lineX, y: iconY + 8 }, end: { x: lineX + 12, y: iconY + 8 }, color: rgb(1, 1, 1), thickness: 2 })
+      }
+    }
+
+    const textX = type === 'other' ? margin : margin + iconSize + 12
+    page.drawText(text, { x: textX, y: cursorY - 16, size: 16, font: bold, color: rgb(0, 0, 0) })
+    cursorY -= 32
+  }
+
   const drawAssignments = () => {
-    ensure(24)
-    drawText('Задания', 16, bold)
-    const fieldHeight = 100 // Reduced from 120 to fit 8 assignments on 2 pages
-    worksheet.assignments.forEach((a, i) => {
+    // Page 1: Header + Assignments 1-4
+    // We assume drawHeader() has already run and cursorY is set.
+    
+    drawSectionTitle('Задания', 'assignment')
+    
+    const fieldHeight = 80 // Reduced for compactness
+    const itemsPerPage1 = 4
+    
+    // Draw first 4 items
+    worksheet.assignments.slice(0, itemsPerPage1).forEach((a, i) => {
       const maxWidth = contentWidth
       const lines = wrapText(regular, `${i + 1}. ${a.text}`, 12, maxWidth)
-      const textHeight = lines.length * (12 + 6)
-      ensure(textHeight + fieldHeight + 10) // Reduced buffer
+      // Check if text is too long, if so, limit it or just let it flow (but might overflow page)
+      // Since we force 4 items, we hope they fit. 
+      // Typically 4 items * (fieldHeight + textHeight) ~ 4 * 120 = 480pt.
+      // Page height 842 - 120 (header) - 80 (margin) = 640pt. Should fit.
+      
       let y = cursorY
       lines.forEach(line => {
         page.drawText(line, { x: margin, y: y - 12, size: 12, font: regular })
@@ -106,7 +156,27 @@ export async function buildWorksheetPdf(worksheet: Worksheet) {
       })
       cursorY = y - 6
       page.drawRectangle({ x: margin, y: cursorY - fieldHeight, width: contentWidth, height: fieldHeight, borderColor: rgb(0.8, 0.8, 0.85), borderWidth: 1, color: rgb(0.97, 0.97, 0.98) })
-      cursorY -= fieldHeight + 16 // Reduced gap between assignments
+      cursorY -= fieldHeight + 16
+    })
+
+    // Force Page Break for next 4 items
+    page = addPage()
+    cursorY = h - margin
+    
+    // Draw next 4 items (5-8)
+    worksheet.assignments.slice(itemsPerPage1).forEach((a, i) => {
+      const idx = itemsPerPage1 + i
+      const maxWidth = contentWidth
+      const lines = wrapText(regular, `${idx + 1}. ${a.text}`, 12, maxWidth)
+      
+      let y = cursorY
+      lines.forEach(line => {
+        page.drawText(line, { x: margin, y: y - 12, size: 12, font: regular })
+        y -= 18
+      })
+      cursorY = y - 6
+      page.drawRectangle({ x: margin, y: cursorY - fieldHeight, width: contentWidth, height: fieldHeight, borderColor: rgb(0.8, 0.8, 0.85), borderWidth: 1, color: rgb(0.97, 0.97, 0.98) })
+      cursorY -= fieldHeight + 16
     })
   }
 
@@ -115,10 +185,17 @@ export async function buildWorksheetPdf(worksheet: Worksheet) {
     page = addPage()
     cursorY = h - margin
     
-    drawText('Мини-тест', 16, bold)
+    drawSectionTitle('Мини-тест', 'test')
+    
+    // Calculate if we can fit all 10 on one page
+    // Approx height per question: 3 lines text (50pt) + 3 options (66pt) + gap (12pt) ~ 130pt.
+    // 10 questions = 1300pt > 842pt. So likely need 2 pages.
+    // User wants: if impossible to fit on 1, split evenly (5 and 5).
+    
+    const itemsPerPage = 5
+    
     worksheet.test.forEach((q, i) => {
-      // Split 5 questions per page if requested
-      if (i === 5) {
+      if (i === itemsPerPage) {
         page = addPage()
         cursorY = h - margin
       }
@@ -149,7 +226,7 @@ export async function buildWorksheetPdf(worksheet: Worksheet) {
     page = addPage()
     cursorY = h - margin
     
-    drawText('Оценка урока', 16, bold)
+    drawSectionTitle('Оценка урока', 'other')
     const items = ['Все понял', 'Было немного сложно', 'Нужна помощь']
     let y = cursorY
     items.forEach(t => {
@@ -159,7 +236,7 @@ export async function buildWorksheetPdf(worksheet: Worksheet) {
     })
     cursorY = y - 20
     
-    drawText('Заметки', 16, bold)
+    drawSectionTitle('Заметки', 'other')
     const lines = 20 // More lines since it's a separate page
     let ly = cursorY - 10
     for (let i = 0; i < lines; i++) {
@@ -172,7 +249,7 @@ export async function buildWorksheetPdf(worksheet: Worksheet) {
   const drawAnswersTwoColumns = () => {
     page = addPage()
     cursorY = h - margin
-    drawText('Ответы', 16, bold)
+    drawSectionTitle('Ответы', 'other')
     const gap = 20
     const colWidth = (contentWidth - gap) / 2
     const leftX = margin
