@@ -182,15 +182,19 @@ export default function WorksheetPage() {
       }
 
       // Use POST request to avoid URL length limits with GET query params
-      const res = await fetch(`/api/pdf?id=${sessionId}`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            data: encodedData
-        })
-      })
+      // However, Puppeteer on Vercel needs a GET request URL to visit.
+      // So we need to construct the FULL URL that Puppeteer will visit.
+      
+      const currentUrl = new URL(window.location.href)
+      currentUrl.searchParams.set('print', '1')
+      currentUrl.searchParams.set('pdf', '1')
+      if (encodedData) {
+        currentUrl.searchParams.set('data', encodedData)
+      }
+      
+      const targetUrl = currentUrl.toString()
+      
+      const res = await fetch(`/api/pdf?url=${encodeURIComponent(targetUrl)}`)
       
       const contentType = res.headers.get('content-type') || ''
       
