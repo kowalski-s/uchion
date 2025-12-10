@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useMutation } from '@tanstack/react-query'
 import { useSessionStore } from '../store/session'
-import { DummyProvider } from '../lib/api'
-import type { Worksheet, PublicWorksheet } from '../../shared/types'
+import { DummyProvider, generateWorksheet } from '../lib/api'
+import type { Worksheet, PublicWorksheet, GeneratePayload } from '../../shared/types'
 import { buildWorksheetPdf } from '../lib/pdf-client'
 
 const PageContainer = ({ children, id, className = '' }: { children: React.ReactNode, id?: string, className?: string }) => (
@@ -57,6 +58,44 @@ export default function WorksheetPage() {
   )
   const [loading, setLoading] = useState(!worksheet)
   const [activePage, setActivePage] = useState(1)
+  const [regenProgress, setRegenProgress] = useState(0)
+
+  const regenerateMutation = useMutation({
+    mutationFn: (payload: GeneratePayload) => generateWorksheet(payload, (p) => setRegenProgress(p)),
+    onSuccess: (res) => {
+      if (res.status === 'error') {
+        alert(res.message) // Simple alert for now, or use a toast
+        return
+      }
+      const newWorksheet = res.data.worksheet
+      setWorksheet(newWorksheet)
+      try {
+        localStorage.setItem('uchion_cached_worksheet', JSON.stringify(newWorksheet))
+      } catch (e) {
+        console.error('Failed to update cache', e)
+      }
+      // Update session store too if we want consistency
+      if (sessionId) {
+        sessionStore.saveSession(sessionId, {
+          payload: { 
+            subject: newWorksheet.subject, 
+            grade: parseInt(newWorksheet.grade) || 3, 
+            topic: newWorksheet.topic 
+          },
+          worksheet: newWorksheet,
+          pdfBase64: newWorksheet.pdfBase64
+        })
+      }
+    },
+    onError: () => {
+      alert('Не удалось перегенерировать лист. Попробуйте ещё раз.')
+    }
+  })
+
+  const handleNewGeneration = () => {
+    localStorage.removeItem('uchion_cached_worksheet')
+    navigate('/')
+  }
 
   // Fetch worksheet if not in store (e.g. on refresh or direct link)
   useEffect(() => {
@@ -66,11 +105,24 @@ export default function WorksheetPage() {
       return
     }
 
-    // No server PDF now; hydrate only from store or DummyProvider
-
     const loadWorksheet = async () => {
       setLoading(true)
       try {
+        // 1. Try localStorage first
+        const cached = localStorage.getItem('uchion_cached_worksheet')
+        if (cached) {
+          try {
+            const parsed = JSON.parse(cached) as Worksheet
+            setWorksheet(parsed)
+            setLoading(false)
+            return 
+          } catch (e) {
+            console.error('Failed to parse cached worksheet', e)
+            localStorage.removeItem('uchion_cached_worksheet')
+          }
+        }
+
+        // 2. Fallback to DummyProvider (or real API fetch if implemented)
         // In a real app, you would fetch from your API/DB here
         // For now, we use the DummyProvider as requested for dev/testing
         const data = await DummyProvider.getWorksheetById(sessionId)
@@ -184,6 +236,19 @@ export default function WorksheetPage() {
               </div>
             </div>
             <div className="flex items-center gap-4">
+               <button
+                onClick={handleNewGeneration}
+                className="group flex flex-col items-center gap-0.5 pt-4"
+                title="Создать новый материал"
+              >
+                <div className="flex h-10 w-10 items-center justify-center rounded-full border border-indigo-100 bg-white shadow-sm transition-all group-hover:bg-indigo-50 group-active:scale-95">
+                  <svg className="h-5 w-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
+                  </svg>
+                </div>
+                <span className="text-[10px] font-medium text-gray-500 group-hover:text-indigo-600">Новая генерация</span>
+              </button>
+
                <button
                 onClick={handlePrint}
                 className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-gray-700 shadow hover:bg-gray-50 hover:text-indigo-600 transition-all"
@@ -366,6 +431,9 @@ export default function WorksheetPage() {
         </div>
 
       </main>
+
+      {/* Loading Overlay for Regeneration */}
+      {/* Removed regenerate overlay as we redirect to home now */}
       
       <style>{`
         .worksheet-pdf-root { 

@@ -29,6 +29,14 @@ export default function GeneratePage() {
       }
       const sessionId = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : String(Date.now())
       const worksheet = res.data.worksheet
+      
+      // Save to localStorage for persistence
+      try {
+        localStorage.setItem('uchion_cached_worksheet', JSON.stringify(worksheet))
+      } catch (e) {
+        console.error('Failed to save to localStorage', e)
+      }
+
       saveSession(sessionId, {
         payload: { subject: form.getValues('subject'), grade: form.getValues('grade'), topic: form.getValues('topic') },
         worksheet,
@@ -45,6 +53,7 @@ export default function GeneratePage() {
   const onSubmit = (values: GenerateFormValues) => {
     setErrorText(null)
     setProgress(0)
+    localStorage.removeItem('uchion_cached_worksheet')
     mutation.mutate({ subject: values.subject, grade: values.grade, topic: values.topic })
   }
 
