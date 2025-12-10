@@ -81,53 +81,28 @@ export async function buildWorksheetPdf(worksheet: Worksheet) {
     // Reset cursor for Title below header area
     cursorY = h - margin - 70
 
-    // Title centered
-    const titleSize = 24
+    // Title centered with auto-scaling
+    let titleSize = 24
     const title = worksheet.topic
-    const titleWidth = bold.widthOfTextAtSize(title, titleSize)
+    let titleWidth = bold.widthOfTextAtSize(title, titleSize)
+    
+    // Scale down if title is too wide
+    while (titleWidth > contentWidth && titleSize > 14) {
+      titleSize -= 1
+      titleWidth = bold.widthOfTextAtSize(title, titleSize)
+    }
+
     const centerX = margin + (contentWidth - titleWidth) / 2
     page.drawText(title, { x: centerX, y: cursorY - titleSize, size: titleSize, font: bold })
     cursorY -= titleSize + 16
   }
 
   const drawSectionTitle = (text: string, type: 'assignment' | 'test' | 'other') => {
-    // Draw icon background
-    const iconSize = 28
-    const iconX = margin
-    const iconY = cursorY - iconSize + 6 // Adjust alignment
-    const color = rgb(0.35, 0.2, 0.85) // Purple
-
-    if (type !== 'other') {
-      page.drawRectangle({
-        x: iconX,
-        y: iconY,
-        width: iconSize,
-        height: iconSize,
-        color: color,
-        borderColor: color,
-        borderWidth: 0,
-      })
-
-      // Draw simple white icon inside
-      if (type === 'assignment') {
-        // Pencil icon (diagonal line with thickness)
-        page.drawLine({
-          start: { x: iconX + 6, y: iconY + 6 },
-          end: { x: iconX + 22, y: iconY + 22 },
-          color: rgb(1, 1, 1),
-          thickness: 3
-        })
-      } else if (type === 'test') {
-        // Document icon (lines)
-        const lineX = iconX + 6
-        page.drawLine({ start: { x: lineX, y: iconY + 20 }, end: { x: lineX + 16, y: iconY + 20 }, color: rgb(1, 1, 1), thickness: 2 })
-        page.drawLine({ start: { x: lineX, y: iconY + 14 }, end: { x: lineX + 16, y: iconY + 14 }, color: rgb(1, 1, 1), thickness: 2 })
-        page.drawLine({ start: { x: lineX, y: iconY + 8 }, end: { x: lineX + 12, y: iconY + 8 }, color: rgb(1, 1, 1), thickness: 2 })
-      }
-    }
-
-    const textX = type === 'other' ? margin : margin + iconSize + 12
-    page.drawText(text, { x: textX, y: cursorY - 16, size: 16, font: bold, color: rgb(0, 0, 0) })
+    // Revert to simple text title without icons for PDF download as requested
+    // "in pdf (downloading) you can remove these icons"
+    
+    // We still keep the spacing
+    page.drawText(text, { x: margin, y: cursorY - 16, size: 16, font: bold, color: rgb(0, 0, 0) })
     cursorY -= 32
   }
 

@@ -238,7 +238,8 @@ export default function WorksheetPage() {
               Задания
             </h2>
             {/* Print-only simplified header for Assignments */}
-            <h2 className="hidden print:flex mb-4 text-lg font-bold text-gray-900 border-b pb-2">
+            <h2 className="hidden print:flex mb-4 text-lg font-bold text-gray-900 border-b pb-2 items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded bg-indigo-600 text-white text-xs">✏️</span>
               Задания
             </h2>
 
@@ -269,7 +270,8 @@ export default function WorksheetPage() {
               Мини-тест
             </h2>
             {/* Print-only simplified header for Test */}
-            <h2 className="hidden print:flex mb-4 text-lg font-bold text-gray-900 border-b pb-2">
+            <h2 className="hidden print:flex mb-4 text-lg font-bold text-gray-900 border-b pb-2 items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded bg-indigo-600 text-white text-xs">📝</span>
               Мини-тест
             </h2>
 
