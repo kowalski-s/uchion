@@ -18,6 +18,7 @@ export async function buildPdf(worksheet: Worksheet, meta: GeneratePayload): Pro
     const __dirname = path.dirname(__filename)
     
     const possiblePaths = [
+      path.join(process.cwd(), 'public/fonts/Inter-Regular.ttf'),
       path.join(__dirname, '../_assets/fonts/Inter-Regular.ttf'),
       path.join(process.cwd(), 'api/_assets/fonts/Inter-Regular.ttf'),
       path.join(process.cwd(), '_assets/fonts/Inter-Regular.ttf'),

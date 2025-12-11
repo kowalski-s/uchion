@@ -1,9 +1,9 @@
 import type { Worksheet, Subject, TestQuestion, Assignment, WorksheetAnswers, WorksheetJson, AssignmentType, ValidationResult, ValidationIssueAnalysis } from '../../shared/types'
-import { z } from 'zod'
 import OpenAI from 'openai'
-import { generatePrompt, SYSTEM_PROMPT } from './prompt.js'
-import { AIResponseSchema } from './schema.js'
 import type { GeneratePayload } from '../../shared/types'
+import { SUBJECT_CONFIG } from './ai/prompts.js'
+import { WORKSHEET_JSON_SCHEMA } from './ai/schema.js'
+import { timedLLMCall, extractWorksheetJsonFromResponse, buildWorksheetTextFromJson, validateWorksheet, analyzeValidationIssues, regenerateProblemBlocks } from './ai/validator.js'
 
 export type GenerateParams = {
   subject: Subject
@@ -69,489 +69,18 @@ class DummyProvider implements AIProvider {
   }
 }
 
-const RUSSIAN_SYSTEM_PROMPT = `
-Ты — методист по русскому языку для 1–4 классов (ФГОС). Объясняй тему чётко, нейтрально, без “дети” и “на уроке”. Используй только терминологию начальной школы.
-
-Формат вывода строго:
-ASSIGNMENTS (7 заданий) → TEST (10 вопросов A/B/C) → ANSWERS_ASSIGNMENTS → ANSWERS_TEST.
-
-ASSIGNMENTS — ровно 7 заданий по текущей теме. Требования:
-- 1 задание = 1 действие.
-- Жёстко анализируй формулировку темы и подбирай такие типы заданий, которые лучше всего тренируют именно эту орфограмму/правило.
-- Используй только слова и правила, которые реально проверяются данной темой.
-- Запрещено включать словарные слова и слова, НЕ проверяемые данным способом (например: «школа», «метро», «пальто» для темы проверяемых гласных).
-- Задания должны быть разнообразными. Допускаемые форматы:
-  • вставь пропущенные буквы/знаки;
-  • разбей слова на группы;
-  • найди и исправь ошибку;
-  • дополни слово или предложение;
-  • составь предложение по опорным словам;
-  • выбери правильный вариант;
-  • объясни коротко (1 предложением), почему пишется так — без усложнений.
-- Не начинай задание словом «Пример:».
-- Формулировки можно варьировать: «Вставь/впиши/дополни…», «Найди ошибку…», «Выбери правильный вариант…».
-
-TEST — 10 коротких вопросов A/B/C строго по теме:
-- 1 вопрос = 1 маленькая проверка.
-- 3 варианта ответов (A/B/C), один правильный.
-- Никаких понятий средней школы.
-- Распределяй правильные варианты равномерно: в тесте обязательно должны встречаться A, B и C. 
-- Не допускай, чтобы более двух правильных ответов подряд были в одном и том же варианте. 
-- Распределение должно выглядеть случайным и естественным.
 
 
-ANSWERS_ASSIGNMENTS — 7 коротких ответов по существу.
-ANSWERS_TEST — 10 букв A/B/C или однозначных ответов по порядку.
-
-Запрещено:
-- темы 5+ класса;
-- выдуманные правила;
-- словарные слова в темах проверяемых гласных;
-- слишком лёгкие или слишком сложные задания;
-- подпункты (а/б);
-- изменение структуры блоков.
-
-Перед выводом проверяй:
-- корректность формулировок и правил;
-- соответствие уровню класса;
-- что в ASSIGNMENTS ровно 7 заданий, а в TEST 10 вопросов;
-- что ответы соответствуют.
-
-Ответь ТОЛЬКО ОДНИМ JSON-объектом без комментариев, пояснений и markdown.
-Не используй json или любой другой markdown.
-Не оставляй запятые после последнего элемента массива или объекта.
-`.trim();
-
-const MATH_SYSTEM_PROMPT = `
-Ты — методист по математике 1–4 классов (ФГОС). Дай точные определения и правила простым языком. Ошибки в вычислениях недопустимы.
-
-Строгий формат вывода:
-ASSIGNMENTS (7 заданий) → TEST (10 вопросов A/B/C) → ANSWERS_ASSIGNMENTS → ANSWERS_TEST.
-
-ASSIGNMENTS — ровно 7 заданий по теме. Требования:
-- 1 задание = 1 действие (нельзя два действия в одном задании).
-- Используй только числа и операции, соответствующие уровню класса.
-- Задания должны соответствовать теме (например: при теме “задачи в два действия” задания должны быть текстовыми задачами именно с двумя действиями).
-- Форматы заданий должны быть разнообразны:
-  • вычисли / реши пример;
-  • найди и исправь ошибку;
-  • заполни пропуск;
-  • составь выражение по условию;
-  • простая текстовая мини-задача в 1 действие;
-  • упорядочивание;
-  • очень короткое объяснение (1 фраза).
-- Нельзя включать слишком лёгкие или слишком сложные задания.
-
-TEST — 10 вопросов A/B/C по теме:
-- 3 варианта ответа (A/B/C), один правильный.
-- Вопросы должны соответствовать теме, а не “общей математике”.
-- Распределяй правильные варианты равномерно: в тесте обязательно должны встречаться A, B и C. 
-- Не допускай, чтобы более двух правильных ответов подряд были в одном и том же варианте. 
-- Распределение должно выглядеть случайным и естественным.
 
 
-ANSWERS_ASSIGNMENTS — ровно 7 корректных ответов без пересказа условий.
-ANSWERS_TEST — 10 ответов (буквы или числа), по порядку.
 
-Запрещено:
-- отрицательные числа / дроби не из программы;
-- многоходовые задачи;
-- подпункты;
-- нелепые ситуации;
-- расхождение темы между ASSIGNMENTS и TEST.
 
-Перед выводом проверяй:
-- что в ASSIGNMENTS ровно 7 заданий;
-- что в TEST ровно 10 вопросов;
-- все вычисления верны;
-- структура блоков строго сохранена.
 
-Ответь ТОЛЬКО ОДНИМ JSON-объектом без комментариев, пояснений и markdown.
-Не используй json или другой markdown.
-Не оставляй запятые после последнего элемента массива или объекта.
-`.trim();
 
-const RUSSIAN_VALIDATOR_PROMPT = `
-Ты — валидатор русского языка 1–4 классов. Проверяешь ГОТОВЫЙ рабочий лист.
 
-Правильная структура:
-ASSIGNMENTS (7 заданий) → TEST (10 вопросов A/B/C) → ANSWERS_ASSIGNMENTS → ANSWERS_TEST.
 
-Проверяй:
 
-1) Общая корректность
-- нет тем и терминов 5+ класса;
-- нет выдуманных правил;
-- формулировки подходят для начальной школы.
-
-2) ASSIGNMENTS
-- ровно 7 заданий;
-- 1 задание = 1 действие;
-- задания полностью соответствуют теме;
-- нет словарных слов в темах проверяемых гласных;
-- задания разнообразны по формату (не подряд 3 однотипных);
-- нет заданий, начинающихся с “Пример:”.
-
-3) TEST
-- 10 вопросов;
-- каждый вопрос строго A/B/C, один правильный вариант;
-- вопросы по той же теме, что задания.
-
-4) ANSWERS
-- ANSWERS_ASSIGNMENTS: ровно 7 ответов;
-- ANSWERS_TEST: ровно 10 ответов;
-- ответы соответствуют заданиям и вопросам по порядку;
-- нет противоречий.
-
-5) Структура
-- блоки идут строго в порядке, без добавлений и пропусков.
-
-Вывод:
-STATUS: OK
-или
-STATUS: FAIL
-ISSUES:
-- [кратко описать проблему]
-`.trim();
-
-const MATH_VALIDATOR_PROMPT = `
-Ты — валидатор математики 1–4 классов. Проверяешь готовый рабочий лист.
-
-Проверяй:
-
-1) ASSIGNMENTS
-- ровно 7 заданий;
-- каждое задание содержит 1 действие;
-- числа и приёмы соответствуют уровню класса;
-- задания разнообразны по формату;
-- задания полностью соответствуют теме;
-- нет многоходовых задач;
-- нет нелепых ситуаций.
-
-2) TEST
-- 10 вопросов;
-- каждый вопрос A/B/C, один правильный вариант;
-- формат и содержание соответствуют теме.
-
-3) ANSWERS
-- ANSWERS_ASSIGNMENTS: 7 корректных ответов;
-- ANSWERS_TEST: 10 корректных ответов;
-- все ответы совпадают с заданиями и вопросами по порядку.
-
-4) Структура
-- строго: ASSIGNMENTS → TEST → ANSWERS_ASSIGNMENTS → ANSWERS_TEST.
-
-Вывод:
-STATUS: OK
-или
-STATUS: FAIL
-ISSUES:
-- [описание ошибки]
-`.trim();
-
-const ValidatorResponseSchema = z.object({
-  score: z.number().min(1).max(10),
-  issues: z.array(z.string())
-})
-
-type SubjectConfig = {
-  systemPrompt: string;
-  validatorPrompt: string;
-}
-
-const SUBJECT_CONFIG: Record<Subject, SubjectConfig> = {
-  russian: {
-    systemPrompt: RUSSIAN_SYSTEM_PROMPT,
-    validatorPrompt: RUSSIAN_VALIDATOR_PROMPT,
-  },
-  math: {
-    systemPrompt: MATH_SYSTEM_PROMPT,
-    validatorPrompt: MATH_VALIDATOR_PROMPT,
-  },
-}
-
-function extractWorksheetJsonFromResponse(response: any): WorksheetJson {
-  const output = response.output?.[0];
-  const content = output?.content?.[0];
-
-  if (content && 'json' in content && content.json) {
-    // API уже вернул структурированный JSON
-    return content.json as WorksheetJson;
-  }
-
-  if (content && 'text' in content && content.text?.value) {
-    let raw = content.text.value.trim();
-
-    // на случай, если модель добавила комментарий — вырезаем только JSON по { ... }
-    const firstBrace = raw.indexOf('{');
-    const lastBrace = raw.lastIndexOf('}');
-    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-      raw = raw.slice(firstBrace, lastBrace + 1);
-    }
-
-    if (!raw) {
-      console.error('[GEN] Empty JSON string in response');
-      throw new Error('Empty AI JSON response');
-    }
-
-    try {
-      return JSON.parse(raw) as WorksheetJson;
-    } catch (e) {
-      console.error('[GEN] Failed to parse WorksheetJson from text', { rawSnippet: raw });
-      throw e;
-    }
-  }
-
-  // Fallback: check output_text
-  if ('output_text' in response && typeof response.output_text === 'string' && response.output_text) {
-    let raw = response.output_text.trim();
-    const firstBrace = raw.indexOf('{');
-    const lastBrace = raw.lastIndexOf('}');
-    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-      raw = raw.slice(firstBrace, lastBrace + 1);
-      if (raw) {
-        try {
-          return JSON.parse(raw) as WorksheetJson;
-        } catch (e) {
-           console.error('[GEN] Failed to parse WorksheetJson from output_text', { rawSnippet: raw });
-           throw e;
-        }
-      }
-    }
-  }
-
-  console.error('[GEN] No json/text content in AI response', { response });
-  throw new Error('AI response did not contain JSON content');
-}
-
-function extractTextFromResponse(response: any): string {
-  if (!response) return "";
-
-  // Новый формат Responses API: output_text (если доступен)
-  if (typeof (response as any).output_text === "string") {
-    return (response as any).output_text;
-  }
-
-  // Запасной вариант через output[*].content[*].text
-  const output = (response as any).output;
-  if (Array.isArray(output)) {
-    const first = output[0];
-    const firstContent = first?.content?.[0];
-    if (firstContent && typeof firstContent.json === 'object') {
-      try {
-        return JSON.stringify(firstContent.json)
-      } catch {}
-    }
-    const text = firstContent?.text;
-    if (typeof text === "string") return text;
-  }
-
-  return "";
-}
-
-function parseValidatorOutput(outputText: string): ValidationResult {
-  const lines = outputText.split('\n').map(l => l.trim()).filter(Boolean)
-  let status: 'OK' | 'FAIL' = 'FAIL'
-  const issues: string[] = []
-  for (const line of lines) {
-    if (line.startsWith('STATUS:')) {
-      if (line.includes('OK')) status = 'OK'
-      if (line.includes('FAIL')) status = 'FAIL'
-    } else if (line.startsWith('-')) {
-      issues.push(line)
-    }
-  }
-  return { status, issues }
-}
-
-function analyzeValidationIssues(issues: string[]): ValidationIssueAnalysis {
-  const invalidAssignments: number[] = []
-  const invalidTests: number[] = []
-  let hasStructureErrors = false
-  for (const issue of issues) {
-    const upper = issue.toUpperCase()
-    if (upper.includes('[БЛОК]') || upper.includes('[BLOCK]') || upper.includes('STRUCTURE')) {
-      hasStructureErrors = true
-    }
-    const assignMatch = upper.match(/\[ASSIGNMENT\s+(\d+)\]/)
-    if (assignMatch) {
-      const idx = Number(assignMatch[1])
-      if (!Number.isNaN(idx)) invalidAssignments.push(idx)
-    }
-    const testMatch = upper.match(/\[TEST\s+(\d+)\]/)
-    if (testMatch) {
-      const idx = Number(testMatch[1])
-      if (!Number.isNaN(idx)) invalidTests.push(idx)
-    }
-  }
-  return {
-    hasStructureErrors,
-    invalidAssignments: Array.from(new Set(invalidAssignments)).sort((a, b) => a - b),
-    invalidTests: Array.from(new Set(invalidTests)).sort((a, b) => a - b),
-  }
-}
-
-async function regenerateProblemBlocks(params: {
-  subject: Subject
-  grade: number
-  topic: string
-  original: WorksheetJson
-  analysis: ValidationIssueAnalysis
-  openai: any
-  onProgress?: (percent: number) => void
-}): Promise<WorksheetJson> {
-  const { subject, grade, topic, original, analysis, openai, onProgress } = params
-  if (analysis.hasStructureErrors) return original
-  const needAssignments = analysis.invalidAssignments.length > 0
-  const needTests = analysis.invalidTests.length > 0
-  if (!needAssignments && !needTests) return original
-
-  console.log('[CLEAN] invalidAssignments:', analysis.invalidAssignments, 'invalidTests:', analysis.invalidTests)
-  onProgress?.(75)
-
-  const partial: Partial<WorksheetJson> = {}
-  if (needAssignments) {
-    partial.assignments = (original.assignments || []).filter(a => analysis.invalidAssignments.includes(a.index))
-  }
-  if (needTests) {
-    partial.test = (original.test || []).filter(t => analysis.invalidTests.includes(t.index))
-  }
-
-  const systemPrompt = SUBJECT_CONFIG[subject].systemPrompt
-  const userParts: string[] = []
-  userParts.push(`Ты уже сгенерировал рабочий лист по теме "${topic}" для ${grade} класса (предмет: ${subject}).`)
-  userParts.push('Валидатор нашёл ошибки в некоторых заданиях и/или вопросах теста. Нужно ПЕРЕГЕНЕРИРОВАТЬ ТОЛЬКО проблемные элементы, сохраняя формат WorksheetJson.')
-  if (needAssignments) userParts.push(`Проблемные задания (assignments) с индексами: ${analysis.invalidAssignments.join(', ')}.`)
-  if (needTests) userParts.push(`Проблемные вопросы теста (test) с индексами: ${analysis.invalidTests.join(', ')}.`)
-  userParts.push('Вот фрагмент текущего WorksheetJson с проблемными элементами (assignments/test):')
-  userParts.push(JSON.stringify(partial, null, 2))
-  userParts.push('Твоя задача: вернуть НОВЫЕ версии только этих элементов в формате JSON со структурой:')
-  userParts.push(`{ "assignments": [ { "index": number, "type": "theory" | "apply" | "error" | "creative", "text": string } ], "test": [ { "index": number, "question": string, "options": { "A": string, "B": string, "C": string } } ] }`)
-  userParts.push('Не изменяй индексы. Верни только поля, которые ты перегенерировал. Без комментариев, без текста вне JSON.')
-  const userPrompt = userParts.join('\n\n')
-
-  const regenerationResponse = await timedLLMCall('regen-problem-blocks', () =>
-    (openai as any).responses.create({
-      model: 'gpt-4.1-mini',
-      max_output_tokens: 800,
-      text: {
-        format: {
-          type: 'json_schema',
-          name: 'worksheet_blocks_patch',
-          schema: {
-            type: 'object',
-            properties: {
-              assignments: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  properties: {
-                    index: { type: 'integer' },
-                    type: { type: 'string', enum: ['theory','apply','error','creative'] },
-                    text: { type: 'string' }
-                  },
-                  required: ['index','type','text'],
-                  additionalProperties: false
-                }
-              },
-              test: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  properties: {
-                    index: { type: 'integer' },
-                    question: { type: 'string' },
-                    options: {
-                      type: 'object',
-                      properties: { A: { type: 'string' }, B: { type: 'string' }, C: { type: 'string' } },
-                      required: ['A','B','C'],
-                      additionalProperties: false
-                    }
-                  },
-                  required: ['index','question','options'],
-                  additionalProperties: false
-                }
-              }
-            },
-            additionalProperties: false
-          }
-        }
-      },
-      input: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
-      ]
-    })
-  )
-
-  const regenText = extractTextFromResponse(regenerationResponse)
-  let patch: Partial<WorksheetJson> = {}
-  try {
-    patch = JSON.parse(regenText)
-  } catch (e) {
-    console.error('[REGEN] Failed to parse blocks patch JSON', e)
-    return original
-  }
-
-  const updated: WorksheetJson = {
-    ...original,
-    assignments: (original.assignments || []).map(a => {
-      const replacement = patch.assignments?.find(pa => pa.index === a.index) ?? null
-      return replacement ? { ...a, ...replacement } : a
-    }),
-    test: (original.test || []).map(t => {
-      const replacement = patch.test?.find(pt => pt.index === t.index) ?? null
-      return replacement ? { ...t, ...replacement } : t
-    })
-  }
-  onProgress?.(85)
-  return updated
-}
-
-function buildWorksheetTextFromJson(json: WorksheetJson): string {
-  const parts: string[] = []
-  parts.push('ASSIGNMENTS:')
-  for (const a of json.assignments || []) {
-    parts.push(`${a.index}) ${a.text}`)
-  }
-  parts.push('')
-  parts.push('TEST:')
-  for (const t of json.test || []) {
-    parts.push(`${t.index}) ${t.question}`)
-    parts.push(`A) ${t.options?.A ?? ''}`)
-    parts.push(`B) ${t.options?.B ?? ''}`)
-    parts.push(`C) ${t.options?.C ?? ''}`)
-  }
-  parts.push('')
-  parts.push('ANSWERS_ASSIGNMENTS:')
-  for (let i = 0; i < (json.answers?.assignments?.length ?? 0); i++) {
-    const ans = json.answers!.assignments[i]
-    parts.push(`${i + 1}) ${ans}`)
-  }
-  parts.push('')
-  parts.push('ANSWERS_TEST:')
-  for (let i = 0; i < (json.answers?.test?.length ?? 0); i++) {
-    const ans = json.answers!.test[i]
-    parts.push(`${i + 1}) ${ans} — правильный ответ`)
-  }
-  return parts.join('\n')
-}
-
-async function timedLLMCall(label: string, call: () => Promise<any>) {
-  const start = Date.now();
-  console.log(`[LLM][START] ${label}`);
-  const res = await call();
-  const end = Date.now();
-
-  console.log(`[LLM][END] ${label}`, {
-    duration_ms: end - start,
-    timestamp: new Date().toISOString(),
-    model: res?.model,
-    usage: res?.usage ?? null
-  });
-
-  return res;
-}
+ 
 
 class OpenAIProvider implements AIProvider {
   private client: OpenAI
@@ -603,43 +132,7 @@ class OpenAIProvider implements AIProvider {
     }
   }
 
-  private async validateWorksheet(content: string, params: GenerateParams): Promise<{ score: number, issues: string[] }> {
-    try {
-      // @ts-ignore - Using new responses API
-      const completion = await timedLLMCall(
-        "validator",
-        () => (this.client as any).responses.create({
-          model: 'gpt-4.1-mini', // faster validator
-          input: [
-            { role: 'system', content: SUBJECT_CONFIG[params.subject].validatorPrompt },
-            { role: 'user', content: `Предмет: ${params.subject}\nКласс: ${params.grade}\nТема: ${params.topic}\n\n${content}` }
-          ],
-          max_output_tokens: 600
-        })
-      )
-
-      console.log('[Validator Response]', JSON.stringify(completion, null, 2))
-
-      const responseContent = extractTextFromResponse(completion)
-      if (!responseContent) return { score: 0, issues: ['Validator: empty response'] }
-
-      const statusMatch = responseContent.match(/STATUS:\s*(OK|FAIL)/i)
-      const status = statusMatch ? statusMatch[1].toUpperCase() : 'FAIL'
-
-      let issues: string[] = []
-      const issuesBlockMatch = responseContent.match(/ISSUES:\s*[\r\n]+([\s\S]*)/i)
-      if (issuesBlockMatch) {
-        const block = issuesBlockMatch[1]
-        issues = block.split(/\r?\n/).map(l => l.trim()).filter(l => l.startsWith('- ')).map(l => l.replace(/^\-\s*/, ''))
-      }
-
-      const score = status === 'OK' ? 10 : (issues.length > 0 ? Math.max(1, 10 - Math.min(issues.length, 9)) : 5)
-      return { score, issues }
-    } catch (error) {
-      console.error('Validator error:', error)
-      return { score: 0, issues: ['Validator exception'] }
-    }
-  }
+  
 
   async generateWorksheet(params: GenerateParams, onProgress?: (percent: number) => void): Promise<Worksheet> {
     console.log('[УчиОн] OpenAIProvider.generateWorksheet called', params)
@@ -697,53 +190,7 @@ class OpenAIProvider implements AIProvider {
               format: {
                 type: 'json_schema',
                 name: 'worksheet_json',
-                schema: {
-                  type: 'object',
-                  properties: {
-                    assignments: {
-                      type: 'array',
-                      items: {
-                        type: 'object',
-                        properties: {
-                          index: { type: 'integer' },
-                          type: { type: 'string', enum: ['theory','apply','error','creative'] },
-                          text: { type: 'string' }
-                        },
-                        required: ['index','type','text'],
-                        additionalProperties: false
-                      }
-                    },
-                    test: {
-                      type: 'array',
-                      items: {
-                        type: 'object',
-                        properties: {
-                          index: { type: 'integer' },
-                          question: { type: 'string' },
-                          options: {
-                            type: 'object',
-                            properties: { A: { type: 'string' }, B: { type: 'string' }, C: { type: 'string' } },
-                            required: ['A','B','C'],
-                            additionalProperties: false
-                          }
-                        },
-                        required: ['index','question','options'],
-                        additionalProperties: false
-                      }
-                    },
-                    answers: {
-                      type: 'object',
-                      properties: {
-                        assignments: { type: 'array', items: { type: 'string' } },
-                        test: { type: 'array', items: { type: 'string', enum: ['A','B','C'] } }
-                      },
-                      required: ['assignments','test'],
-                      additionalProperties: false
-                    }
-                  },
-                  required: ['assignments','test','answers'],
-                  additionalProperties: false
-                }
+                schema: WORKSHEET_JSON_SCHEMA
               }
             }
           })
@@ -769,7 +216,7 @@ class OpenAIProvider implements AIProvider {
 
       // Step 2: Validate
       console.log(`[УчиОн] Validating attempt ${attempt}...`)
-      const validation = await this.validateWorksheet(worksheetText, params)
+      const validation = await validateWorksheet(this.client, params, worksheetText)
       console.log(`[УчиОн] Validation result: score=${validation.score}, issues=${validation.issues.length}`)
       onProgress?.(attempt === 1 ? 60 : 90) // Validation done
 
@@ -802,7 +249,7 @@ class OpenAIProvider implements AIProvider {
       worksheetJson = regenJson
       worksheetText = buildWorksheetTextFromJson(worksheetJson as WorksheetJson)
 
-      const validation2 = await this.validateWorksheet(worksheetText, params)
+      const validation2 = await validateWorksheet(this.client, params, worksheetText)
       console.log(`[УчиОн] Validation after CLEAN: score=${validation2.score}, issues=${validation2.issues.length}`)
       onProgress?.(90)
       if (validation2.score === 10) {
@@ -971,26 +418,23 @@ class OpenAIProvider implements AIProvider {
 }
 
 export function getAIProvider(): AIProvider {
-  const providerEnv = (process.env.AI_PROVIDER || '').trim().toLowerCase()
-  const apiKey = process.env.OPENAI_API_KEY
-  const hasKey = Boolean(apiKey && apiKey.length > 0)
+  const isProd =
+    process.env.NODE_ENV === 'production' ||
+    process.env.VERCEL_ENV === 'production'
 
-  const providerName =
-    providerEnv === 'openai' && hasKey ? 'openai' : 'dummy'
+  const useOpenAI =
+    isProd &&
+    process.env.AI_PROVIDER === 'openai' &&
+    process.env.OPENAI_API_KEY
 
   console.log('[УчиОн] getAIProvider:', {
-    AI_PROVIDER: process.env.AI_PROVIDER, // Log original value to see hidden chars
-    normalized: providerEnv,
-    hasKey,
-    using: providerName,
+    isProd,
+    AI_PROVIDER: process.env.AI_PROVIDER,
+    useOpenAI: !!useOpenAI,
   })
 
-  if (providerEnv === 'openai' && !hasKey) {
-    throw new Error('Missing OPENAI_API_KEY for provider "openai"')
-  }
-
-  if (providerName === 'openai') {
-    return new OpenAIProvider(apiKey as string)
+  if (useOpenAI) {
+    return new OpenAIProvider(process.env.OPENAI_API_KEY as string)
   }
 
   return new DummyProvider()
