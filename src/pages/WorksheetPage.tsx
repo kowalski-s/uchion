@@ -283,14 +283,23 @@ export default function WorksheetPage() {
           {/* PAGE 1 */}
           <PageContainer id="page1">
           {/* HEADER */}
-          <div className="mb-8 flex items-center justify-between border-b-2 border-gray-100 pb-4">
+          <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between border-b-2 border-gray-100 pb-4 gap-4">
             <div className="flex items-center gap-2 text-indigo-600">
                <span className="text-2xl font-bold tracking-tight">УчиОн</span>
             </div>
             {/* Name/Date Header for First Page */}
-             <div className="text-sm text-gray-500 text-right">
-               <div className="mb-2">Имя и фамилия: ____________________________________</div>
-               <div>Дата: __________________</div>
+             <div className="text-sm text-gray-500 w-full sm:w-auto sm:min-w-[320px]">
+               <div className="flex flex-col gap-2 w-full max-w-full">
+                 <div className="flex items-center gap-2 w-full">
+                   <span className="whitespace-nowrap">Имя и фамилия:</span>
+                   <div className="border-b border-gray-300 flex-1 min-w-0"></div>
+                 </div>
+
+                 <div className="flex items-center gap-2 w-full">
+                   <span className="whitespace-nowrap">Дата:</span>
+                   <div className="border-b border-gray-300 flex-1 min-w-0"></div>
+                 </div>
+               </div>
              </div>
           </div>
 
