@@ -20,7 +20,8 @@
 
 ## 3. AI & ML
 
-- **Model**: `gpt-4o-mini`.
+- **Generation Model**: `gpt-5-mini`.
+- **Validation Model**: `gpt-4.1-mini`.
 - **Integration**: OpenAI Node.js SDK.
 - **Structured Output**: Zod Schemas.
 - **Validator**: Самописный модуль валидации на базе LLM.

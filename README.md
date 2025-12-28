@@ -7,7 +7,7 @@
 - блок вопросов,
 - PDF-файл для скачивания.
 
-Основано на OpenAI (gpt-4o-mini) и собственном backend API.
+Основано на OpenAI (gpt-5-mini + gpt-4.1-mini) и собственном backend API.
 
 ---
 
@@ -41,7 +41,8 @@
 - PDF-генерация через pdfkit  
 
 ### **AI**
-- OpenAI (gpt-4o-mini)  
+- Generation: OpenAI (gpt-5-mini)
+- Validation: OpenAI (gpt-4.1-mini)
 - OpenRouter (возможность легко переключать модели)
 
 Полная архитектура → см. `/docs` (architecture-overview, tech-stack, api-design и т.д.)
