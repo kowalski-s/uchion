@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(npm run db:generate:*)",
+      "Bash(npx tsc:*)",
+      "Bash(test:*)",
+      "Bash(npx tsx:*)"
+    ]
+  }
+}
