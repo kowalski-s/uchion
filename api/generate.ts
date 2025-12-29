@@ -1,8 +1,13 @@
 // api/generate.ts
 import { z } from 'zod'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { db } from '../db/index.js'
+import { users } from '../db/schema.js'
+import { eq, sql } from 'drizzle-orm'
 import { getAIProvider } from './_lib/ai-provider.js'
 import { buildPdf } from './_lib/pdf.js'
+import { getTokenFromCookie, ACCESS_TOKEN_COOKIE } from './_lib/auth/cookies.js'
+import { verifyAccessToken } from './_lib/auth/tokens.js'
 import type { GeneratePayload, Worksheet } from '../shared/types'
 
 const InputSchema = z.object({
@@ -36,25 +41,51 @@ export default async function handler(
 
   const input: Input = parse.data
 
+  // Check authentication (optional - guests can also generate)
+  let userId: string | null = null
+  const token = getTokenFromCookie(req, ACCESS_TOKEN_COOKIE)
+
+  if (token) {
+    const payload = verifyAccessToken(token)
+    if (payload) {
+      userId = payload.sub
+
+      // Check user limit
+      const [user] = await db
+        .select({ generationsLeft: users.generationsLeft })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1)
+
+      if (!user || user.generationsLeft <= 0) {
+        return res.status(403).json({
+          status: 'error',
+          code: 'LIMIT_EXCEEDED',
+          message: 'Лимит генераций исчерпан.',
+        })
+      }
+    }
+  }
+
   // Setup SSE
   res.setHeader('Content-Type', 'text/event-stream')
   res.setHeader('Cache-Control', 'no-cache')
   res.setHeader('Connection', 'keep-alive')
-  
+
   const sendEvent = (data: any) => {
     res.write(`data: ${JSON.stringify(data)}\n\n`)
   }
 
   try {
     const ai = getAIProvider()
-    
+
     // Pass progress callback
     const worksheet = await ai.generateWorksheet(input as GeneratePayload, (percent) => {
       sendEvent({ type: 'progress', percent })
     })
 
     sendEvent({ type: 'progress', percent: 97 }) // PDF generation start
-    
+
     let pdfBase64: string | null = null
     try {
       pdfBase64 = await buildPdf(worksheet, input as GeneratePayload)
@@ -70,6 +101,17 @@ export default async function handler(
       id,
       grade: `${input.grade} класс`,
       pdfBase64: pdfBase64 ?? ''
+    }
+
+    // Decrement limit for authenticated users
+    if (userId) {
+      await db
+        .update(users)
+        .set({
+          generationsLeft: sql`${users.generationsLeft} - 1`,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, userId))
     }
 
     sendEvent({ type: 'result', data: { worksheet: finalWorksheet } })

@@ -17,17 +17,20 @@ export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
   email: varchar('email', { length: 255 }).notNull().unique(),
   emailVerified: timestamp('email_verified', { withTimezone: true }),
-  passwordHash: text('password_hash'),
   name: varchar('name', { length: 255 }),
   image: text('image'),
   role: userRoleEnum('role').notNull().default('user'),
   generationsLeft: integer('generations_left').notNull().default(3),
+  // OAuth provider info
+  provider: varchar('provider', { length: 50 }),  // 'google' | 'yandex'
+  providerId: varchar('provider_id', { length: 255 }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
 }, (table) => ({
   emailIdx: index('users_email_idx').on(table.email),
   deletedAtIdx: index('users_deleted_at_idx').on(table.deletedAt),
+  providerIdx: index('users_provider_idx').on(table.provider, table.providerId),
 }))
 
 // ==================== WORKSHEETS TABLE ====================
@@ -99,42 +102,18 @@ export const payments = pgTable('payments', {
   createdAtIdx: index('payments_created_at_idx').on(table.createdAt),
 }))
 
-// ==================== NEXTAUTH TABLES ====================
+// ==================== REFRESH TOKENS TABLE ====================
 
-export const accounts = pgTable('accounts', {
+export const refreshTokens = pgTable('refresh_tokens', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  type: varchar('type', { length: 255 }).notNull(),
-  provider: varchar('provider', { length: 255 }).notNull(),
-  providerAccountId: varchar('provider_account_id', { length: 255 }).notNull(),
-  refreshToken: text('refresh_token'),
-  accessToken: text('access_token'),
-  expiresAt: integer('expires_at'),
-  tokenType: varchar('token_type', { length: 255 }),
-  scope: varchar('scope', { length: 255 }),
-  idToken: text('id_token'),
-  sessionState: varchar('session_state', { length: 255 }),
+  jti: varchar('jti', { length: 255 }).notNull().unique(),  // JWT ID for token tracking
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
-  userIdIdx: index('accounts_user_id_idx').on(table.userId),
-  providerIdx: index('accounts_provider_idx').on(table.provider, table.providerAccountId),
-}))
-
-export const sessions = pgTable('sessions', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  sessionToken: varchar('session_token', { length: 255 }).notNull().unique(),
-  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  expires: timestamp('expires', { withTimezone: true }).notNull(),
-}, (table) => ({
-  userIdIdx: index('sessions_user_id_idx').on(table.userId),
-  sessionTokenIdx: index('sessions_session_token_idx').on(table.sessionToken),
-}))
-
-export const verificationTokens = pgTable('verification_tokens', {
-  identifier: varchar('identifier', { length: 255 }).notNull(),
-  token: varchar('token', { length: 255 }).notNull().unique(),
-  expires: timestamp('expires', { withTimezone: true }).notNull(),
-}, (table) => ({
-  tokenIdx: index('verification_tokens_token_idx').on(table.token),
+  userIdIdx: index('refresh_tokens_user_id_idx').on(table.userId),
+  jtiIdx: index('refresh_tokens_jti_idx').on(table.jti),
 }))
 
 // ==================== RELATIONS ====================
@@ -144,8 +123,7 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   generations: many(generations),
   subscription: one(subscriptions),
   payments: many(payments),
-  accounts: many(accounts),
-  sessions: many(sessions),
+  refreshTokens: many(refreshTokens),
 }))
 
 export const worksheetsRelations = relations(worksheets, ({ one }) => ({
@@ -184,16 +162,9 @@ export const paymentsRelations = relations(payments, ({ one }) => ({
   }),
 }))
 
-export const accountsRelations = relations(accounts, ({ one }) => ({
+export const refreshTokensRelations = relations(refreshTokens, ({ one }) => ({
   user: one(users, {
-    fields: [accounts.userId],
-    references: [users.id],
-  }),
-}))
-
-export const sessionsRelations = relations(sessions, ({ one }) => ({
-  user: one(users, {
-    fields: [sessions.userId],
+    fields: [refreshTokens.userId],
     references: [users.id],
   }),
 }))

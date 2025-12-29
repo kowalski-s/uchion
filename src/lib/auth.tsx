@@ -1,116 +1,139 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
+
+// ==================== TYPES ====================
 
 export interface User {
   id: string
   email: string
   name?: string | null
   role: 'user' | 'admin'
-}
-
-export interface Session {
-  user: User
-  expires: string
+  generationsLeft: number
 }
 
 interface AuthContextType {
-  session: Session | null
+  user: User | null
   status: 'loading' | 'authenticated' | 'unauthenticated'
-  signIn: (email: string, password: string) => Promise<{ error?: string; ok: boolean }>
+  signInWithGoogle: () => void
+  signInWithYandex: () => void
   signOut: () => Promise<void>
-  signInWithProvider: (provider: 'google' | 'yandex') => void
+  refreshAuth: () => Promise<void>
 }
+
+// ==================== CONTEXT ====================
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+// ==================== PROVIDER ====================
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null)
+  const [user, setUser] = useState<User | null>(null)
   const [status, setStatus] = useState<'loading' | 'authenticated' | 'unauthenticated'>('loading')
 
-  // Load session from localStorage on mount
-  useEffect(() => {
-    const savedSession = localStorage.getItem('uchion_session')
-    if (savedSession) {
-      try {
-        const sessionData = JSON.parse(savedSession)
-        // Check if session is expired
-        if (new Date(sessionData.expires) > new Date()) {
-          setSession(sessionData)
+  // Try to refresh token and get user
+  const tryRefresh = useCallback(async (): Promise<boolean> => {
+    try {
+      const response = await fetch('/api/auth/refresh', {
+        method: 'POST',
+        credentials: 'include',
+      })
+
+      if (response.ok) {
+        // Retry getting user info after refresh
+        const meResponse = await fetch('/api/auth/me', {
+          credentials: 'include',
+        })
+
+        if (meResponse.ok) {
+          const data = await meResponse.json()
+          setUser(data.user)
           setStatus('authenticated')
-        } else {
-          localStorage.removeItem('uchion_session')
-          setStatus('unauthenticated')
+          return true
         }
-      } catch (error) {
-        console.error('Failed to parse session:', error)
-        localStorage.removeItem('uchion_session')
-        setStatus('unauthenticated')
       }
-    } else {
-      setStatus('unauthenticated')
+      return false
+    } catch {
+      return false
     }
   }, [])
 
-  const signIn = async (email: string, password: string): Promise<{ error?: string; ok: boolean }> => {
+  // Check authentication on mount
+  const checkAuth = useCallback(async () => {
     try {
-      console.log('[AUTH] Signing in...', email)
-
-      // Sign in with our simple login endpoint
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
+      const response = await fetch('/api/auth/me', {
+        credentials: 'include', // Important: send cookies
       })
 
-      console.log('[AUTH] Login response status:', response.status)
-
-      if (!response.ok) {
+      if (response.ok) {
         const data = await response.json()
-        console.error('[AUTH] Login failed:', data)
-        return { error: data.error || 'Authentication failed', ok: false }
+        setUser(data.user)
+        setStatus('authenticated')
+      } else if (response.status === 401) {
+        // Try to refresh token
+        const refreshed = await tryRefresh()
+        if (!refreshed) {
+          setUser(null)
+          setStatus('unauthenticated')
+        }
+      } else {
+        setUser(null)
+        setStatus('unauthenticated')
       }
-
-      const data = await response.json()
-      console.log('[AUTH] Login successful:', data.user.email)
-
-      // Create a simple session object
-      const sessionData = {
-        user: data.user,
-        expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days
-      }
-
-      // Save to localStorage
-      localStorage.setItem('uchion_session', JSON.stringify(sessionData))
-
-      setSession(sessionData)
-      setStatus('authenticated')
-
-      return { ok: true }
     } catch (error) {
-      console.error('[AUTH] Sign in error:', error)
-      return { error: 'An error occurred during sign in', ok: false }
+      console.error('[Auth] Check failed:', error)
+      setUser(null)
+      setStatus('unauthenticated')
+    }
+  }, [tryRefresh])
+
+  // Check auth on mount
+  useEffect(() => {
+    checkAuth()
+  }, [checkAuth])
+
+  // OAuth redirect handlers
+  const signInWithGoogle = () => {
+    window.location.href = '/api/auth/google/redirect'
+  }
+
+  const signInWithYandex = () => {
+    window.location.href = '/api/auth/yandex/redirect'
+  }
+
+  // Logout
+  const signOut = async () => {
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+      })
+    } finally {
+      setUser(null)
+      setStatus('unauthenticated')
     }
   }
 
-  const signOut = async () => {
-    console.log('[AUTH] Signing out...')
-    localStorage.removeItem('uchion_session')
-    setSession(null)
-    setStatus('unauthenticated')
-  }
-
-  const signInWithProvider = (provider: 'google' | 'yandex') => {
-    // Redirect to OAuth provider
-    window.location.href = `/api/auth/signin/${provider}`
+  // Manual refresh
+  const refreshAuth = async () => {
+    await checkAuth()
   }
 
   return (
-    <AuthContext.Provider value={{ session, status, signIn, signOut, signInWithProvider }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        status,
+        signInWithGoogle,
+        signInWithYandex,
+        signOut,
+        refreshAuth,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   )
 }
+
+// ==================== HOOKS ====================
 
 export function useAuth() {
   const context = useContext(AuthContext)
@@ -120,11 +143,11 @@ export function useAuth() {
   return context
 }
 
-// Compatibility hook similar to next-auth's useSession
+// Compatibility hook (similar structure to old useSession)
 export function useSession() {
-  const { session, status } = useAuth()
+  const { user, status } = useAuth()
   return {
-    data: session,
+    data: user ? { user } : null,
     status,
   }
 }

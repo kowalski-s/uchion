@@ -1,26 +1,31 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { getServerSession } from 'next-auth/next'
-import { authOptions } from '../_lib/auth/config.js'
+import { eq } from 'drizzle-orm'
 import { db } from '../../db/index.js'
 import { users } from '../../db/schema.js'
-import { eq } from 'drizzle-orm'
+import { getTokenFromCookie, ACCESS_TOKEN_COOKIE } from '../_lib/auth/cookies.js'
+import { verifyAccessToken } from '../_lib/auth/tokens.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Only allow GET
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
   try {
-    // Get session
-    const session = await getServerSession(req, res, authOptions)
+    // Get access token from cookie
+    const token = getTokenFromCookie(req, ACCESS_TOKEN_COOKIE)
 
-    if (!session || !session.user) {
-      return res.status(401).json({ error: 'Unauthorized' })
+    if (!token) {
+      return res.status(401).json({ error: 'Not authenticated' })
+    }
+
+    // Verify token
+    const payload = verifyAccessToken(token)
+
+    if (!payload) {
+      return res.status(401).json({ error: 'Invalid or expired token' })
     }
 
     // Get user from database with full details
-    const userId = (session.user as any).id
     const [user] = await db
       .select({
         id: users.id,
@@ -31,7 +36,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         createdAt: users.createdAt,
       })
       .from(users)
-      .where(eq(users.id, userId))
+      .where(eq(users.id, payload.sub))
       .limit(1)
 
     if (!user) {
@@ -40,7 +45,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     return res.status(200).json({ user })
   } catch (error) {
-    console.error('Get user error:', error)
+    console.error('[Auth Me] Error:', error)
     return res.status(500).json({ error: 'Internal server error' })
   }
 }

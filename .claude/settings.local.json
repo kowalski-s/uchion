@@ -5,7 +5,8 @@
       "Bash(npm run db:generate:*)",
       "Bash(npx tsc:*)",
       "Bash(test:*)",
-      "Bash(npx tsx:*)"
+      "Bash(npx tsx:*)",
+      "WebSearch"
     ]
   }
 }

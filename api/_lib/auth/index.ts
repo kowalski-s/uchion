@@ -1,10 +1,41 @@
-// Export auth configuration
-export { authOptions } from './config'
-export { authAdapter } from './adapter'
+// OAuth utilities
+export {
+  generateState,
+  generatePKCE,
+  buildGoogleAuthUrl,
+  buildYandexAuthUrl,
+  exchangeGoogleCode,
+  exchangeYandexCode,
+} from './oauth.js'
 
-// Export password utilities
-export { hashPassword, verifyPassword } from './password'
+// Token management
+export {
+  createAccessToken,
+  createRefreshToken,
+  verifyAccessToken,
+  verifyRefreshToken,
+  decodeRefreshToken,
+  revokeRefreshToken,
+  revokeAllUserTokens,
+} from './tokens.js'
+export type { AccessTokenPayload, RefreshTokenPayload } from './tokens.js'
 
-// Export middleware
-export { withAuth, withAdminAuth } from './middleware'
-export type { AuthenticatedHandler } from './middleware'
+// Cookie management
+export {
+  ACCESS_TOKEN_COOKIE,
+  REFRESH_TOKEN_COOKIE,
+  STATE_COOKIE,
+  PKCE_COOKIE,
+  setAuthCookies,
+  clearAuthCookies,
+  setOAuthStateCookie,
+  setPKCECookie,
+  clearOAuthCookies,
+  getTokenFromCookie,
+  getStateCookie,
+  getPKCECookie,
+} from './cookies.js'
+
+// Middleware
+export { withAuth, withAdminAuth, withOptionalAuth } from './middleware.js'
+export type { AuthUser, AuthenticatedHandler, OptionalAuthHandler } from './middleware.js'

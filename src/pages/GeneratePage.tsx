@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -7,13 +7,18 @@ import { GenerateSchema, GenerateFormValues } from '../lib/schemas'
 import { generateWorksheet } from '../lib/api'
 import { useSessionStore } from '../store/session'
 import CustomSelect from '../components/ui/CustomSelect'
+import { useAuth } from '../lib/auth'
+import { getGenerationsLeft, incrementGuestUsage, canGenerate, GUEST_LIMIT } from '../lib/limits'
+import Header from '../components/Header'
 
 export default function GeneratePage() {
   const navigate = useNavigate()
   const saveSession = useSessionStore(s => s.saveSession)
   const setCurrent = useSessionStore(s => s.setCurrent)
+  const { user } = useAuth()
   const [errorText, setErrorText] = useState<string | null>(null)
   const [progress, setProgress] = useState(0)
+  const [generationsLeft, setGenerationsLeft] = useState(getGenerationsLeft(user))
 
   const form = useForm<GenerateFormValues>({
     resolver: zodResolver(GenerateSchema),
@@ -29,13 +34,16 @@ export default function GeneratePage() {
       }
       const sessionId = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : String(Date.now())
       const worksheet = res.data.worksheet
-      
+
       // Save to localStorage for persistence
       try {
         localStorage.setItem('uchion_cached_worksheet', JSON.stringify(worksheet))
       } catch (e) {
         console.error('Failed to save to localStorage', e)
       }
+
+      // Обновить лимит после успешной генерации
+      setGenerationsLeft(getGenerationsLeft(user))
 
       saveSession(sessionId, {
         payload: { subject: form.getValues('subject'), grade: form.getValues('grade'), topic: form.getValues('topic') },
@@ -51,9 +59,23 @@ export default function GeneratePage() {
   })
 
   const onSubmit = (values: GenerateFormValues) => {
+    // Проверка лимитов
+    if (!canGenerate(user)) {
+      setErrorText('Лимит бесплатных генераций исчерпан. Войдите, чтобы продолжить.')
+      setTimeout(() => navigate('/login'), 2000)
+      return
+    }
+
     setErrorText(null)
     setProgress(0)
     localStorage.removeItem('uchion_cached_worksheet')
+
+    // Если гость - инкрементируем счетчик
+    if (!user) {
+      incrementGuestUsage()
+      setGenerationsLeft(prev => prev - 1)
+    }
+
     mutation.mutate({ subject: values.subject, grade: values.grade, topic: values.topic })
   }
 
@@ -62,14 +84,7 @@ export default function GeneratePage() {
       {/* Decorative background element */}
       <div className="absolute top-[-20%] left-[50%] w-[1000px] h-[1000px] -translate-x-1/2 rounded-full bg-gradient-to-b from-purple-100/40 to-transparent blur-3xl pointer-events-none" />
 
-      <header className="relative z-10 pt-6 pb-4">
-        <div className="mx-auto max-w-6xl px-6">
-          <div className="flex items-center text-2xl font-bold tracking-tight">
-            <span className="text-slate-900">Учи</span>
-            <span className="text-[#8C52FF] drop-shadow-[0_0_12px_rgba(140,82,255,0.4)]">Он</span>
-          </div>
-        </div>
-      </header>
+      <Header />
 
       <main className="relative z-10 mx-auto flex max-w-3xl flex-col items-center px-4 py-12 text-center">
         <h1 className="mb-3 text-4xl font-extrabold tracking-tight text-slate-900 sm:text-5xl">
@@ -78,6 +93,24 @@ export default function GeneratePage() {
         <h2 className="mb-10 text-xl text-slate-500 font-medium">
           Создавайте рабочие листы для уроков за секунды
         </h2>
+
+        {/* Индикатор лимита */}
+        <div className="mb-6 text-center">
+          {user ? (
+            <p className="text-sm text-slate-600">
+              Осталось генераций: <span className="font-bold text-[#8C52FF]">{generationsLeft}</span>
+            </p>
+          ) : (
+            <p className="text-sm text-slate-600">
+              Бесплатно: <span className="font-bold text-[#8C52FF]">{generationsLeft}</span> из {GUEST_LIMIT}
+              {generationsLeft === 0 && (
+                <span className="block mt-2 text-red-600">
+                  Лимит исчерпан. <Link to="/login" className="underline hover:text-red-800">Войдите</Link>, чтобы продолжить
+                </span>
+              )}
+            </p>
+          )}
+        </div>
 
         <div className="w-full max-w-2xl rounded-[2rem] bg-white p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] ring-1 ring-purple-100">
           <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-6">
@@ -168,14 +201,14 @@ export default function GeneratePage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/60 backdrop-blur-md transition-all">
           <div className="w-full max-w-xl px-6 text-center">
             <h3 className="mb-6 text-2xl font-bold text-slate-800">Создаем материалы...</h3>
-            
+
             <div className="w-full text-left">
               <div className="mb-2 flex justify-between items-end text-sm font-medium">
                 <span className="text-slate-600">Готово: {Math.round(progress)}%</span>
-                <span className="text-xs text-slate-400">Генерация занимает 2–3 минуты</span>
+                <span className="text-xs text-slate-400">Генерация занимает 2-3 минуты</span>
               </div>
               <div className="h-4 w-full overflow-hidden rounded-full bg-slate-200 shadow-inner">
-                <div 
+                <div
                   className="h-full rounded-full bg-gradient-to-r from-[#8C52FF] to-[#A16BFF] transition-all duration-300 ease-out shadow-[0_0_10px_rgba(140,82,255,0.5)]"
                   style={{ width: `${progress}%` }}
                 />
