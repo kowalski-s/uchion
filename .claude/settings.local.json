@@ -6,7 +6,11 @@
       "Bash(npx tsc:*)",
       "Bash(test:*)",
       "Bash(npx tsx:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(rm:*)",
+      "Bash(npx playwright install)",
+      "Bash(npx bmad-method@alpha install:*)",
+      "Bash(npm run test:run:*)"
     ]
   }
 }

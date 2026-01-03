@@ -3,11 +3,48 @@ import crypto from 'crypto'
 // ==================== PKCE & STATE ====================
 
 /**
- * Generate cryptographically secure state parameter (32 bytes)
+ * Generate cryptographically secure state parameter with timestamp
  * Used for CSRF protection in OAuth flow
+ *
+ * Format: {random_bytes}.{timestamp}
+ * This allows validation of state age to prevent replay attacks
  */
 export function generateState(): string {
-  return base64url(crypto.randomBytes(32))
+  const randomPart = base64url(crypto.randomBytes(32))
+  const timestamp = Date.now()
+  return `${randomPart}.${timestamp}`
+}
+
+/**
+ * Validate OAuth state parameter
+ *
+ * Checks:
+ * 1. Format is valid (contains timestamp)
+ * 2. Timestamp is not too old (max 10 minutes)
+ *
+ * @param state - State parameter to validate
+ * @param maxAgeSeconds - Maximum age of state in seconds (default: 10 minutes)
+ * @returns true if valid, false otherwise
+ */
+export function validateState(state: string, maxAgeSeconds: number = 10 * 60): boolean {
+  try {
+    const parts = state.split('.')
+    if (parts.length !== 2) {
+      return false
+    }
+
+    const timestamp = parseInt(parts[1], 10)
+    if (isNaN(timestamp)) {
+      return false
+    }
+
+    const now = Date.now()
+    const age = (now - timestamp) / 1000 // Convert to seconds
+
+    return age <= maxAgeSeconds
+  } catch {
+    return false
+  }
 }
 
 /**
@@ -35,130 +72,13 @@ function base64url(buffer: Buffer): string {
     .replace(/=/g, '')
 }
 
-// ==================== GOOGLE OAUTH ====================
-
-interface GoogleAuthParams {
-  clientId: string
-  redirectUri: string
-  state: string
-  codeChallenge: string
-  scope?: string
-}
-
-/**
- * Build Google OAuth authorization URL
- */
-export function buildGoogleAuthUrl(params: GoogleAuthParams): string {
-  const {
-    clientId,
-    redirectUri,
-    state,
-    codeChallenge,
-    scope = 'openid email profile'
-  } = params
-
-  const url = new URL('https://accounts.google.com/o/oauth2/v2/auth')
-  url.searchParams.set('client_id', clientId)
-  url.searchParams.set('redirect_uri', redirectUri)
-  url.searchParams.set('response_type', 'code')
-  url.searchParams.set('scope', scope)
-  url.searchParams.set('state', state)
-  url.searchParams.set('code_challenge', codeChallenge)
-  url.searchParams.set('code_challenge_method', 'S256')
-  url.searchParams.set('access_type', 'offline')
-  url.searchParams.set('prompt', 'consent')
-
-  return url.toString()
-}
-
-interface GoogleTokenResponse {
-  access_token: string
-  id_token: string
-  refresh_token?: string
-  expires_in: number
-  token_type: string
-  scope: string
-}
-
-interface GoogleUserInfo {
-  id: string
-  email: string
-  verified_email: boolean
-  name?: string
-  given_name?: string
-  family_name?: string
-  picture?: string
-}
-
-interface GoogleExchangeParams {
-  code: string
-  clientId: string
-  clientSecret: string
-  redirectUri: string
-  codeVerifier: string
-}
+// ==================== SHARED TYPES ====================
 
 interface OAuthUserResult {
   providerId: string
   email: string
   name: string | null
   image: string | null
-}
-
-/**
- * Exchange Google authorization code for tokens and user info
- */
-export async function exchangeGoogleCode(params: GoogleExchangeParams): Promise<OAuthUserResult> {
-  const { code, clientId, clientSecret, redirectUri, codeVerifier } = params
-
-  // Exchange code for tokens
-  const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: new URLSearchParams({
-      code,
-      client_id: clientId,
-      client_secret: clientSecret,
-      redirect_uri: redirectUri,
-      grant_type: 'authorization_code',
-      code_verifier: codeVerifier,
-    }),
-  })
-
-  if (!tokenResponse.ok) {
-    const error = await tokenResponse.text()
-    console.error('[Google OAuth] Token exchange failed:', error)
-    throw new Error('Failed to exchange authorization code')
-  }
-
-  const tokens: GoogleTokenResponse = await tokenResponse.json()
-
-  // Get user info
-  const userResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-    headers: {
-      Authorization: `Bearer ${tokens.access_token}`,
-    },
-  })
-
-  if (!userResponse.ok) {
-    console.error('[Google OAuth] Failed to get user info')
-    throw new Error('Failed to get user info')
-  }
-
-  const userInfo: GoogleUserInfo = await userResponse.json()
-
-  if (!userInfo.email) {
-    throw new Error('Email not provided by Google')
-  }
-
-  return {
-    providerId: userInfo.id,
-    email: userInfo.email,
-    name: userInfo.name || null,
-    image: userInfo.picture || null,
-  }
 }
 
 // ==================== YANDEX OAUTH ====================

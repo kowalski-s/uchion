@@ -15,8 +15,8 @@ NextAuth.js настроен для работы с Vercel Functions + Drizzle O
 Настроены три способа авторизации:
 
 1. **Email/Password (Credentials)** - встроенная авторизация
-2. **Google OAuth** - авторизация через Google
-3. **Yandex OAuth** - авторизация через Яндекс
+2. **Yandex OAuth** - авторизация через Яндекс
+3. **Telegram Login** - авторизация через Telegram
 
 ## Переменные окружения
 
@@ -34,28 +34,16 @@ NEXTAUTH_SECRET=<generate with: openssl rand -base64 32>
 ### OAuth Providers (опциональные)
 
 ```bash
-# Google OAuth
-GOOGLE_CLIENT_ID=your-google-client-id
-GOOGLE_CLIENT_SECRET=your-google-client-secret
-
 # Yandex OAuth
 YANDEX_CLIENT_ID=your-yandex-client-id
 YANDEX_CLIENT_SECRET=your-yandex-client-secret
+
+# Telegram Login
+TELEGRAM_BOT_TOKEN=your-telegram-bot-token
+TELEGRAM_BOT_USERNAME=your-telegram-bot-username
 ```
 
 ## Настройка OAuth Providers
-
-### Google OAuth
-
-1. Перейдите в [Google Cloud Console](https://console.cloud.google.com/)
-2. Создайте новый проект или выберите существующий
-3. Включите Google+ API
-4. Перейдите в "Credentials" → "Create Credentials" → "OAuth client ID"
-5. Выберите "Web application"
-6. Добавьте authorized redirect URIs:
-   - Development: `http://localhost:3000/api/auth/callback/google`
-   - Production: `https://yourdomain.com/api/auth/callback/google`
-7. Скопируйте Client ID и Client Secret в `.env`
 
 ### Yandex OAuth
 
@@ -66,6 +54,14 @@ YANDEX_CLIENT_SECRET=your-yandex-client-secret
    - Development: `http://localhost:3000/api/auth/callback/yandex`
    - Production: `https://yourdomain.com/api/auth/callback/yandex`
 5. Скопируйте ID приложения и Пароль приложения в `.env`
+
+### Telegram Login
+
+1. Создайте бота через [@BotFather](https://t.me/BotFather) в Telegram
+2. Отправьте команду `/newbot` и следуйте инструкциям
+3. Получите токен бота и сохраните его в `TELEGRAM_BOT_TOKEN`
+4. Установите домен для виджета: `/setdomain` → введите ваш домен
+5. Сохраните username бота (без @) в `TELEGRAM_BOT_USERNAME`
 
 ## Генерация NEXTAUTH_SECRET
 
@@ -89,8 +85,8 @@ openssl rand -base64 32
 
 ### Авторизация через провайдеры
 
-- `GET /api/auth/signin/google` - Вход через Google
 - `GET /api/auth/signin/yandex` - Вход через Яндекс
+- `GET /api/auth/telegram/callback` - Вход через Telegram
 - `POST /api/auth/signin/credentials` - Вход через Email/Password
 
 ## Middleware для защиты API

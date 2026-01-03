@@ -1,9 +1,3 @@
-
----
-
-# 📄 **.gitignore (полностью готовый)**
-
-```gitignore
 # Node
 node_modules/
 npm-debug.log
@@ -46,6 +40,10 @@ Thumbs.db
 
 # Testing
 coverage/
+.vitest/
+test-results/
+playwright-report/
+playwright/.cache/
 
 # Local cache
 .cache/
@@ -53,6 +51,6 @@ coverage/
 
 # Generated
 *.pdf
-node_modules
-.vercel
-.env*.local
+
+# BMAD Method
+_bmad-output/

@@ -49,8 +49,8 @@ vercel dev
 - `POST /api/auth/register` - регистрация нового пользователя
 - `GET /api/auth/me` - информация о текущем пользователе
 - `POST /api/auth/signin/credentials` - вход (Email/Password)
-- `GET /api/auth/signin/google` - вход через Google (требует настройки OAuth)
 - `GET /api/auth/signin/yandex` - вход через Яндекс (требует настройки OAuth)
+- `GET /api/auth/telegram/callback` - вход через Telegram (требует настройки бота)
 
 ## Пример регистрации
 
@@ -77,7 +77,7 @@ curl -X POST http://localhost:3000/api/auth/signin/credentials \
 
 ## Настройка OAuth (опционально)
 
-Для работы с Google и Яндекс OAuth см. [AUTH_SETUP.md](./AUTH_SETUP.md)
+Для работы с Яндекс OAuth и Telegram Login см. [AUTH_SETUP.md](./AUTH_SETUP.md)
 
 ## Структура файлов
 

@@ -13,7 +13,6 @@ export interface User {
 interface AuthContextType {
   user: User | null
   status: 'loading' | 'authenticated' | 'unauthenticated'
-  signInWithGoogle: () => void
   signInWithYandex: () => void
   signOut: () => Promise<void>
   refreshAuth: () => Promise<void>
@@ -91,10 +90,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [checkAuth])
 
   // OAuth redirect handlers
-  const signInWithGoogle = () => {
-    window.location.href = '/api/auth/google/redirect'
-  }
-
   const signInWithYandex = () => {
     window.location.href = '/api/auth/yandex/redirect'
   }
@@ -122,7 +117,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         status,
-        signInWithGoogle,
         signInWithYandex,
         signOut,
         refreshAuth,

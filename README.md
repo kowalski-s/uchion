@@ -13,7 +13,7 @@
 
 ## 🚀 Возможности
 
-- **OAuth 2.0 аутентификация** через Google и Yandex с PKCE защитой.
+- **OAuth 2.0 аутентификация** через Яндекс и Telegram с PKCE защитой.
 - Генерация рабочих листов по теме урока.
 - Поддержка предметов: **математика**, **русский язык**.
 - Поддержка классов: **1–4**.
@@ -40,7 +40,7 @@
 ### **Backend**
 - Vercel Serverless Functions (Node.js + TypeScript)
 - Endpoint `/api/generate` для генерации листов
-- OAuth endpoints: `/api/auth/google/*`, `/api/auth/yandex/*`
+- OAuth endpoints: `/api/auth/yandex/*`, `/api/auth/telegram/*`
 - Модуль `AIProvider` для взаимодействия с OpenAI
 - PDF-генерация через pdfkit
 
@@ -88,11 +88,10 @@
 /api                         # Vercel Serverless Functions
   generate.ts                # генерация листов
   /auth
-    /google                  # Google OAuth endpoints
-      redirect.ts
-      callback.ts
     /yandex                  # Yandex OAuth endpoints
       redirect.ts
+      callback.ts
+    /telegram                # Telegram Login endpoint
       callback.ts
     me.ts                    # получение данных пользователя
     logout.ts                # выход из системы
@@ -149,30 +148,29 @@ UCHION_VECTOR_STORE_ID=опционально  # для RAG контекста
 AUTH_SECRET=случайная_строка_32+_символов  # для подписи JWT (сгенерируй через openssl rand -base64 32)
 APP_URL=http://localhost:3000              # URL приложения
 
-# Google OAuth
-GOOGLE_CLIENT_ID=ваш_google_client_id
-GOOGLE_CLIENT_SECRET=ваш_google_client_secret
-
-# Yandex OAuth (опционально)
+# Yandex OAuth
 YANDEX_CLIENT_ID=ваш_yandex_client_id
 YANDEX_CLIENT_SECRET=ваш_yandex_client_secret
+
+# Telegram Login
+TELEGRAM_BOT_TOKEN=ваш_telegram_bot_token
+TELEGRAM_BOT_USERNAME=ваш_telegram_bot_username
 ```
 
 Для продакшена (Vercel) задайте переменные в настройках проекта.
 
-### 3. Настройка OAuth приложений:
-
-**Google Cloud Console:**
-1. Создай проект в [Google Cloud Console](https://console.cloud.google.com)
-2. Включи Google+ API
-3. Создай OAuth 2.0 Client ID
-4. Добавь redirect URI: `http://localhost:3000/api/auth/google/callback` (для разработки)
-5. Добавь redirect URI: `https://твой-домен.vercel.app/api/auth/google/callback` (для продакшена)
+### 3. Настройка аутентификации:
 
 **Yandex OAuth:**
 1. Создай приложение в [Yandex OAuth](https://oauth.yandex.ru)
 2. Добавь callback URL: `http://localhost:3000/api/auth/yandex/callback` (для разработки)
 3. Добавь callback URL: `https://твой-домен.vercel.app/api/auth/yandex/callback` (для продакшена)
+
+**Telegram Login:**
+1. Создай бота через [@BotFather](https://t.me/BotFather)
+2. Получи токен бота (TELEGRAM_BOT_TOKEN)
+3. Установи домен для бота: `/setdomain` → введи свой домен
+4. Укажи username бота в TELEGRAM_BOT_USERNAME
 
 ### 4. Настройка базы данных:
 
@@ -214,7 +212,7 @@ vercel dev
 Кратко:
 
 - ✅ MVP (генерация + PDF)
-- ✅ OAuth аутентификация (Google + Yandex)
+- ✅ OAuth аутентификация (Яндекс + Telegram)
 - ✅ База данных (PostgreSQL + Drizzle)
 - ✅ Лимиты генерации
 - 🔄 Улучшение качества материалов

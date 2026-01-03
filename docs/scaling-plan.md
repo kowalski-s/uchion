@@ -23,7 +23,7 @@
 ### Изменения
 1.  **Database**: Подключение Supabase (PostgreSQL).
     - Таблицы: `users`, `worksheets`, `generations_log`.
-2.  **Auth**: Supabase Auth (Email/Google).
+2.  **Auth**: Custom OAuth 2.0 (Yandex/Telegram).
 3.  **API**: Новые эндпоинты:
     - `GET /api/worksheets` (список).
     - `GET /api/worksheets/:id` (детали).

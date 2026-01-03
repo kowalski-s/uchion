@@ -22,7 +22,7 @@ export const users = pgTable('users', {
   role: userRoleEnum('role').notNull().default('user'),
   generationsLeft: integer('generations_left').notNull().default(3),
   // OAuth provider info
-  provider: varchar('provider', { length: 50 }),  // 'google' | 'yandex'
+  provider: varchar('provider', { length: 50 }),  // 'yandex' | 'telegram'
   providerId: varchar('provider_id', { length: 255 }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

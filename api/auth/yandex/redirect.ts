@@ -1,10 +1,22 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { generateState, generatePKCE, buildYandexAuthUrl } from '../../_lib/auth/oauth.js'
 import { setOAuthStateCookie, setPKCECookie } from '../../_lib/auth/cookies.js'
+import { checkOAuthRedirectRateLimit } from '../../_lib/auth/rate-limit.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' })
+  }
+
+  // Apply rate limiting
+  const rateLimitResult = checkOAuthRedirectRateLimit(req)
+  if (!rateLimitResult.success) {
+    const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000)
+    console.warn('[Yandex OAuth] Rate limit exceeded on redirect')
+    return res
+      .status(429)
+      .setHeader('Retry-After', retryAfter.toString())
+      .json({ error: 'Too many requests. Please try again later.' })
   }
 
   try {

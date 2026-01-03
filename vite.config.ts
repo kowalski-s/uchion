@@ -10,4 +10,13 @@ export default defineConfig({
       '/api': 'http://localhost:3000',
     },
   },
+  test: {
+    globals: true,
+    environment: 'node',
+    include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'html'],
+    },
+  },
 })

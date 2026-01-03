@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { eq } from 'drizzle-orm'
 import { db } from '../../../db/index.js'
 import { users } from '../../../db/schema.js'
-import { exchangeYandexCode } from '../../_lib/auth/oauth.js'
+import { exchangeYandexCode, validateState } from '../../_lib/auth/oauth.js'
 import { createAccessToken, createRefreshToken } from '../../_lib/auth/tokens.js'
 import {
   getStateCookie,
@@ -10,6 +10,13 @@ import {
   setAuthCookies,
   clearOAuthCookies,
 } from '../../_lib/auth/cookies.js'
+import { checkAuthRateLimit } from '../../_lib/auth/rate-limit.js'
+import {
+  logOAuthCallbackSuccess,
+  logOAuthCallbackFailed,
+  logRateLimitExceeded,
+  logCsrfDetected,
+} from '../../_lib/auth/audit-log.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') {
@@ -17,6 +24,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const appUrl = process.env.APP_URL || ''
+
+  // Apply rate limiting
+  const rateLimitResult = checkAuthRateLimit(req)
+  if (!rateLimitResult.success) {
+    const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000)
+    logRateLimitExceeded(req, '/api/auth/yandex/callback')
+    clearOAuthCookies(res)
+    return res
+      .status(429)
+      .setHeader('Retry-After', retryAfter.toString())
+      .redirect(302, `${appUrl}/login?error=rate_limit_exceeded`)
+  }
 
   try {
     const { code, state, error: oauthError } = req.query
@@ -44,7 +63,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Validate state (CSRF protection)
     const storedState = getStateCookie(req)
     if (!storedState || state !== storedState) {
-      console.error('[Yandex OAuth] State mismatch - possible CSRF attack')
+      logCsrfDetected(req, 'yandex', { provided_state: state, expected_state: storedState })
+      clearOAuthCookies(res)
+      return res.redirect(302, `${appUrl}/login?error=invalid_state`)
+    }
+
+    // Validate state timestamp (additional security layer)
+    if (!validateState(storedState)) {
+      console.error('[Yandex OAuth] State expired or invalid format')
+      logCsrfDetected(req, 'yandex', { state: storedState, reason: 'expired_or_invalid' })
       clearOAuthCookies(res)
       return res.redirect(302, `${appUrl}/login?error=invalid_state`)
     }
@@ -123,9 +150,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     setAuthCookies(res, { accessToken, refreshToken })
     clearOAuthCookies(res)
 
+    // Log successful authentication
+    logOAuthCallbackSuccess(req, user.id, user.email, 'yandex')
+
     // Redirect to app
     return res.redirect(302, appUrl || '/')
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    logOAuthCallbackFailed(req, errorMessage, 'yandex')
     console.error('[Yandex OAuth] Callback error:', error)
     clearOAuthCookies(res)
     return res.redirect(302, `${appUrl}/login?error=authentication_failed`)

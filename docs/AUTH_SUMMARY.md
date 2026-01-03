@@ -75,12 +75,7 @@ docs/
 - Поддержка регистрации через `/api/auth/register`
 - Вход через `/api/auth/signin/credentials`
 
-### 2. Google OAuth
-- Требует настройки в Google Cloud Console
-- Переменные: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
-- Callback URL: `{NEXTAUTH_URL}/api/auth/callback/google`
-
-### 3. Yandex OAuth
+### 2. Yandex OAuth
 - Требует настройки в Yandex OAuth
 - Переменные: `YANDEX_CLIENT_ID`, `YANDEX_CLIENT_SECRET`
 - Callback URL: `{NEXTAUTH_URL}/api/auth/callback/yandex`
@@ -91,8 +86,8 @@ docs/
 
 - `GET /api/auth/session` - Текущая сессия
 - `POST /api/auth/signin/credentials` - Вход (Email/Password)
-- `GET /api/auth/signin/google` - Вход через Google
 - `GET /api/auth/signin/yandex` - Вход через Яндекс
+- `GET /api/auth/telegram/callback` - Вход через Telegram
 - `POST /api/auth/signout` - Выход
 - `GET /api/auth/csrf` - CSRF token
 - `GET /api/auth/providers` - Список доступных providers
@@ -143,10 +138,10 @@ NEXTAUTH_SECRET=<generate with: openssl rand -base64 32>
 ### Опциональные (для OAuth)
 
 ```bash
-GOOGLE_CLIENT_ID=...
-GOOGLE_CLIENT_SECRET=...
 YANDEX_CLIENT_ID=...
 YANDEX_CLIENT_SECRET=...
+TELEGRAM_BOT_TOKEN=...
+TELEGRAM_BOT_USERNAME=...
 ```
 
 ## Database Migrations
