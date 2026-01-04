@@ -20,7 +20,8 @@
       "Bash(git -C D:/github/uchion log --all --pretty=format:\"%h %s\" -p -- \"*.env*\")",
       "WebFetch(domain:core.telegram.org)",
       "Bash(git add:*)",
-      "Bash(git restore:*)"
+      "Bash(git restore:*)",
+      "Bash(npm run build:*)"
     ]
   }
 }

@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { eq } from 'drizzle-orm'
 import { db } from '../../db/index.js'
-import { users } from '../../db/schema.js'
+import { users, subscriptions } from '../../db/schema.js'
 import { getTokenFromCookie, ACCESS_TOKEN_COOKIE } from '../_lib/auth/cookies.js'
 import { verifyAccessToken } from '../_lib/auth/tokens.js'
 import { checkMeRateLimit } from '../_lib/auth/rate-limit.js'
@@ -54,7 +54,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(404).json({ error: 'User not found' })
     }
 
-    return res.status(200).json({ user })
+    // Get subscription info
+    const [subscription] = await db
+      .select({
+        plan: subscriptions.plan,
+        status: subscriptions.status,
+        expiresAt: subscriptions.expiresAt,
+      })
+      .from(subscriptions)
+      .where(eq(subscriptions.userId, payload.sub))
+      .limit(1)
+
+    return res.status(200).json({
+      user: {
+        ...user,
+        subscription: subscription || { plan: 'free', status: 'active', expiresAt: null }
+      }
+    })
   } catch (error) {
     console.error('[Auth Me] Error:', error)
     return res.status(500).json({ error: 'Internal server error' })

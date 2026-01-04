@@ -52,3 +52,18 @@ export type PublicWorksheet = {
   answersAssignments: string[]
   answersTest: string[]
 }
+
+// Dashboard types
+export interface WorksheetListItem {
+  id: string
+  subject: 'math' | 'russian'
+  grade: number
+  topic: string
+  createdAt: string
+}
+
+export interface UserSubscription {
+  plan: 'free' | 'basic' | 'premium'
+  status: 'active' | 'canceled' | 'expired' | 'trial'
+  expiresAt: string | null
+}

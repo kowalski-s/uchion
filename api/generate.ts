@@ -2,7 +2,7 @@
 import { z } from 'zod'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { db } from '../db/index.js'
-import { users } from '../db/schema.js'
+import { users, worksheets } from '../db/schema.js'
 import { eq, sql } from 'drizzle-orm'
 import { getAIProvider } from './_lib/ai-provider.js'
 import { buildPdf } from './_lib/pdf.js'
@@ -103,7 +103,7 @@ export default async function handler(
       pdfBase64: pdfBase64 ?? ''
     }
 
-    // Decrement limit for authenticated users
+    // Decrement limit and save worksheet for authenticated users
     if (userId) {
       await db
         .update(users)
@@ -112,6 +112,15 @@ export default async function handler(
           updatedAt: new Date(),
         })
         .where(eq(users.id, userId))
+
+      // Save worksheet to database
+      await db.insert(worksheets).values({
+        userId,
+        subject: input.subject,
+        grade: input.grade,
+        topic: input.topic,
+        content: JSON.stringify(finalWorksheet),
+      })
     }
 
     sendEvent({ type: 'result', data: { worksheet: finalWorksheet } })

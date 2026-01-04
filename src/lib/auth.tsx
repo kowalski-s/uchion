@@ -2,12 +2,19 @@ import { createContext, useContext, useState, useEffect, useCallback, ReactNode 
 
 // ==================== TYPES ====================
 
+export interface UserSubscription {
+  plan: 'free' | 'basic' | 'premium'
+  status: 'active' | 'canceled' | 'expired' | 'trial'
+  expiresAt: string | null
+}
+
 export interface User {
   id: string
   email: string
   name?: string | null
   role: 'user' | 'admin'
   generationsLeft: number
+  subscription?: UserSubscription
 }
 
 interface AuthContextType {
