@@ -10,7 +10,16 @@
       "Bash(rm:*)",
       "Bash(npx playwright install)",
       "Bash(npx bmad-method@alpha install:*)",
-      "Bash(npm run test:run:*)"
+      "Bash(npm run test:run:*)",
+      "Skill(bmad:bmm:workflows:create-prd)",
+      "Bash(vercel env:*)",
+      "Bash(vercel domains:*)",
+      "Bash(vercel ls:*)",
+      "Bash(git -C D:/github/uchion log --oneline --all -- \".env.production\" \".env*\")",
+      "Bash(git -C D:/github/uchion ls-files:*)",
+      "Bash(git -C D:/github/uchion log --all --pretty=format:\"%h %s\" -p -- \"*.env*\")",
+      "WebFetch(domain:core.telegram.org)",
+      "Bash(git add:*)"
     ]
   }
 }
