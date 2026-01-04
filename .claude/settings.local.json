@@ -24,7 +24,9 @@
       "Bash(npm run build:*)",
       "Bash(find:*)",
       "Bash(npx drizzle-kit:*)",
-      "Bash(printf:*)"
+      "Bash(printf:*)",
+      "Bash(ls:*)",
+      "Bash(curl:*)"
     ]
   }
 }
