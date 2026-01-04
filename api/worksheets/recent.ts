@@ -11,7 +11,11 @@ async function handler(req: VercelRequest, res: VercelResponse, user: AuthUser) 
   }
 
   // Rate limiting: 30 requests per minute
-  const rateLimitResult = checkRateLimit(req, { maxRequests: 30, windowSeconds: 60 })
+  const rateLimitResult = checkRateLimit(req, {
+    maxRequests: 30,
+    windowSeconds: 60,
+    identifier: `worksheets:list:${user.id}`,
+  })
   if (!rateLimitResult.success) {
     const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000)
     return res
@@ -21,21 +25,44 @@ async function handler(req: VercelRequest, res: VercelResponse, user: AuthUser) 
   }
 
   try {
+    // Parse query parameters
+    const { folderId, limit: limitStr } = req.query
+    const limit = Math.min(parseInt(limitStr as string) || 50, 100)
+
+    // Build WHERE conditions
+    const conditions = [
+      eq(worksheets.userId, user.id),
+      isNull(worksheets.deletedAt),
+    ]
+
+    // Filter by folder if specified
+    if (folderId === 'null' || folderId === '') {
+      // Get worksheets without folder (root level)
+      conditions.push(isNull(worksheets.folderId))
+    } else if (folderId && typeof folderId === 'string') {
+      // Validate UUID format
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      if (uuidRegex.test(folderId)) {
+        conditions.push(eq(worksheets.folderId, folderId))
+      }
+    }
+
     const userWorksheets = await db
       .select({
         id: worksheets.id,
+        folderId: worksheets.folderId,
+        title: worksheets.title,
         subject: worksheets.subject,
         grade: worksheets.grade,
         topic: worksheets.topic,
+        difficulty: worksheets.difficulty,
         createdAt: worksheets.createdAt,
+        updatedAt: worksheets.updatedAt,
       })
       .from(worksheets)
-      .where(and(
-        eq(worksheets.userId, user.id),
-        isNull(worksheets.deletedAt)
-      ))
+      .where(and(...conditions))
       .orderBy(desc(worksheets.createdAt))
-      .limit(5)
+      .limit(limit)
 
     return res.status(200).json({ worksheets: userWorksheets })
   } catch (error) {

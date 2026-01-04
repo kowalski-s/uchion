@@ -21,7 +21,10 @@
       "WebFetch(domain:core.telegram.org)",
       "Bash(git add:*)",
       "Bash(git restore:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(find:*)",
+      "Bash(npx drizzle-kit:*)",
+      "Bash(printf:*)"
     ]
   }
 }

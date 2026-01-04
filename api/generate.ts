@@ -3,11 +3,12 @@ import { z } from 'zod'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { db } from '../db/index.js'
 import { users, worksheets } from '../db/schema.js'
-import { eq, sql } from 'drizzle-orm'
+import { eq, sql, and, isNull } from 'drizzle-orm'
 import { getAIProvider } from './_lib/ai-provider.js'
 import { buildPdf } from './_lib/pdf.js'
 import { getTokenFromCookie, ACCESS_TOKEN_COOKIE } from './_lib/auth/cookies.js'
 import { verifyAccessToken } from './_lib/auth/tokens.js'
+import { checkGenerateRateLimit } from './_lib/auth/rate-limit.js'
 import type { GeneratePayload, Worksheet } from '../shared/types'
 
 const InputSchema = z.object({
@@ -50,14 +51,25 @@ export default async function handler(
     if (payload) {
       userId = payload.sub
 
-      // Check user limit
+      // Check user exists and is not deleted, also check limit
       const [user] = await db
         .select({ generationsLeft: users.generationsLeft })
         .from(users)
-        .where(eq(users.id, userId))
+        .where(and(
+          eq(users.id, userId),
+          isNull(users.deletedAt)  // Exclude soft-deleted users
+        ))
         .limit(1)
 
-      if (!user || user.generationsLeft <= 0) {
+      if (!user) {
+        return res.status(401).json({
+          status: 'error',
+          code: 'UNAUTHORIZED',
+          message: 'Пользователь не найден.',
+        })
+      }
+
+      if (user.generationsLeft <= 0) {
         return res.status(403).json({
           status: 'error',
           code: 'LIMIT_EXCEEDED',
@@ -65,6 +77,18 @@ export default async function handler(
         })
       }
     }
+  }
+
+  // Rate limiting - critical for preventing abuse (OpenAI costs money!)
+  const rateLimitResult = checkGenerateRateLimit(req, userId)
+  if (!rateLimitResult.success) {
+    const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000)
+    return res.status(429).json({
+      status: 'error',
+      code: 'RATE_LIMIT_EXCEEDED',
+      message: `Слишком много запросов. Попробуйте через ${Math.ceil(retryAfter / 60)} мин.`,
+      retryAfter,
+    })
   }
 
   // Setup SSE

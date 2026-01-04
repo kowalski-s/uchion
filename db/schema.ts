@@ -33,11 +33,31 @@ export const users = pgTable('users', {
   providerIdx: index('users_provider_idx').on(table.provider, table.providerId),
 }))
 
+// ==================== FOLDERS TABLE ====================
+
+export const folders = pgTable('folders', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  name: varchar('name', { length: 100 }).notNull(),
+  color: varchar('color', { length: 7 }).default('#6366f1'), // HEX color for folder icon
+  parentId: uuid('parent_id'), // Self-reference for nested folders (optional)
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
+}, (table) => ({
+  userIdIdx: index('folders_user_id_idx').on(table.userId),
+  parentIdIdx: index('folders_parent_id_idx').on(table.parentId),
+  deletedAtIdx: index('folders_deleted_at_idx').on(table.deletedAt),
+}))
+
 // ==================== WORKSHEETS TABLE ====================
 
 export const worksheets = pgTable('worksheets', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  folderId: uuid('folder_id').references(() => folders.id, { onDelete: 'set null' }), // Optional folder
+  title: varchar('title', { length: 200 }), // Custom user title (null = auto-generated from topic)
   subject: subjectEnum('subject').notNull(),
   grade: integer('grade').notNull(), // 1-4
   topic: varchar('topic', { length: 500 }).notNull(),
@@ -50,6 +70,7 @@ export const worksheets = pgTable('worksheets', {
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
 }, (table) => ({
   userIdIdx: index('worksheets_user_id_idx').on(table.userId),
+  folderIdIdx: index('worksheets_folder_id_idx').on(table.folderId),
   subjectIdx: index('worksheets_subject_idx').on(table.subject),
   gradeIdx: index('worksheets_grade_idx').on(table.grade),
   createdAtIdx: index('worksheets_created_at_idx').on(table.createdAt),
@@ -120,16 +141,35 @@ export const refreshTokens = pgTable('refresh_tokens', {
 
 export const usersRelations = relations(users, ({ many, one }) => ({
   worksheets: many(worksheets),
+  folders: many(folders),
   generations: many(generations),
   subscription: one(subscriptions),
   payments: many(payments),
   refreshTokens: many(refreshTokens),
 }))
 
+export const foldersRelations = relations(folders, ({ one, many }) => ({
+  user: one(users, {
+    fields: [folders.userId],
+    references: [users.id],
+  }),
+  parent: one(folders, {
+    fields: [folders.parentId],
+    references: [folders.id],
+    relationName: 'parentFolder',
+  }),
+  children: many(folders, { relationName: 'parentFolder' }),
+  worksheets: many(worksheets),
+}))
+
 export const worksheetsRelations = relations(worksheets, ({ one }) => ({
   user: one(users, {
     fields: [worksheets.userId],
     references: [users.id],
+  }),
+  folder: one(folders, {
+    fields: [worksheets.folderId],
+    references: [folders.id],
   }),
   generation: one(generations, {
     fields: [worksheets.id],

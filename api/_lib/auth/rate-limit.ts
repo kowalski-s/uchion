@@ -208,3 +208,37 @@ export function checkRefreshRateLimit(req: VercelRequest): RateLimitResult {
     windowSeconds: 60, // per minute
   })
 }
+
+/**
+ * Rate limit for /api/generate endpoint
+ * Critical: This endpoint costs money (OpenAI API calls)
+ *
+ * Limits:
+ * - Guests (by IP): 5 generations per hour (matches frontend guest limit of 3)
+ * - Authenticated users: 20 generations per hour (can be adjusted based on subscription)
+ */
+export function checkGenerateRateLimit(
+  req: VercelRequest,
+  userId?: string | null
+): RateLimitResult {
+  if (userId) {
+    // Authenticated users - more generous limits
+    return checkRateLimit(req, {
+      maxRequests: 20,
+      windowSeconds: 60 * 60, // 1 hour
+      identifier: `generate:user:${userId}`,
+    })
+  }
+
+  // Guests - strict limits by IP
+  return checkRateLimit(req, {
+    maxRequests: 5, // Slightly more than frontend limit (3) as buffer
+    windowSeconds: 60 * 60, // 1 hour
+    identifier: `generate:guest:${getClientIp(req)}`,
+  })
+}
+
+/**
+ * Get client IP - exported for use in other modules
+ */
+export { getClientIp }

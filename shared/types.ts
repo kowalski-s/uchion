@@ -56,14 +56,32 @@ export type PublicWorksheet = {
 // Dashboard types
 export interface WorksheetListItem {
   id: string
+  folderId?: string | null
+  title?: string | null
   subject: 'math' | 'russian'
   grade: number
   topic: string
+  difficulty?: 'easy' | 'medium' | 'hard'
   createdAt: string
+  updatedAt?: string
 }
 
 export interface UserSubscription {
   plan: 'free' | 'basic' | 'premium'
   status: 'active' | 'canceled' | 'expired' | 'trial'
   expiresAt: string | null
+}
+
+// Folder types
+export interface Folder {
+  id: string
+  name: string
+  color: string
+  parentId?: string | null
+  sortOrder: number
+  createdAt: string
+}
+
+export interface FolderWithCount extends Folder {
+  worksheetCount: number
 }

@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { eq } from 'drizzle-orm'
+import { eq, and, isNull } from 'drizzle-orm'
 import { db } from '../../../db/index.js'
 import { users } from '../../../db/schema.js'
 import { getTokenFromCookie, ACCESS_TOKEN_COOKIE } from './cookies.js'
@@ -46,7 +46,7 @@ export function withAuth(handler: AuthenticatedHandler) {
         return res.status(401).json({ error: 'Invalid or expired token' })
       }
 
-      // Verify user still exists in database
+      // Verify user still exists in database and is not deleted
       const [user] = await db
         .select({
           id: users.id,
@@ -54,11 +54,14 @@ export function withAuth(handler: AuthenticatedHandler) {
           role: users.role,
         })
         .from(users)
-        .where(eq(users.id, payload.sub))
+        .where(and(
+          eq(users.id, payload.sub),
+          isNull(users.deletedAt)  // Exclude soft-deleted users
+        ))
         .limit(1)
 
       if (!user) {
-        return res.status(401).json({ error: 'User not found' })
+        return res.status(401).json({ error: 'User not found or deactivated' })
       }
 
       return await handler(req, res, user)
@@ -102,7 +105,7 @@ export function withOptionalAuth(handler: OptionalAuthHandler) {
         return await handler(req, res, null)
       }
 
-      // Verify user still exists in database
+      // Verify user still exists in database and is not deleted
       const [user] = await db
         .select({
           id: users.id,
@@ -110,7 +113,10 @@ export function withOptionalAuth(handler: OptionalAuthHandler) {
           role: users.role,
         })
         .from(users)
-        .where(eq(users.id, payload.sub))
+        .where(and(
+          eq(users.id, payload.sub),
+          isNull(users.deletedAt)  // Exclude soft-deleted users
+        ))
         .limit(1)
 
       return await handler(req, res, user || null)
