@@ -96,9 +96,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .join('\n')
 
     // Verify hash using HMAC-SHA256
-    // Step 1: secret_key = HMAC-SHA256(bot_token, "WebAppData")
+    // Step 1: secret_key = SHA256(bot_token) for Telegram Login Widget
+    // NOTE: This is different from Telegram Web App which uses HMAC(WebAppData, token)
     const secretKey = crypto
-      .createHmac('sha256', 'WebAppData')
+      .createHash('sha256')
       .update(botToken)
       .digest()
 
@@ -108,8 +109,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .update(dataCheckString)
       .digest('hex')
 
-    // Step 3: Compare hashes
-    if (hash !== calculatedHash) {
+    // Step 3: Compare hashes using timing-safe comparison
+    const hashBuffer = Buffer.from(hash, 'hex')
+    const calculatedBuffer = Buffer.from(calculatedHash, 'hex')
+
+    if (hashBuffer.length !== calculatedBuffer.length ||
+        !crypto.timingSafeEqual(hashBuffer, calculatedBuffer)) {
       logInvalidSignature(req, 'telegram', { telegram_id: String(id) })
       return res.redirect(302, `${appUrl}/login?error=invalid_signature`)
     }
