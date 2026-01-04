@@ -182,11 +182,8 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Worksheets Section with Folders */}
+        {/* Worksheets Section */}
         <section className="mb-8">
-          <div className="flex items-center gap-3 mb-4">
-            <h2 className="text-lg font-bold text-slate-900">Мои материалы</h2>
-          </div>
           <WorksheetManager />
         </section>
 

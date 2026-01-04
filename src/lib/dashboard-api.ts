@@ -16,7 +16,7 @@ export async function fetchWorksheets(options?: FetchWorksheetsOptions): Promise
     params.set('limit', String(options.limit))
   }
 
-  const url = `/api/worksheets/recent${params.toString() ? `?${params}` : ''}`
+  const url = `/api/worksheets${params.toString() ? `?${params}` : ''}`
   const res = await fetch(url, {
     credentials: 'include',
   })

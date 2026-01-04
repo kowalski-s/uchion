@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
+import { useNavigate, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Link, useNavigate } from 'react-router-dom'
+import { useAuth } from '../lib/auth'
+import Header from '../components/Header'
 import {
   fetchWorksheets,
   deleteWorksheet,
@@ -51,10 +53,10 @@ function PlusIcon() {
   )
 }
 
-function ArrowRightIcon({ className = "w-5 h-5" }: { className?: string }) {
+function ChevronLeftIcon() {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={className}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
     </svg>
   )
 }
@@ -64,6 +66,17 @@ function XMarkIcon() {
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
       <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
     </svg>
+  )
+}
+
+function LoadingSpinner() {
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-white via-purple-50/50 to-white flex items-center justify-center">
+      <div className="relative">
+        <div className="animate-spin rounded-full h-12 w-12 border-2 border-purple-200"></div>
+        <div className="absolute inset-0 animate-spin rounded-full h-12 w-12 border-t-2 border-[#8C52FF]"></div>
+      </div>
+    </div>
   )
 }
 
@@ -83,7 +96,6 @@ function RenameModal({
 }) {
   const [title, setTitle] = useState(currentTitle)
 
-  // Reset title when modal opens with new currentTitle
   useEffect(() => {
     if (isOpen) {
       setTitle(currentTitle)
@@ -129,15 +141,23 @@ function RenameModal({
   )
 }
 
-export default function WorksheetManager() {
+export default function WorksheetsListPage() {
   const navigate = useNavigate()
+  const { user, status } = useAuth()
   const queryClient = useQueryClient()
   const [renameModal, setRenameModal] = useState<{ id: string; title: string } | null>(null)
 
-  // Fetch recent worksheets (limit 5 for dashboard)
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      navigate('/login')
+    }
+  }, [status, navigate])
+
+  // Fetch all worksheets (no limit)
   const { data: worksheets, isLoading: isLoadingWorksheets } = useQuery({
-    queryKey: ['worksheets'],
-    queryFn: () => fetchWorksheets({ limit: 5 }),
+    queryKey: ['worksheets', 'all'],
+    queryFn: () => fetchWorksheets({ limit: 100 }),
+    enabled: status === 'authenticated',
   })
 
   // Mutations
@@ -174,102 +194,128 @@ export default function WorksheetManager() {
     return `${formatSubjectName(ws.subject)}, ${ws.grade} класс`
   }
 
+  if (status === 'loading') {
+    return <LoadingSpinner />
+  }
+
+  if (!user) {
+    return null
+  }
+
   const worksheetCount = worksheets?.length || 0
 
   return (
-    <div>
-      {/* Header with arrow navigation */}
-      <Link
-        to="/worksheets"
-        className="flex items-center gap-3 mb-4 group cursor-pointer"
-      >
-        <span className="section-badge">{worksheetCount}</span>
-        <h2 className="text-lg font-bold text-slate-900">Рабочие листы</h2>
-        <ArrowRightIcon className="w-5 h-5 text-slate-400 group-hover:text-[#8C52FF] group-hover:translate-x-1 transition-all" />
-      </Link>
+    <div className="min-h-screen bg-gradient-to-b from-white via-purple-50/30 to-white">
+      <Header />
 
-      {/* Worksheets List */}
-      <div className="glass-container p-4 md:p-6">
-        {isLoadingWorksheets ? (
-          <div className="flex justify-center py-10">
-            <div className="relative">
-              <div className="animate-spin rounded-full h-10 w-10 border-2 border-purple-200"></div>
-              <div className="absolute inset-0 animate-spin rounded-full h-10 w-10 border-t-2 border-[#8C52FF]"></div>
-            </div>
-          </div>
-        ) : worksheetCount === 0 ? (
-          <div className="text-center py-10">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-purple-100 rounded-2xl mb-4">
-              <DocumentIcon className="w-8 h-8 text-[#8C52FF]" />
-            </div>
-            <p className="text-slate-500">Рабочих листов пока нет</p>
-            <p className="text-sm text-slate-400 mt-1">Нажмите «Создать» в меню сверху</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {worksheets?.map((ws) => (
-              <div
-                key={ws.id}
-                className="worksheet-card flex items-center gap-4 cursor-pointer hover:bg-slate-50 transition-colors"
-                onClick={() => navigate(`/worksheets/${ws.id}`)}
-              >
-                <div className="p-2 bg-slate-100 rounded-lg">
-                  <DocumentIcon className="w-5 h-5 text-slate-500" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-slate-900 truncate">
-                    {getDisplayTitle(ws)}
-                  </p>
-                  <p className="text-sm text-slate-500 truncate">{ws.topic}</p>
-                  <p className="text-xs text-slate-400">
-                    {new Date(ws.createdAt).toLocaleDateString('ru-RU')}
-                  </p>
-                </div>
-                <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                  {/* Rename */}
-                  <button
-                    onClick={() => setRenameModal({ id: ws.id, title: ws.title || getDisplayTitle(ws) })}
-                    className="p-2 text-slate-300 hover:text-[#8C52FF] hover:bg-purple-50 rounded-lg transition-all"
-                    title="Переименовать"
-                  >
-                    <PencilIcon />
-                  </button>
-                  {/* Duplicate */}
-                  <button
-                    onClick={() => duplicateMutation.mutate(ws.id)}
-                    disabled={duplicateMutation.isPending}
-                    className="p-2 text-slate-300 hover:text-[#8C52FF] hover:bg-purple-50 rounded-lg transition-all disabled:opacity-50"
-                    title="Создать копию"
-                  >
-                    <CopyIcon />
-                  </button>
-                  {/* Create based on this */}
-                  <Link
-                    to={`/?subject=${ws.subject}&grade=${ws.grade}&topic=${encodeURIComponent(ws.topic)}`}
-                    className="p-2 text-slate-300 hover:text-emerald-500 hover:bg-emerald-50 rounded-lg transition-all"
-                    title="Создать на основе"
-                  >
-                    <PlusIcon />
-                  </Link>
-                  {/* Delete */}
-                  <button
-                    onClick={() => {
-                      if (confirm('Удалить этот рабочий лист?')) {
-                        deleteMutation.mutate(ws.id)
-                      }
-                    }}
-                    disabled={deleteMutation.isPending}
-                    className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all disabled:opacity-50"
-                    title="Удалить"
-                  >
-                    <TrashIcon />
-                  </button>
-                </div>
+      <main className="mx-auto max-w-4xl px-4 py-10">
+        {/* Back button and title */}
+        <div className="mb-8">
+          <Link
+            to="/dashboard"
+            className="inline-flex items-center gap-2 text-slate-500 hover:text-[#8C52FF] transition-colors mb-4"
+          >
+            <ChevronLeftIcon />
+            <span className="font-medium">Назад в кабинет</span>
+          </Link>
+          <h1 className="text-3xl font-bold text-slate-900">Рабочие листы</h1>
+          <p className="text-slate-500 mt-1">Всего: {worksheetCount}</p>
+        </div>
+
+        {/* Worksheets List */}
+        <div className="glass-container p-4 md:p-6">
+          {isLoadingWorksheets ? (
+            <div className="flex justify-center py-10">
+              <div className="relative">
+                <div className="animate-spin rounded-full h-10 w-10 border-2 border-purple-200"></div>
+                <div className="absolute inset-0 animate-spin rounded-full h-10 w-10 border-t-2 border-[#8C52FF]"></div>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+            </div>
+          ) : worksheetCount === 0 ? (
+            <div className="text-center py-16">
+              <div className="inline-flex items-center justify-center w-20 h-20 bg-purple-100 rounded-2xl mb-4">
+                <DocumentIcon className="w-10 h-10 text-[#8C52FF]" />
+              </div>
+              <p className="text-slate-500 text-lg">Рабочих листов пока нет</p>
+              <p className="text-sm text-slate-400 mt-2">Создайте свой первый рабочий лист</p>
+              <Link
+                to="/"
+                className="inline-flex items-center gap-2 mt-6 px-6 py-3 bg-[#8C52FF] hover:bg-purple-700 text-white rounded-xl font-medium transition-colors"
+              >
+                <PlusIcon />
+                Создать лист
+              </Link>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {worksheets?.map((ws) => (
+                <div
+                  key={ws.id}
+                  className="worksheet-card flex items-center gap-4 cursor-pointer hover:bg-slate-50 transition-colors"
+                  onClick={() => navigate(`/worksheets/${ws.id}`)}
+                >
+                  <div className="p-3 bg-slate-100 rounded-xl">
+                    <DocumentIcon className="w-6 h-6 text-slate-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-slate-900 truncate text-lg">
+                      {getDisplayTitle(ws)}
+                    </p>
+                    <p className="text-sm text-slate-500 truncate">{ws.topic}</p>
+                    <p className="text-xs text-slate-400 mt-1">
+                      {new Date(ws.createdAt).toLocaleDateString('ru-RU', {
+                        day: 'numeric',
+                        month: 'long',
+                        year: 'numeric',
+                      })}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                    {/* Rename */}
+                    <button
+                      onClick={() => setRenameModal({ id: ws.id, title: ws.title || getDisplayTitle(ws) })}
+                      className="p-2 text-slate-300 hover:text-[#8C52FF] hover:bg-purple-50 rounded-lg transition-all"
+                      title="Переименовать"
+                    >
+                      <PencilIcon />
+                    </button>
+                    {/* Duplicate */}
+                    <button
+                      onClick={() => duplicateMutation.mutate(ws.id)}
+                      disabled={duplicateMutation.isPending}
+                      className="p-2 text-slate-300 hover:text-[#8C52FF] hover:bg-purple-50 rounded-lg transition-all disabled:opacity-50"
+                      title="Создать копию"
+                    >
+                      <CopyIcon />
+                    </button>
+                    {/* Create based on this */}
+                    <Link
+                      to={`/?subject=${ws.subject}&grade=${ws.grade}&topic=${encodeURIComponent(ws.topic)}`}
+                      className="p-2 text-slate-300 hover:text-emerald-500 hover:bg-emerald-50 rounded-lg transition-all"
+                      title="Создать на основе"
+                    >
+                      <PlusIcon />
+                    </Link>
+                    {/* Delete */}
+                    <button
+                      onClick={() => {
+                        if (confirm('Удалить этот рабочий лист?')) {
+                          deleteMutation.mutate(ws.id)
+                        }
+                      }}
+                      disabled={deleteMutation.isPending}
+                      className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all disabled:opacity-50"
+                      title="Удалить"
+                    >
+                      <TrashIcon />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </main>
 
       {/* Rename Modal */}
       <RenameModal
