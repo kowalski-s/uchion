@@ -1,7 +1,7 @@
 import crypto from 'crypto'
 import { db } from '../../../db/index.js'
 import { refreshTokens } from '../../../db/schema.js'
-import { eq, and, isNull } from 'drizzle-orm'
+import { eq, and, isNull, lt } from 'drizzle-orm'
 
 // ==================== TYPES ====================
 
@@ -92,9 +92,15 @@ function verifyJWT<T>(token: string): T | null {
 
     const [headerBase64, payloadBase64, signature] = parts
 
-    // Verify signature
+    // Verify signature using timing-safe comparison to prevent timing attacks
     const expectedSignature = createSignature(headerBase64, payloadBase64, secret)
-    if (signature !== expectedSignature) {
+
+    // Both signatures must have same length for timingSafeEqual
+    const sigBuffer = Buffer.from(signature, 'utf8')
+    const expectedBuffer = Buffer.from(expectedSignature, 'utf8')
+
+    if (sigBuffer.length !== expectedBuffer.length ||
+        !crypto.timingSafeEqual(sigBuffer, expectedBuffer)) {
       return null
     }
 
@@ -259,5 +265,5 @@ export async function cleanupExpiredTokens(): Promise<void> {
   const now = new Date()
   await db
     .delete(refreshTokens)
-    .where(eq(refreshTokens.expiresAt, now))
+    .where(lt(refreshTokens.expiresAt, now))
 }

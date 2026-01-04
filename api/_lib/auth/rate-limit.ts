@@ -186,3 +186,25 @@ export function checkOAuthRedirectRateLimit(req: VercelRequest): RateLimitResult
     windowSeconds: 10 * 60, // per 10 minutes
   })
 }
+
+/**
+ * Rate limit for /api/auth/me endpoint
+ * Higher limits since this is called frequently for session checks
+ */
+export function checkMeRateLimit(req: VercelRequest): RateLimitResult {
+  return checkRateLimit(req, {
+    maxRequests: 60, // 60 requests
+    windowSeconds: 60, // per minute
+  })
+}
+
+/**
+ * Rate limit for /api/auth/refresh endpoint
+ * Moderate limits - token refresh happens occasionally
+ */
+export function checkRefreshRateLimit(req: VercelRequest): RateLimitResult {
+  return checkRateLimit(req, {
+    maxRequests: 10, // 10 refresh attempts
+    windowSeconds: 60, // per minute
+  })
+}

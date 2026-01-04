@@ -39,14 +39,14 @@
 
 - [x] Самописный OAuth 2.0
 - [x] Добавить Яндекс OAuth
-- [ ] Добавить вход через Telegram
-- [ ] Защитить роуты
-- [ ] Ревью безопасности
-- [ ] Логика сессий/токенов (refresh token, истечение)
-- [ ] Логаут + инвалидация токенов
-- [ ] **Encryption at rest** для sensitive данных (OAuth tokens, emails)
-- [ ] **Access logs** для аудита (12 месяцев retention)
-- [ ] **Data export capability** (право на получение данных - ФЗ-152)
+- [x] Добавить вход через Telegram
+- [x] Защитить роуты (middleware: withAuth, withAdminAuth, withOptionalAuth)
+- [x] Ревью безопасности (timing-safe comparisons, security headers, rate limiting)
+- [x] Логика сессий/токенов (refresh token rotation, 1h access / 7d refresh)
+- [x] Логаут + инвалидация токенов (revokeRefreshToken, revokeAllUserTokens)
+- [ ] **Encryption at rest** для sensitive данных → модуль готов, применить в Фазе 7
+- [x] **Access logs** для аудита (audit-log.ts, события: login, logout, CSRF, rate limit)
+- [ ] **Data export capability** (право на получение данных - ФЗ-152) → Фаза 7
 
 ---
 

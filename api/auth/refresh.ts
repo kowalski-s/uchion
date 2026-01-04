@@ -14,10 +14,21 @@ import {
   createRefreshToken,
   revokeRefreshToken,
 } from '../_lib/auth/tokens.js'
+import { checkRefreshRateLimit } from '../_lib/auth/rate-limit.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
+  }
+
+  // Apply rate limiting
+  const rateLimitResult = checkRefreshRateLimit(req)
+  if (!rateLimitResult.success) {
+    const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000)
+    return res
+      .status(429)
+      .setHeader('Retry-After', retryAfter.toString())
+      .json({ error: 'Too many refresh attempts' })
   }
 
   try {

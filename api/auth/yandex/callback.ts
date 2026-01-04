@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import crypto from 'crypto'
 import { eq } from 'drizzle-orm'
 import { db } from '../../../db/index.js'
 import { users } from '../../../db/schema.js'
@@ -60,9 +61,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.redirect(302, `${appUrl}/login?error=invalid_request`)
     }
 
-    // Validate state (CSRF protection)
+    // Validate state (CSRF protection) using timing-safe comparison
     const storedState = getStateCookie(req)
-    if (!storedState || state !== storedState) {
+    if (!storedState) {
+      logCsrfDetected(req, 'yandex', { provided_state: state, expected_state: null })
+      clearOAuthCookies(res)
+      return res.redirect(302, `${appUrl}/login?error=invalid_state`)
+    }
+
+    // Use timing-safe comparison to prevent timing attacks
+    const stateBuffer = Buffer.from(state, 'utf8')
+    const storedBuffer = Buffer.from(storedState, 'utf8')
+    const statesMatch = stateBuffer.length === storedBuffer.length &&
+      crypto.timingSafeEqual(stateBuffer, storedBuffer)
+
+    if (!statesMatch) {
       logCsrfDetected(req, 'yandex', { provided_state: state, expected_state: storedState })
       clearOAuthCookies(res)
       return res.redirect(302, `${appUrl}/login?error=invalid_state`)

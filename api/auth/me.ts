@@ -4,10 +4,21 @@ import { db } from '../../db/index.js'
 import { users } from '../../db/schema.js'
 import { getTokenFromCookie, ACCESS_TOKEN_COOKIE } from '../_lib/auth/cookies.js'
 import { verifyAccessToken } from '../_lib/auth/tokens.js'
+import { checkMeRateLimit } from '../_lib/auth/rate-limit.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' })
+  }
+
+  // Apply rate limiting
+  const rateLimitResult = checkMeRateLimit(req)
+  if (!rateLimitResult.success) {
+    const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000)
+    return res
+      .status(429)
+      .setHeader('Retry-After', retryAfter.toString())
+      .json({ error: 'Too many requests' })
   }
 
   try {

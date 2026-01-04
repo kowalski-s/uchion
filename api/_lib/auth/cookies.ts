@@ -34,12 +34,19 @@ function getBaseOptions(): Omit<CookieOptions, 'maxAge'> {
   }
 }
 
-function setCookie(res: VercelResponse, name: string, value: string, maxAge: number): void {
+function setCookie(
+  res: VercelResponse,
+  name: string,
+  value: string,
+  maxAge: number,
+  customPath?: string
+): void {
   const options = { ...getBaseOptions(), maxAge }
+  const path = customPath || options.path
 
   const parts = [
     `${name}=${value}`,
-    `Path=${options.path}`,
+    `Path=${path}`,
     `Max-Age=${maxAge}`,
     options.httpOnly ? 'HttpOnly' : '',
     options.secure ? 'Secure' : '',
@@ -59,8 +66,8 @@ function setCookie(res: VercelResponse, name: string, value: string, maxAge: num
   res.setHeader('Set-Cookie', cookieArray)
 }
 
-function clearCookie(res: VercelResponse, name: string): void {
-  setCookie(res, name, '', 0)
+function clearCookie(res: VercelResponse, name: string, customPath?: string): void {
+  setCookie(res, name, '', 0, customPath)
 }
 
 // ==================== AUTH COOKIES ====================
@@ -88,26 +95,31 @@ export function clearAuthCookies(res: VercelResponse): void {
 
 // ==================== OAUTH FLOW COOKIES ====================
 
+// Restrict OAuth cookies to /api/auth/ path for security
+const OAUTH_COOKIE_PATH = '/api/auth/'
+
 /**
  * Set OAuth state cookie (for CSRF protection)
+ * Path restricted to /api/auth/ for security
  */
 export function setOAuthStateCookie(res: VercelResponse, state: string): void {
-  setCookie(res, STATE_COOKIE, state, OAUTH_COOKIE_MAX_AGE)
+  setCookie(res, STATE_COOKIE, state, OAUTH_COOKIE_MAX_AGE, OAUTH_COOKIE_PATH)
 }
 
 /**
  * Set PKCE code verifier cookie
+ * Path restricted to /api/auth/ for security
  */
 export function setPKCECookie(res: VercelResponse, codeVerifier: string): void {
-  setCookie(res, PKCE_COOKIE, codeVerifier, OAUTH_COOKIE_MAX_AGE)
+  setCookie(res, PKCE_COOKIE, codeVerifier, OAUTH_COOKIE_MAX_AGE, OAUTH_COOKIE_PATH)
 }
 
 /**
  * Clear OAuth flow cookies after callback
  */
 export function clearOAuthCookies(res: VercelResponse): void {
-  clearCookie(res, STATE_COOKIE)
-  clearCookie(res, PKCE_COOKIE)
+  clearCookie(res, STATE_COOKIE, OAUTH_COOKIE_PATH)
+  clearCookie(res, PKCE_COOKIE, OAUTH_COOKIE_PATH)
 }
 
 // ==================== COOKIE READING ====================

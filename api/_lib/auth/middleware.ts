@@ -17,13 +17,13 @@ export type AuthenticatedHandler = (
   req: VercelRequest,
   res: VercelResponse,
   user: AuthUser
-) => Promise<void> | void
+) => Promise<void | VercelResponse> | void | VercelResponse
 
 export type OptionalAuthHandler = (
   req: VercelRequest,
   res: VercelResponse,
   user: AuthUser | null
-) => Promise<void> | void
+) => Promise<void | VercelResponse> | void | VercelResponse
 
 // ==================== MIDDLEWARE ====================
 
