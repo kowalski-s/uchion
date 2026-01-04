@@ -7,6 +7,7 @@ export async function generateWorksheet(
   const res = await fetch('/api/generate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include', // Important: send auth cookies to save worksheet
     body: JSON.stringify(payload)
   })
 
