@@ -63,9 +63,7 @@ export default function GeneratePage() {
       })
       setCurrent(sessionId)
 
-      // Invalidate worksheets queries to trigger refetch in Dashboard
-      console.log('[Frontend] Invalidating worksheets queries after successful generation')
-      queryClient.invalidateQueries({ queryKey: ['worksheets'] })
+      // Invalidate worksheets queries to trigger refetch in Dashboard      queryClient.invalidateQueries({ queryKey: ['worksheets'] })
 
       navigate('/worksheet/' + sessionId)
     },

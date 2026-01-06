@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { eq } from 'drizzle-orm'
+import { eq, and, isNull } from 'drizzle-orm'
 import { db } from '../../db/index.js'
 import { users } from '../../db/schema.js'
 import {
@@ -55,7 +55,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         role: users.role,
       })
       .from(users)
-      .where(eq(users.id, payload.sub))
+      .where(and(eq(users.id, payload.sub), isNull(users.deletedAt)))
       .limit(1)
 
     if (!user) {

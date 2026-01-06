@@ -25,10 +25,7 @@ const CreateFolderSchema = z.object({
  * GET  - List all folders
  * POST - Create new folder
  */
-async function handler(req: VercelRequest, res: VercelResponse, user: AuthUser) {
-  console.log('[API folders/index] Method:', req.method, 'User:', user.id)
-
-  if (req.method === 'GET') {
+async function handler(req: VercelRequest, res: VercelResponse, user: AuthUser) {  if (req.method === 'GET') {
     return handleList(req, res, user)
   }
 
@@ -58,10 +55,7 @@ async function handleList(
       .json({ error: 'Too many requests' })
   }
 
-  try {
-    console.log('[API folders/index] Fetching folders for user:', user.id)
-
-    const userFolders = await db
+  try {    const userFolders = await db
       .select({
         id: folders.id,
         name: folders.name,
@@ -75,11 +69,7 @@ async function handleList(
         eq(folders.userId, user.id),
         isNull(folders.deletedAt)
       ))
-      .orderBy(asc(folders.sortOrder), asc(folders.createdAt))
-
-    console.log('[API folders/index] Found folders:', userFolders.length)
-
-    // Get worksheet counts per folder
+      .orderBy(asc(folders.sortOrder), asc(folders.createdAt))    // Get worksheet counts per folder
     const worksheetCounts = await db
       .select({ folderId: worksheets.folderId })
       .from(worksheets)
@@ -99,11 +89,7 @@ async function handleList(
       worksheetCount: countMap.get(folder.id) || 0,
     }))
 
-    const rootWorksheetCount = countMap.get(null) || 0
-
-    console.log('[API folders/index] Root worksheet count:', rootWorksheetCount)
-
-    return res.status(200).json({
+    const rootWorksheetCount = countMap.get(null) || 0    return res.status(200).json({
       folders: foldersWithCount,
       rootWorksheetCount,
     })
@@ -130,14 +116,8 @@ async function handleCreate(
       .status(429)
       .setHeader('Retry-After', retryAfter.toString())
       .json({ error: 'Too many requests' })
-  }
-
-  console.log('[API folders/index] Create folder request body:', req.body)
-
-  const parse = CreateFolderSchema.safeParse(req.body)
-  if (!parse.success) {
-    console.log('[API folders/index] Validation error:', parse.error.flatten())
-    return res.status(400).json({
+  }  const parse = CreateFolderSchema.safeParse(req.body)
+  if (!parse.success) {    return res.status(400).json({
       error: 'Validation error',
       details: parse.error.flatten().fieldErrors,
     })
@@ -166,9 +146,7 @@ async function handleCreate(
       ))
 
     // Check if limit reached
-    if (folderCount >= folderLimit) {
-      console.log('[API folders/index] Folder limit reached:', { userId: user.id, plan: userPlan, count: folderCount, limit: folderLimit })
-      return res.status(403).json({
+    if (folderCount >= folderLimit) {      return res.status(403).json({
         error: 'Достигнут лимит папок',
         message: userPlan === 'free'
           ? `Бесплатный тариф позволяет создать до ${folderLimit} папок. Перейдите на платный тариф для создания до 10 папок.`
@@ -228,11 +206,7 @@ async function handleCreate(
         parentId: folders.parentId,
         sortOrder: folders.sortOrder,
         createdAt: folders.createdAt,
-      })
-
-    console.log('[API folders/index] Folder created:', newFolder.id)
-
-    return res.status(201).json({
+      })    return res.status(201).json({
       folder: {
         ...newFolder,
         worksheetCount: 0,

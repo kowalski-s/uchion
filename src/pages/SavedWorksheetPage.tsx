@@ -74,14 +74,8 @@ export default function SavedWorksheetPage() {
   // Fetch worksheet from DB
   const { data: worksheetData, isLoading, error } = useQuery({
     queryKey: ['worksheet', id],
-    queryFn: async () => {
-      console.log('[SavedWorksheetPage] Fetching worksheet:', id)
-      const result = await fetchWorksheet(id!)
-      console.log('[SavedWorksheetPage] Fetch result:', {
-        hasContent: !!result?.content,
-        hasAssignments: !!(result?.content as any)?.assignments,
-      })
-      return result
+    queryFn: async () => {      const result = await fetchWorksheet(id!)
+            return result
     },
     enabled: !!id && status === 'authenticated',
     retry: 1,
@@ -90,21 +84,7 @@ export default function SavedWorksheetPage() {
   // Extract worksheet content
   const worksheet = worksheetData?.content as Worksheet | null
 
-  // Debug logging
-  useEffect(() => {
-    if (error) {
-      console.error('[SavedWorksheetPage] Query error:', error)
-    }
-    if (worksheetData) {
-      console.log('[SavedWorksheetPage] worksheetData loaded:', {
-        id: worksheetData.id,
-        hasContent: !!worksheetData.content,
-        contentKeys: worksheetData.content ? Object.keys(worksheetData.content as object) : [],
-      })
-    }
-  }, [error, worksheetData])
-
-  useEffect(() => {
+    useEffect(() => {
     const handleScroll = () => {
       const p1 = document.getElementById('page1')
       const p2 = document.getElementById('page2')

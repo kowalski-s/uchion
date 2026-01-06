@@ -11,6 +11,12 @@ import { verifyAccessToken } from './_lib/auth/tokens.js'
 import { checkGenerateRateLimit } from './_lib/auth/rate-limit.js'
 import type { GeneratePayload, Worksheet } from '../shared/types'
 
+type SSEEvent =
+  | { type: 'progress'; percent: number }
+  | { type: 'result'; data: { worksheet: Worksheet } }
+  | { type: 'error'; code: string; message: string }
+
+
 const InputSchema = z.object({
   subject: z.enum(['math', 'russian']),
   grade: z.number().int().min(1).max(4),
@@ -47,11 +53,8 @@ export default async function handler(
   let userId: string | null = null
   const token = getTokenFromCookie(req, ACCESS_TOKEN_COOKIE)
 
-  console.log('[AUTH] Token from cookie:', token ? `${token.substring(0, 20)}...` : 'NO TOKEN')
-
   if (token) {
     const payload = verifyAccessToken(token)
-    console.log('[AUTH] Token verification result:', payload ? `userId: ${payload.sub}` : 'INVALID TOKEN')
     if (payload) {
       userId = payload.sub
 
@@ -100,7 +103,7 @@ export default async function handler(
   res.setHeader('Cache-Control', 'no-cache')
   res.setHeader('Connection', 'keep-alive')
 
-  const sendEvent = (data: any) => {
+  const sendEvent = (data: SSEEvent) => {
     res.write(`data: ${JSON.stringify(data)}\n\n`)
   }
 
@@ -132,9 +135,7 @@ export default async function handler(
     }
 
     // Decrement limit and save worksheet for authenticated users
-    console.log('[DB] userId before save block:', userId)
     if (userId) {
-      console.log('[DB] Decrementing limit for user:', userId)
       await db
         .update(users)
         .set({
@@ -144,10 +145,8 @@ export default async function handler(
         .where(eq(users.id, userId))
 
       // Save worksheet to database
-      console.log('[DB] About to insert worksheet for user:', userId)
-      console.log('[DB] folderId from input:', input.folderId)
       try {
-        const insertResult = await db.insert(worksheets).values({
+        await db.insert(worksheets).values({
           userId,
           folderId: input.folderId || null,
           subject: input.subject,
@@ -155,26 +154,23 @@ export default async function handler(
           topic: input.topic,
           difficulty: 'medium',
           content: JSON.stringify(finalWorksheet),
-        }).returning({ id: worksheets.id })
-        console.log('[DB] Worksheet saved successfully, id:', insertResult[0]?.id)
+        })
       } catch (dbError) {
         // Log database error but don't block worksheet delivery
         console.error('[API] Failed to save worksheet to database:', dbError)
       }
-    } else {
-      console.log('[DB] SKIPPING save - no userId (guest user)')
     }
 
     sendEvent({ type: 'result', data: { worksheet: finalWorksheet } })
     res.end()
 
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[API] Generate error:', err) // Log full error for Vercel logs
 
     const code =
-      err?.message === 'AI_ERROR'
+      err instanceof Error && err.message === 'AI_ERROR'
         ? 'AI_ERROR'
-        : err?.message === 'PDF_ERROR'
+        : err instanceof Error && err.message === 'PDF_ERROR'
         ? 'PDF_ERROR'
         : 'SERVER_ERROR'
 

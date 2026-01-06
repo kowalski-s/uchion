@@ -9,7 +9,7 @@ export type SelectOption = {
 type CustomSelectProps = {
   label: string
   value: string | number
-  onChange: (value: any) => void
+  onChange: (value: string | number) => void
   options: SelectOption[]
 }
 

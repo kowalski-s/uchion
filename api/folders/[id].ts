@@ -23,11 +23,7 @@ const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
  */
 async function handler(req: VercelRequest, res: VercelResponse, user: AuthUser) {
   const { id } = req.query
-  const folderId = Array.isArray(id) ? id[0] : id
-
-  console.log('[API folders/[id]] Method:', req.method, 'ID:', folderId, 'User:', user.id)
-
-  if (!folderId || !uuidRegex.test(folderId)) {
+  const folderId = Array.isArray(id) ? id[0] : id  if (!folderId || !uuidRegex.test(folderId)) {
     return res.status(400).json({ error: 'Invalid folder ID format' })
   }
 

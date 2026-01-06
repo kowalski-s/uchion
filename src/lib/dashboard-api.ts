@@ -16,20 +16,10 @@ export async function fetchWorksheets(options?: FetchWorksheetsOptions): Promise
     params.set('limit', String(options.limit))
   }
 
-  const url = `/api/worksheets${params.toString() ? `?${params}` : ''}`
-  console.log('[Frontend API] ==== fetchWorksheets START ====')
-  console.log('[Frontend API] URL:', url)
-  console.log('[Frontend API] Options:', options)
-
-  try {
+  const url = `/api/worksheets${params.toString() ? `?${params}` : ''}`  try {
     const res = await fetch(url, {
       credentials: 'include',
-    })
-
-    console.log('[Frontend API] Response status:', res.status)
-    console.log('[Frontend API] Response headers:', Object.fromEntries(res.headers.entries()))
-
-    if (!res.ok) {
+    })    if (!res.ok) {
       const errorText = await res.text()
       console.error('[Frontend API] Error response body:', errorText)
       if (res.status === 401) {
@@ -38,10 +28,7 @@ export async function fetchWorksheets(options?: FetchWorksheetsOptions): Promise
       throw new Error(`Failed to fetch worksheets: ${res.status} ${errorText}`)
     }
 
-    const data = await res.json()
-    console.log('[Frontend API] Worksheets received:', { count: data.worksheets?.length })
-    console.log('[Frontend API] ==== fetchWorksheets END (success) ====')
-    return data.worksheets
+    const data = await res.json()    return data.worksheets
   } catch (error) {
     console.error('[Frontend API] ==== fetchWorksheets FAILED ====')
     console.error('[Frontend API] Error:', error)
@@ -54,17 +41,9 @@ export async function fetchRecentWorksheets(): Promise<WorksheetListItem[]> {
   return fetchWorksheets({ limit: 5 })
 }
 
-export async function fetchWorksheet(id: string): Promise<WorksheetListItem & { content: unknown }> {
-  console.log('[Dashboard API] fetchWorksheet called with id:', id)
-
-  const res = await fetch(`/api/worksheets/${id}`, {
+export async function fetchWorksheet(id: string): Promise<WorksheetListItem & { content: unknown }> {  const res = await fetch(`/api/worksheets/${id}`, {
     credentials: 'include',
-  })
-
-  console.log('[Dashboard API] fetchWorksheet response status:', res.status)
-  console.log('[Dashboard API] fetchWorksheet response headers:', Object.fromEntries(res.headers.entries()))
-
-  if (!res.ok) {
+  })  if (!res.ok) {
     const errorBody = await res.text().catch(() => 'Unable to read error body')
     console.error('[Dashboard API] fetchWorksheet error:', res.status, errorBody)
 
@@ -75,16 +54,10 @@ export async function fetchWorksheet(id: string): Promise<WorksheetListItem & { 
     throw new Error(`Ошибка загрузки: ${res.status}`)
   }
 
-  const data = await res.json()
-  console.log('[Dashboard API] fetchWorksheet raw data:', JSON.stringify(data).substring(0, 500))
-
-  if (!data.worksheet) {
+  const data = await res.json()  if (!data.worksheet) {
     console.error('[Dashboard API] fetchWorksheet - worksheet is undefined in response')
     throw new Error('Сервер вернул пустой ответ')
-  }
-
-  console.log('[Dashboard API] fetchWorksheet success, content has assignments:', !!(data.worksheet?.content?.assignments))
-  return data.worksheet
+  }  return data.worksheet
 }
 
 export interface UpdateWorksheetData {
@@ -93,19 +66,12 @@ export interface UpdateWorksheetData {
   content?: string
 }
 
-export async function updateWorksheet(id: string, data: UpdateWorksheetData): Promise<void> {
-  console.log('[Dashboard API] updateWorksheet called:', { id, data })
-
-  const res = await fetch(`/api/worksheets/${id}`, {
+export async function updateWorksheet(id: string, data: UpdateWorksheetData): Promise<void> {  const res = await fetch(`/api/worksheets/${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
     body: JSON.stringify(data),
-  })
-
-  console.log('[Dashboard API] updateWorksheet response status:', res.status)
-
-  if (!res.ok) {
+  })  if (!res.ok) {
     const errorBody = await res.text().catch(() => 'Unable to read error body')
     console.error('[Dashboard API] updateWorksheet error:', res.status, errorBody)
 
@@ -121,10 +87,7 @@ export async function updateWorksheet(id: string, data: UpdateWorksheetData): Pr
       }
     }
     throw new Error('Не удалось обновить лист')
-  }
-
-  console.log('[Dashboard API] updateWorksheet success')
-}
+  }}
 
 export async function deleteWorksheet(id: string): Promise<void> {
   const res = await fetch(`/api/worksheets/${id}`, {

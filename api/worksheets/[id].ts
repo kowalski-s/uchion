@@ -23,11 +23,7 @@ const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
  */
 async function handler(req: VercelRequest, res: VercelResponse, user: AuthUser) {
   const { id } = req.query
-  const worksheetId = Array.isArray(id) ? id[0] : id
-
-  console.log('[API worksheets/[id]] Method:', req.method, 'ID:', worksheetId, 'User:', user.id)
-
-  if (!worksheetId || !uuidRegex.test(worksheetId)) {
+  const worksheetId = Array.isArray(id) ? id[0] : id  if (!worksheetId || !uuidRegex.test(worksheetId)) {
     return res.status(400).json({ error: 'Invalid worksheet ID format' })
   }
 
@@ -50,10 +46,7 @@ async function handleGet(
   res: VercelResponse,
   user: AuthUser,
   id: string
-) {
-  console.log('[Worksheets [id]] GET request for worksheet:', id, 'by user:', user.id)
-
-  const rateLimitResult = checkRateLimit(req, {
+) {  const rateLimitResult = checkRateLimit(req, {
     maxRequests: 60,
     windowSeconds: 60,
     identifier: `worksheet:get:${user.id}`,
@@ -86,24 +79,16 @@ async function handleGet(
         eq(worksheets.id, id),
         isNull(worksheets.deletedAt)
       ))
-      .limit(1)
-
-    console.log('[Worksheets [id]] DB result:', worksheet ? 'found' : 'not found')
-
-    if (!worksheet) {
+      .limit(1)    if (!worksheet) {
       return res.status(404).json({ error: 'Worksheet not found' })
     }
 
-    if (worksheet.userId !== user.id) {
-      console.log('[Worksheets [id]] Access denied. Owner:', worksheet.userId, 'Requester:', user.id)
-      return res.status(403).json({ error: 'Access denied' })
+    if (worksheet.userId !== user.id) {      return res.status(403).json({ error: 'Access denied' })
     }
 
     let parsedContent = null
     try {
-      parsedContent = JSON.parse(worksheet.content)
-      console.log('[Worksheets [id]] Content parsed, has assignments:', !!parsedContent?.assignments)
-    } catch (parseError) {
+      parsedContent = JSON.parse(worksheet.content)    } catch (parseError) {
       console.error('[Worksheets [id]] Failed to parse content JSON:', parseError)
       return res.status(500).json({ error: 'Failed to parse worksheet content' })
     }
@@ -134,10 +119,7 @@ async function handleUpdate(
   res: VercelResponse,
   user: AuthUser,
   id: string
-) {
-  console.log('[Worksheets [id]] PATCH request:', id, 'body:', JSON.stringify(req.body))
-
-  const rateLimitResult = checkRateLimit(req, {
+) {  const rateLimitResult = checkRateLimit(req, {
     maxRequests: 30,
     windowSeconds: 60,
     identifier: `worksheet:update:${user.id}`,
@@ -151,9 +133,7 @@ async function handleUpdate(
   }
 
   const parse = UpdateWorksheetSchema.safeParse(req.body)
-  if (!parse.success) {
-    console.log('[Worksheets [id]] Validation failed:', parse.error.flatten())
-    return res.status(400).json({
+  if (!parse.success) {    return res.status(400).json({
       error: 'Validation error',
       details: parse.error.flatten().fieldErrors,
     })
@@ -213,16 +193,10 @@ async function handleUpdate(
       } catch {
         return res.status(400).json({ error: 'Invalid content JSON' })
       }
-    }
-
-    console.log('[Worksheets [id]] Updating with:', updateData)
-    await db
+    }    await db
       .update(worksheets)
       .set(updateData)
-      .where(eq(worksheets.id, id))
-
-    console.log('[Worksheets [id]] Update successful')
-    return res.status(200).json({ success: true })
+      .where(eq(worksheets.id, id))    return res.status(200).json({ success: true })
   } catch (error) {
     console.error('[Worksheets [id]] Update Error:', error)
     return res.status(500).json({ error: 'Internal server error' })
@@ -235,10 +209,7 @@ async function handleDelete(
   res: VercelResponse,
   user: AuthUser,
   id: string
-) {
-  console.log('[Worksheets [id]] DELETE request:', id)
-
-  const rateLimitResult = checkRateLimit(req, {
+) {  const rateLimitResult = checkRateLimit(req, {
     maxRequests: 10,
     windowSeconds: 60,
     identifier: `worksheet:delete:${user.id}`,
@@ -272,10 +243,7 @@ async function handleDelete(
     await db
       .update(worksheets)
       .set({ deletedAt: new Date(), updatedAt: new Date() })
-      .where(eq(worksheets.id, id))
-
-    console.log('[Worksheets [id]] Delete successful')
-    return res.status(200).json({ success: true })
+      .where(eq(worksheets.id, id))    return res.status(200).json({ success: true })
   } catch (error) {
     console.error('[Worksheets [id]] Delete Error:', error)
     return res.status(500).json({ error: 'Internal server error' })

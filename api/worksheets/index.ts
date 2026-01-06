@@ -29,30 +29,19 @@ async function handler(req: VercelRequest, res: VercelResponse, user: AuthUser) 
 
   try {
     const { folderId, limit: limitStr } = req.query
-    const limit = Math.min(parseInt(limitStr as string) || 50, 100)
-
-    console.log('[API worksheets/index] Fetching worksheets for user:', user.id)
-    console.log('[API worksheets/index] Query params - folderId:', folderId, 'limit:', limit)
-
-    const conditions = [
+    const limit = Math.min(parseInt(limitStr as string) || 50, 100)    const conditions = [
       eq(worksheets.userId, user.id),
       isNull(worksheets.deletedAt),
     ]
 
     // Only filter by folderId if explicitly provided
     // Don't filter when getting general list
-    if (folderId === 'null' || folderId === '') {
-      console.log('[API worksheets/index] Filter: folderId IS NULL (root folder)')
-      conditions.push(isNull(worksheets.folderId))
+    if (folderId === 'null' || folderId === '') {      conditions.push(isNull(worksheets.folderId))
     } else if (folderId && typeof folderId === 'string') {
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-      if (uuidRegex.test(folderId)) {
-        console.log('[API worksheets/index] Filter: folderId =', folderId)
-        conditions.push(eq(worksheets.folderId, folderId))
+      if (uuidRegex.test(folderId)) {        conditions.push(eq(worksheets.folderId, folderId))
       }
-    } else {
-      console.log('[API worksheets/index] No folderId filter - returning ALL worksheets')
-    }
+    } else {    }
 
     const userWorksheets = await db
       .select({
@@ -69,11 +58,7 @@ async function handler(req: VercelRequest, res: VercelResponse, user: AuthUser) 
       .from(worksheets)
       .where(and(...conditions))
       .orderBy(desc(worksheets.createdAt))
-      .limit(limit)
-
-    console.log('[API worksheets/index] Found worksheets:', userWorksheets.length)
-
-    return res.status(200).json({ worksheets: userWorksheets })
+      .limit(limit)    return res.status(200).json({ worksheets: userWorksheets })
   } catch (error) {
     console.error('[API worksheets/index] Error:', error)
     return res.status(500).json({ error: 'Internal server error' })

@@ -56,9 +56,8 @@ export async function buildPdf(worksheet: Worksheet, meta: GeneratePayload): Pro
       doc.font(fontName).fontSize(11).text(`✏️ ${i + 1}. ${task.text}`, { lineGap: 5 })
       doc.moveDown(0.5)
       // Space for answer
-      doc.font(fontName).fontSize(10).text('__________________________________________________________________________', { color: '#9ca3af' })
-      doc.moveDown(1)
-      doc.fillColor('#000000')
+      doc.fillColor('#9ca3af').font(fontName).fontSize(10).text('__________________________________________________________________________')
+      doc.fillColor('#000000').moveDown(1)
     })
     
     // Check if we need a new page for Test (simple heuristic)
