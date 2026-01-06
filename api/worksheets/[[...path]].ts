@@ -90,15 +90,22 @@ async function handleList(
     const { folderId, limit: limitStr } = req.query
     const limit = Math.min(parseInt(limitStr as string) || 50, 100)
 
+    console.log('[API] Fetching worksheets for user:', user.id)
+    console.log('[API] Query params - folderId:', folderId, 'limit:', limit)
+
     const conditions = [
       eq(worksheets.userId, user.id),
       isNull(worksheets.deletedAt),
     ]
 
     if (folderId === 'null' || folderId === '') {
+      console.log('[API] Filter: folderId IS NULL (root folder)')
       conditions.push(isNull(worksheets.folderId))
     } else if (folderId && typeof folderId === 'string' && uuidRegex.test(folderId)) {
+      console.log('[API] Filter: folderId =', folderId)
       conditions.push(eq(worksheets.folderId, folderId))
+    } else {
+      console.log('[API] No folderId filter applied')
     }
 
     const userWorksheets = await db
@@ -117,6 +124,14 @@ async function handleList(
       .where(and(...conditions))
       .orderBy(desc(worksheets.createdAt))
       .limit(limit)
+
+    console.log('[API] Found worksheets:', userWorksheets.length)
+    console.log('[API] First 3 worksheets:', userWorksheets.slice(0, 3).map(w => ({
+      id: w.id,
+      title: w.title,
+      folderId: w.folderId,
+      createdAt: w.createdAt
+    })))
 
     return res.status(200).json({ worksheets: userWorksheets })
   } catch (error) {

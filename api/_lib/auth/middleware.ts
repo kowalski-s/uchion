@@ -37,14 +37,18 @@ export function withAuth(handler: AuthenticatedHandler) {
       const token = getTokenFromCookie(req, ACCESS_TOKEN_COOKIE)
 
       if (!token) {
+        console.log('[Auth Middleware] No token found in cookies')
         return res.status(401).json({ error: 'Authentication required' })
       }
 
       const payload = verifyAccessToken(token)
 
       if (!payload) {
+        console.log('[Auth Middleware] Token verification failed')
         return res.status(401).json({ error: 'Invalid or expired token' })
       }
+
+      console.log('[Auth Middleware] Token verified, userId:', payload.sub)
 
       // Verify user still exists in database and is not deleted
       const [user] = await db
@@ -61,8 +65,11 @@ export function withAuth(handler: AuthenticatedHandler) {
         .limit(1)
 
       if (!user) {
+        console.log('[Auth Middleware] User not found in DB for userId:', payload.sub)
         return res.status(401).json({ error: 'User not found or deactivated' })
       }
+
+      console.log('[Auth Middleware] User authenticated:', user.id, user.email)
 
       return await handler(req, res, user)
     } catch (error) {
