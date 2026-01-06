@@ -15,6 +15,7 @@ const InputSchema = z.object({
   subject: z.enum(['math', 'russian']),
   grade: z.number().int().min(1).max(4),
   topic: z.string().min(3).max(200),
+  folderId: z.string().uuid().nullable().optional(),
 })
 
 type Input = z.infer<typeof InputSchema>
@@ -144,9 +145,11 @@ export default async function handler(
 
       // Save worksheet to database
       console.log('[DB] About to insert worksheet for user:', userId)
+      console.log('[DB] folderId from input:', input.folderId)
       try {
         const insertResult = await db.insert(worksheets).values({
           userId,
+          folderId: input.folderId || null,
           subject: input.subject,
           grade: input.grade,
           topic: input.topic,

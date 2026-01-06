@@ -45,12 +45,14 @@ export const GenerateSchema = z.object({
   subject: SubjectSchema,
   grade: z.number().int().min(1).max(4),
   topic: z.string().min(3).max(200),
+  folderId: z.string().uuid().nullable().optional(),
 })
 export type GenerateFormValues = z.infer<typeof GenerateSchema>
 export type GeneratePayload = {
   subject: Subject
   grade: number
   topic: string
+  folderId?: string | null
 }
 
 // --- Internal/AI Types ---

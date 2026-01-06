@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { eq, and, isNull, desc } from 'drizzle-orm'
+import { eq, and, isNull } from 'drizzle-orm'
 import { z } from 'zod'
 import { db } from '../../db/index.js'
 import { worksheets, folders } from '../../db/schema.js'
@@ -16,127 +16,31 @@ const UpdateWorksheetSchema = z.object({
 const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 /**
- * Combined worksheets endpoint:
- * GET    /api/worksheets                - List worksheets (recent)
- * GET    /api/worksheets/[id]           - Get single worksheet
- * PUT    /api/worksheets/[id]           - Update worksheet
- * DELETE /api/worksheets/[id]           - Delete worksheet
- * POST   /api/worksheets/[id]/duplicate - Duplicate worksheet
+ * /api/worksheets/[id]
+ * GET    - Get single worksheet
+ * PATCH  - Update worksheet
+ * DELETE - Delete worksheet
  */
 async function handler(req: VercelRequest, res: VercelResponse, user: AuthUser) {
-  const { path } = req.query
-  const pathSegments = Array.isArray(path) ? path : path ? [path] : []
+  const { id } = req.query
+  const worksheetId = Array.isArray(id) ? id[0] : id
 
-  // Parse path segments
-  const worksheetId = pathSegments[0] || null
-  const action = pathSegments[1] || null
+  console.log('[API worksheets/[id]] Method:', req.method, 'ID:', worksheetId, 'User:', user.id)
 
-  // Validate worksheet ID format if provided
-  if (worksheetId && !uuidRegex.test(worksheetId)) {
+  if (!worksheetId || !uuidRegex.test(worksheetId)) {
     return res.status(400).json({ error: 'Invalid worksheet ID format' })
   }
 
-  // Route based on path and method
-  if (!worksheetId) {
-    // GET /api/worksheets - list
-    if (req.method === 'GET') {
-      return handleList(req, res, user)
-    }
-    return res.status(405).json({ error: 'Method not allowed' })
-  }
-
-  if (action === 'duplicate') {
-    // POST /api/worksheets/[id]/duplicate
-    if (req.method === 'POST') {
-      return handleDuplicate(req, res, user, worksheetId)
-    }
-    return res.status(405).json({ error: 'Method not allowed' })
-  }
-
-  // /api/worksheets/[id]
   switch (req.method) {
     case 'GET':
       return handleGet(req, res, user, worksheetId)
-    case 'PUT':
     case 'PATCH':
+    case 'PUT':
       return handleUpdate(req, res, user, worksheetId)
     case 'DELETE':
       return handleDelete(req, res, user, worksheetId)
     default:
       return res.status(405).json({ error: 'Method not allowed' })
-  }
-}
-
-// GET /api/worksheets - List worksheets (recent)
-async function handleList(
-  req: VercelRequest,
-  res: VercelResponse,
-  user: AuthUser
-) {
-  const rateLimitResult = checkRateLimit(req, {
-    maxRequests: 30,
-    windowSeconds: 60,
-    identifier: `worksheets:list:${user.id}`,
-  })
-  if (!rateLimitResult.success) {
-    const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000)
-    return res
-      .status(429)
-      .setHeader('Retry-After', retryAfter.toString())
-      .json({ error: 'Too many requests' })
-  }
-
-  try {
-    const { folderId, limit: limitStr } = req.query
-    const limit = Math.min(parseInt(limitStr as string) || 50, 100)
-
-    console.log('[API] Fetching worksheets for user:', user.id)
-    console.log('[API] Query params - folderId:', folderId, 'limit:', limit)
-
-    const conditions = [
-      eq(worksheets.userId, user.id),
-      isNull(worksheets.deletedAt),
-    ]
-
-    if (folderId === 'null' || folderId === '') {
-      console.log('[API] Filter: folderId IS NULL (root folder)')
-      conditions.push(isNull(worksheets.folderId))
-    } else if (folderId && typeof folderId === 'string' && uuidRegex.test(folderId)) {
-      console.log('[API] Filter: folderId =', folderId)
-      conditions.push(eq(worksheets.folderId, folderId))
-    } else {
-      console.log('[API] No folderId filter applied')
-    }
-
-    const userWorksheets = await db
-      .select({
-        id: worksheets.id,
-        folderId: worksheets.folderId,
-        title: worksheets.title,
-        subject: worksheets.subject,
-        grade: worksheets.grade,
-        topic: worksheets.topic,
-        difficulty: worksheets.difficulty,
-        createdAt: worksheets.createdAt,
-        updatedAt: worksheets.updatedAt,
-      })
-      .from(worksheets)
-      .where(and(...conditions))
-      .orderBy(desc(worksheets.createdAt))
-      .limit(limit)
-
-    console.log('[API] Found worksheets:', userWorksheets.length)
-    console.log('[API] First 3 worksheets:', userWorksheets.slice(0, 3).map(w => ({
-      id: w.id,
-      title: w.title,
-      folderId: w.folderId,
-      createdAt: w.createdAt
-    })))
-
-    return res.status(200).json({ worksheets: userWorksheets })
-  } catch (error) {
-    console.error('[Worksheets List] Error:', error)
-    return res.status(500).json({ error: 'Internal server error' })
   }
 }
 
@@ -147,6 +51,8 @@ async function handleGet(
   user: AuthUser,
   id: string
 ) {
+  console.log('[Worksheets [id]] GET request for worksheet:', id, 'by user:', user.id)
+
   const rateLimitResult = checkRateLimit(req, {
     maxRequests: 60,
     windowSeconds: 60,
@@ -182,19 +88,24 @@ async function handleGet(
       ))
       .limit(1)
 
+    console.log('[Worksheets [id]] DB result:', worksheet ? 'found' : 'not found')
+
     if (!worksheet) {
       return res.status(404).json({ error: 'Worksheet not found' })
     }
 
     if (worksheet.userId !== user.id) {
+      console.log('[Worksheets [id]] Access denied. Owner:', worksheet.userId, 'Requester:', user.id)
       return res.status(403).json({ error: 'Access denied' })
     }
 
     let parsedContent = null
     try {
       parsedContent = JSON.parse(worksheet.content)
-    } catch {
-      console.error('[Worksheets Get] Failed to parse content JSON')
+      console.log('[Worksheets [id]] Content parsed, has assignments:', !!parsedContent?.assignments)
+    } catch (parseError) {
+      console.error('[Worksheets [id]] Failed to parse content JSON:', parseError)
+      return res.status(500).json({ error: 'Failed to parse worksheet content' })
     }
 
     return res.status(200).json({
@@ -212,18 +123,20 @@ async function handleGet(
       }
     })
   } catch (error) {
-    console.error('[Worksheets Get] Error:', error)
+    console.error('[Worksheets [id]] GET Error:', error)
     return res.status(500).json({ error: 'Internal server error' })
   }
 }
 
-// PUT/PATCH /api/worksheets/[id] - Update worksheet
+// PATCH /api/worksheets/[id] - Update worksheet
 async function handleUpdate(
   req: VercelRequest,
   res: VercelResponse,
   user: AuthUser,
   id: string
 ) {
+  console.log('[Worksheets [id]] PATCH request:', id, 'body:', JSON.stringify(req.body))
+
   const rateLimitResult = checkRateLimit(req, {
     maxRequests: 30,
     windowSeconds: 60,
@@ -239,6 +152,7 @@ async function handleUpdate(
 
   const parse = UpdateWorksheetSchema.safeParse(req.body)
   if (!parse.success) {
+    console.log('[Worksheets [id]] Validation failed:', parse.error.flatten())
     return res.status(400).json({
       error: 'Validation error',
       details: parse.error.flatten().fieldErrors,
@@ -265,6 +179,7 @@ async function handleUpdate(
       return res.status(403).json({ error: 'Access denied' })
     }
 
+    // Validate folder if provided
     if (updates.folderId !== undefined && updates.folderId !== null) {
       const [folder] = await db
         .select({ userId: folders.userId })
@@ -300,14 +215,16 @@ async function handleUpdate(
       }
     }
 
+    console.log('[Worksheets [id]] Updating with:', updateData)
     await db
       .update(worksheets)
       .set(updateData)
       .where(eq(worksheets.id, id))
 
+    console.log('[Worksheets [id]] Update successful')
     return res.status(200).json({ success: true })
   } catch (error) {
-    console.error('[Worksheets Update] Error:', error)
+    console.error('[Worksheets [id]] Update Error:', error)
     return res.status(500).json({ error: 'Internal server error' })
   }
 }
@@ -319,6 +236,8 @@ async function handleDelete(
   user: AuthUser,
   id: string
 ) {
+  console.log('[Worksheets [id]] DELETE request:', id)
+
   const rateLimitResult = checkRateLimit(req, {
     maxRequests: 10,
     windowSeconds: 60,
@@ -355,89 +274,10 @@ async function handleDelete(
       .set({ deletedAt: new Date(), updatedAt: new Date() })
       .where(eq(worksheets.id, id))
 
+    console.log('[Worksheets [id]] Delete successful')
     return res.status(200).json({ success: true })
   } catch (error) {
-    console.error('[Worksheets Delete] Error:', error)
-    return res.status(500).json({ error: 'Internal server error' })
-  }
-}
-
-// POST /api/worksheets/[id]/duplicate - Duplicate worksheet
-async function handleDuplicate(
-  req: VercelRequest,
-  res: VercelResponse,
-  user: AuthUser,
-  id: string
-) {
-  const rateLimitResult = checkRateLimit(req, {
-    maxRequests: 10,
-    windowSeconds: 60,
-    identifier: `worksheet:duplicate:${user.id}`,
-  })
-  if (!rateLimitResult.success) {
-    const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000)
-    return res
-      .status(429)
-      .setHeader('Retry-After', retryAfter.toString())
-      .json({ error: 'Too many requests' })
-  }
-
-  try {
-    const [original] = await db
-      .select({
-        userId: worksheets.userId,
-        folderId: worksheets.folderId,
-        title: worksheets.title,
-        subject: worksheets.subject,
-        grade: worksheets.grade,
-        topic: worksheets.topic,
-        difficulty: worksheets.difficulty,
-        content: worksheets.content,
-      })
-      .from(worksheets)
-      .where(and(
-        eq(worksheets.id, id),
-        isNull(worksheets.deletedAt)
-      ))
-      .limit(1)
-
-    if (!original) {
-      return res.status(404).json({ error: 'Worksheet not found' })
-    }
-
-    if (original.userId !== user.id) {
-      return res.status(403).json({ error: 'Access denied' })
-    }
-
-    const originalTitle = original.title || original.topic
-    const copyTitle = `${originalTitle} (копия)`
-
-    const [newWorksheet] = await db
-      .insert(worksheets)
-      .values({
-        userId: user.id,
-        folderId: original.folderId,
-        title: copyTitle,
-        subject: original.subject,
-        grade: original.grade,
-        topic: original.topic,
-        difficulty: original.difficulty,
-        content: original.content,
-      })
-      .returning({
-        id: worksheets.id,
-        folderId: worksheets.folderId,
-        title: worksheets.title,
-        subject: worksheets.subject,
-        grade: worksheets.grade,
-        topic: worksheets.topic,
-        difficulty: worksheets.difficulty,
-        createdAt: worksheets.createdAt,
-      })
-
-    return res.status(201).json({ worksheet: newWorksheet })
-  } catch (error) {
-    console.error('[Worksheets Duplicate] Error:', error)
+    console.error('[Worksheets [id]] Delete Error:', error)
     return res.status(500).json({ error: 'Internal server error' })
   }
 }

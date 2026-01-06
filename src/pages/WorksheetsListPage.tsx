@@ -6,11 +6,14 @@ import Header from '../components/Header'
 import {
   fetchWorksheets,
   deleteWorksheet,
-  duplicateWorksheet,
   updateWorksheet,
+  fetchFolders,
+  createFolder,
   formatSubjectName,
 } from '../lib/dashboard-api'
-import type { WorksheetListItem } from '../../shared/types'
+import type { WorksheetListItem, FolderWithCount } from '../../shared/types'
+
+const ITEMS_PER_PAGE = 9
 
 // Icons
 function DocumentIcon({ className = "w-5 h-5" }: { className?: string }) {
@@ -29,14 +32,6 @@ function TrashIcon() {
   )
 }
 
-function CopyIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 0 1-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 0 1 1.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 0 0-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 0 1-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 0 0-3.375-3.375h-1.5a1.125 1.125 0 0 1-1.125-1.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H9.75" />
-    </svg>
-  )
-}
-
 function PencilIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
@@ -45,18 +40,26 @@ function PencilIcon() {
   )
 }
 
-function PlusIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-    </svg>
-  )
-}
-
 function ChevronLeftIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
       <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+    </svg>
+  )
+}
+
+function FolderIcon({ className = "w-5 h-5", color }: { className?: string; color?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" fill={color || "none"} viewBox="0 0 24 24" strokeWidth={1.5} stroke={color || "currentColor"} className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 0 1 4.5 9.75h15A2.25 2.25 0 0 1 21.75 12v.75m-8.69-6.44-2.12-2.12a1.5 1.5 0 0 0-1.061-.44H4.5A2.25 2.25 0 0 0 2.25 6v12a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9a2.25 2.25 0 0 0-2.25-2.25h-5.379a1.5 1.5 0 0 1-1.06-.44Z" />
+    </svg>
+  )
+}
+
+function FolderMoveIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9.776c.112-.017.227-.026.344-.026h15.812c.117 0 .232.009.344.026m-16.5 0a2.25 2.25 0 0 0-1.883 2.542l.857 6a2.25 2.25 0 0 0 2.227 1.932H19.05a2.25 2.25 0 0 0 2.227-1.932l.857-6a2.25 2.25 0 0 0-1.883-2.542m-16.5 0V6A2.25 2.25 0 0 1 6 3.75h3.879a1.5 1.5 0 0 1 1.06.44l2.122 2.12a1.5 1.5 0 0 0 1.06.44H18A2.25 2.25 0 0 1 20.25 9v.776" />
     </svg>
   )
 }
@@ -141,11 +144,217 @@ function RenameModal({
   )
 }
 
+// Move to Folder Modal Component
+function MoveToFolderModal({
+  isOpen,
+  onClose,
+  folders,
+  currentFolderId,
+  onMove,
+  isLoading,
+}: {
+  isOpen: boolean
+  onClose: () => void
+  folders: FolderWithCount[]
+  currentFolderId: string | null | undefined
+  onMove: (folderId: string | null) => void
+  isLoading: boolean
+}) {
+  if (!isOpen) return null
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-bold text-slate-900">Переместить в папку</h3>
+          <button onClick={onClose} className="p-1 hover:bg-slate-100 rounded-lg">
+            <XMarkIcon />
+          </button>
+        </div>
+        <div className="space-y-2 max-h-64 overflow-y-auto">
+          {/* Root folder option */}
+          <button
+            onClick={() => onMove(null)}
+            disabled={isLoading || currentFolderId === null || currentFolderId === undefined}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
+              currentFolderId === null || currentFolderId === undefined
+                ? 'bg-purple-50 text-[#8C52FF] cursor-default'
+                : 'hover:bg-slate-50'
+            }`}
+          >
+            <DocumentIcon className="w-5 h-5 text-slate-400" />
+            <span className="font-medium">Без папки</span>
+          </button>
+          {/* Folders */}
+          {folders.map((folder) => (
+            <button
+              key={folder.id}
+              onClick={() => onMove(folder.id)}
+              disabled={isLoading || currentFolderId === folder.id}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
+                currentFolderId === folder.id
+                  ? 'bg-purple-50 text-[#8C52FF] cursor-default'
+                  : 'hover:bg-slate-50'
+              }`}
+            >
+              <FolderIcon className="w-5 h-5" color={folder.color} />
+              <span className="font-medium">{folder.name}</span>
+              <span className="ml-auto text-sm text-slate-400">{folder.worksheetCount}</span>
+            </button>
+          ))}
+        </div>
+        {folders.length === 0 && (
+          <p className="text-center text-slate-400 py-4">Папок пока нет</p>
+        )}
+        <div className="mt-4 pt-4 border-t">
+          <button
+            onClick={onClose}
+            className="w-full px-4 py-2.5 bg-slate-100 hover:bg-slate-200 rounded-xl font-medium transition-colors"
+          >
+            Отмена
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Create Folder Modal Component
+function CreateFolderModal({
+  isOpen,
+  onClose,
+  onSave,
+  isLoading,
+}: {
+  isOpen: boolean
+  onClose: () => void
+  onSave: (name: string, color: string) => void
+  isLoading: boolean
+}) {
+  const [name, setName] = useState('')
+  const [color, setColor] = useState('#6366f1')
+  const colors = ['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#f97316', '#22c55e', '#14b8a6', '#3b82f6']
+
+  useEffect(() => {
+    if (isOpen) {
+      setName('')
+      setColor('#6366f1')
+    }
+  }, [isOpen])
+
+  if (!isOpen) return null
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-bold text-slate-900">Новая папка</h3>
+          <button onClick={onClose} className="p-1 hover:bg-slate-100 rounded-lg">
+            <XMarkIcon />
+          </button>
+        </div>
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#8C52FF] mb-4"
+          placeholder="Название папки"
+          autoFocus
+        />
+        <div className="mb-4">
+          <p className="text-sm text-slate-500 mb-2">Цвет</p>
+          <div className="flex gap-2 flex-wrap">
+            {colors.map((c) => (
+              <button
+                key={c}
+                onClick={() => setColor(c)}
+                className={`w-8 h-8 rounded-full transition-all ${color === c ? 'ring-2 ring-offset-2 ring-[#8C52FF]' : ''}`}
+                style={{ backgroundColor: c }}
+              />
+            ))}
+          </div>
+        </div>
+        <div className="flex gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 rounded-xl font-medium transition-colors"
+          >
+            Отмена
+          </button>
+          <button
+            onClick={() => onSave(name.trim(), color)}
+            disabled={isLoading || !name.trim()}
+            className="flex-1 px-4 py-2.5 bg-[#8C52FF] hover:bg-purple-700 text-white rounded-xl font-medium transition-colors disabled:opacity-50"
+          >
+            {isLoading ? 'Создание...' : 'Создать'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Pagination Component
+function Pagination({
+  currentPage,
+  totalPages,
+  onPageChange,
+}: {
+  currentPage: number
+  totalPages: number
+  onPageChange: (page: number) => void
+}) {
+  if (totalPages <= 1) return null
+
+  const pages = []
+  for (let i = 1; i <= totalPages; i++) {
+    pages.push(i)
+  }
+
+  return (
+    <div className="flex items-center justify-center gap-2 mt-8">
+      <button
+        onClick={() => onPageChange(currentPage - 1)}
+        disabled={currentPage === 1}
+        className="p-2 rounded-lg hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+      >
+        <ChevronLeftIcon />
+      </button>
+
+      {pages.map((page) => (
+        <button
+          key={page}
+          onClick={() => onPageChange(page)}
+          className={`w-10 h-10 rounded-lg font-medium transition-colors ${
+            page === currentPage
+              ? 'bg-[#8C52FF] text-white'
+              : 'hover:bg-slate-100 text-slate-600'
+          }`}
+        >
+          {page}
+        </button>
+      ))}
+
+      <button
+        onClick={() => onPageChange(currentPage + 1)}
+        disabled={currentPage === totalPages}
+        className="p-2 rounded-lg hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors rotate-180"
+      >
+        <ChevronLeftIcon />
+      </button>
+    </div>
+  )
+}
+
 export default function WorksheetsListPage() {
   const navigate = useNavigate()
   const { user, status } = useAuth()
   const queryClient = useQueryClient()
   const [renameModal, setRenameModal] = useState<{ id: string; title: string } | null>(null)
+  const [moveModal, setMoveModal] = useState<{ id: string; currentFolderId: string | null } | null>(null)
+  const [createFolderModal, setCreateFolderModal] = useState(false)
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null | 'all'>('all')
+  const [currentPage, setCurrentPage] = useState(1)
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -153,10 +362,30 @@ export default function WorksheetsListPage() {
     }
   }, [status, navigate])
 
-  // Fetch all worksheets (no limit)
-  const { data: worksheets, isLoading: isLoadingWorksheets } = useQuery({
-    queryKey: ['worksheets', 'all'],
-    queryFn: () => fetchWorksheets({ limit: 100 }),
+  // Reset page when folder changes
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [selectedFolderId])
+
+  // Fetch folders
+  const { data: foldersData } = useQuery({
+    queryKey: ['folders'],
+    queryFn: fetchFolders,
+    enabled: status === 'authenticated',
+  })
+
+  // Fetch all worksheets (we'll paginate client-side)
+  const { data: allWorksheets, isLoading: isLoadingWorksheets } = useQuery({
+    queryKey: ['worksheets', selectedFolderId],
+    queryFn: () => {
+      if (selectedFolderId === 'all') {
+        return fetchWorksheets({ limit: 1000 })
+      } else if (selectedFolderId === null) {
+        return fetchWorksheets({ folderId: null, limit: 1000 })
+      } else {
+        return fetchWorksheets({ folderId: selectedFolderId, limit: 1000 })
+      }
+    },
     enabled: status === 'authenticated',
   })
 
@@ -168,31 +397,75 @@ export default function WorksheetsListPage() {
     },
   })
 
-  const duplicateMutation = useMutation({
-    mutationFn: duplicateWorksheet,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['worksheets'] })
-    },
-  })
-
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: { title?: string } }) => updateWorksheet(id, data),
+    mutationFn: ({ id, data }: { id: string; data: { title?: string } }) => {
+      return updateWorksheet(id, data)
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['worksheets'] })
       setRenameModal(null)
     },
+    onError: (error) => {
+      alert(error instanceof Error ? error.message : 'Не удалось переименовать лист')
+    },
+  })
+
+  // Move worksheet to folder mutation
+  const moveMutation = useMutation({
+    mutationFn: ({ id, folderId }: { id: string; folderId: string | null }) => {
+      return updateWorksheet(id, { folderId })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['worksheets'] })
+      queryClient.invalidateQueries({ queryKey: ['folders'] })
+      setMoveModal(null)
+    },
+    onError: (error) => {
+      alert(error instanceof Error ? error.message : 'Не удалось переместить лист')
+    },
+  })
+
+  // Create folder mutation
+  const createFolderMutation = useMutation({
+    mutationFn: ({ name, color }: { name: string; color: string }) => createFolder({ name, color }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['folders'] })
+      setCreateFolderModal(false)
+    },
+    onError: (error) => {
+      alert(error instanceof Error ? error.message : 'Не удалось создать папку')
+    },
   })
 
   const handleRename = (title: string) => {
-    if (renameModal) {
-      updateMutation.mutate({ id: renameModal.id, data: { title } })
+    if (renameModal && title.trim()) {
+      updateMutation.mutate({ id: renameModal.id, data: { title: title.trim() } })
     }
+  }
+
+  const handleMove = (folderId: string | null) => {
+    if (moveModal) {
+      moveMutation.mutate({ id: moveModal.id, folderId })
+    }
+  }
+
+  const handleCreateFolder = (name: string, color: string) => {
+    createFolderMutation.mutate({ name, color })
   }
 
   const getDisplayTitle = (ws: WorksheetListItem) => {
     if (ws.title) return ws.title
     return `${formatSubjectName(ws.subject)}, ${ws.grade} класс`
   }
+
+  const folders = foldersData?.folders || []
+  const rootWorksheetCount = foldersData?.rootWorksheetCount || 0
+
+  // Pagination logic
+  const totalWorksheets = allWorksheets?.length || 0
+  const totalPages = Math.ceil(totalWorksheets / ITEMS_PER_PAGE)
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
+  const paginatedWorksheets = allWorksheets?.slice(startIndex, startIndex + ITEMS_PER_PAGE) || []
 
   if (status === 'loading') {
     return <LoadingSpinner />
@@ -202,13 +475,11 @@ export default function WorksheetsListPage() {
     return null
   }
 
-  const worksheetCount = worksheets?.length || 0
-
   return (
     <div className="min-h-screen bg-gradient-to-b from-white via-purple-50/30 to-white">
       <Header />
 
-      <main className="mx-auto max-w-4xl px-4 py-10">
+      <main className="mx-auto max-w-6xl px-4 py-10">
         {/* Back button and title */}
         <div className="mb-8">
           <Link
@@ -219,84 +490,132 @@ export default function WorksheetsListPage() {
             <span className="font-medium">Назад в кабинет</span>
           </Link>
           <h1 className="text-3xl font-bold text-slate-900">Рабочие листы</h1>
-          <p className="text-slate-500 mt-1">Всего: {worksheetCount}</p>
+          <p className="text-slate-500 mt-1">Всего: {totalWorksheets}</p>
         </div>
 
-        {/* Worksheets List */}
-        <div className="glass-container p-4 md:p-6">
-          {isLoadingWorksheets ? (
-            <div className="flex justify-center py-10">
-              <div className="relative">
-                <div className="animate-spin rounded-full h-10 w-10 border-2 border-purple-200"></div>
-                <div className="absolute inset-0 animate-spin rounded-full h-10 w-10 border-t-2 border-[#8C52FF]"></div>
-              </div>
-            </div>
-          ) : worksheetCount === 0 ? (
-            <div className="text-center py-16">
-              <div className="inline-flex items-center justify-center w-20 h-20 bg-purple-100 rounded-2xl mb-4">
-                <DocumentIcon className="w-10 h-10 text-[#8C52FF]" />
-              </div>
-              <p className="text-slate-500 text-lg">Рабочих листов пока нет</p>
-              <p className="text-sm text-slate-400 mt-2">Создайте свой первый рабочий лист</p>
-              <Link
-                to="/"
-                className="inline-flex items-center gap-2 mt-6 px-6 py-3 bg-[#8C52FF] hover:bg-purple-700 text-white rounded-xl font-medium transition-colors"
+        {/* Folders Filter */}
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-medium text-slate-500">Папки</h2>
+            <button
+              onClick={() => setCreateFolderModal(true)}
+              className="text-sm text-[#8C52FF] hover:text-purple-700 font-medium"
+            >
+              + Новая папка
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setSelectedFolderId('all')}
+              className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
+                selectedFolderId === 'all'
+                  ? 'bg-[#8C52FF] text-white'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              Все
+            </button>
+            <button
+              onClick={() => setSelectedFolderId(null)}
+              className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
+                selectedFolderId === null
+                  ? 'bg-[#8C52FF] text-white'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              Без папки ({rootWorksheetCount})
+            </button>
+            {folders.map((folder) => (
+              <button
+                key={folder.id}
+                onClick={() => setSelectedFolderId(folder.id)}
+                className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-2 ${
+                  selectedFolderId === folder.id
+                    ? 'bg-[#8C52FF] text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
               >
-                <PlusIcon />
-                Создать лист
-              </Link>
+                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: folder.color }} />
+                {folder.name} ({folder.worksheetCount})
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Worksheets Grid */}
+        {isLoadingWorksheets ? (
+          <div className="flex justify-center py-20">
+            <div className="relative">
+              <div className="animate-spin rounded-full h-12 w-12 border-2 border-purple-200"></div>
+              <div className="absolute inset-0 animate-spin rounded-full h-12 w-12 border-t-2 border-[#8C52FF]"></div>
             </div>
-          ) : (
-            <div className="space-y-3">
-              {worksheets?.map((ws) => (
+          </div>
+        ) : totalWorksheets === 0 ? (
+          <div className="text-center py-20">
+            <div className="inline-flex items-center justify-center w-24 h-24 bg-purple-100 rounded-3xl mb-6">
+              <DocumentIcon className="w-12 h-12 text-[#8C52FF]" />
+            </div>
+            <p className="text-slate-500 text-xl mb-2">Рабочих листов пока нет</p>
+            <p className="text-sm text-slate-400 mb-6">Создайте свой первый рабочий лист</p>
+            <Link
+              to="/"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-[#8C52FF] hover:bg-purple-700 text-white rounded-xl font-medium transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
+              Создать лист
+            </Link>
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {paginatedWorksheets.map((ws) => (
                 <div
                   key={ws.id}
-                  className="worksheet-card flex items-center gap-4 cursor-pointer hover:bg-slate-50 transition-colors"
-                  onClick={() => navigate(`/worksheets/${ws.id}`)}
+                  className="bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all overflow-hidden group"
                 >
-                  <div className="p-3 bg-slate-100 rounded-xl">
-                    <DocumentIcon className="w-6 h-6 text-slate-500" />
+                  {/* Card clickable area */}
+                  <div
+                    className="p-5 cursor-pointer"
+                    onClick={() => navigate(`/worksheets/${ws.id}`)}
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className="p-3 bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl shrink-0">
+                        <DocumentIcon className="w-6 h-6 text-[#8C52FF]" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-bold text-slate-900 truncate text-lg mb-1 group-hover:text-[#8C52FF] transition-colors">
+                          {getDisplayTitle(ws)}
+                        </h3>
+                        <p className="text-sm text-slate-500 truncate mb-2">{ws.topic}</p>
+                        <p className="text-xs text-slate-400">
+                          {new Date(ws.createdAt).toLocaleDateString('ru-RU', {
+                            day: 'numeric',
+                            month: 'long',
+                            year: 'numeric',
+                          })}
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-slate-900 truncate text-lg">
-                      {getDisplayTitle(ws)}
-                    </p>
-                    <p className="text-sm text-slate-500 truncate">{ws.topic}</p>
-                    <p className="text-xs text-slate-400 mt-1">
-                      {new Date(ws.createdAt).toLocaleDateString('ru-RU', {
-                        day: 'numeric',
-                        month: 'long',
-                        year: 'numeric',
-                      })}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                    {/* Rename */}
+
+                  {/* Action buttons */}
+                  <div className="px-5 pb-4 flex items-center gap-2 border-t border-slate-50 pt-3">
                     <button
                       onClick={() => setRenameModal({ id: ws.id, title: ws.title || getDisplayTitle(ws) })}
-                      className="p-2 text-slate-300 hover:text-[#8C52FF] hover:bg-purple-50 rounded-lg transition-all"
+                      className="p-2 text-slate-400 hover:text-[#8C52FF] hover:bg-purple-50 rounded-lg transition-all"
                       title="Переименовать"
                     >
                       <PencilIcon />
                     </button>
-                    {/* Duplicate */}
                     <button
-                      onClick={() => duplicateMutation.mutate(ws.id)}
-                      disabled={duplicateMutation.isPending}
-                      className="p-2 text-slate-300 hover:text-[#8C52FF] hover:bg-purple-50 rounded-lg transition-all disabled:opacity-50"
-                      title="Создать копию"
+                      onClick={() => setMoveModal({ id: ws.id, currentFolderId: ws.folderId || null })}
+                      className="p-2 text-slate-400 hover:text-[#8C52FF] hover:bg-purple-50 rounded-lg transition-all"
+                      title="Переместить в папку"
                     >
-                      <CopyIcon />
+                      <FolderMoveIcon />
                     </button>
-                    {/* Create based on this */}
-                    <Link
-                      to={`/?subject=${ws.subject}&grade=${ws.grade}&topic=${encodeURIComponent(ws.topic)}`}
-                      className="p-2 text-slate-300 hover:text-emerald-500 hover:bg-emerald-50 rounded-lg transition-all"
-                      title="Создать на основе"
-                    >
-                      <PlusIcon />
-                    </Link>
-                    {/* Delete */}
                     <button
                       onClick={() => {
                         if (confirm('Удалить этот рабочий лист?')) {
@@ -304,7 +623,7 @@ export default function WorksheetsListPage() {
                         }
                       }}
                       disabled={deleteMutation.isPending}
-                      className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all disabled:opacity-50"
+                      className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all disabled:opacity-50 ml-auto"
                       title="Удалить"
                     >
                       <TrashIcon />
@@ -313,8 +632,15 @@ export default function WorksheetsListPage() {
                 </div>
               ))}
             </div>
-          )}
-        </div>
+
+            {/* Pagination */}
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={setCurrentPage}
+            />
+          </>
+        )}
       </main>
 
       {/* Rename Modal */}
@@ -324,6 +650,24 @@ export default function WorksheetsListPage() {
         currentTitle={renameModal?.title || ''}
         onSave={handleRename}
         isLoading={updateMutation.isPending}
+      />
+
+      {/* Move to Folder Modal */}
+      <MoveToFolderModal
+        isOpen={!!moveModal}
+        onClose={() => setMoveModal(null)}
+        folders={folders}
+        currentFolderId={moveModal?.currentFolderId}
+        onMove={handleMove}
+        isLoading={moveMutation.isPending}
+      />
+
+      {/* Create Folder Modal */}
+      <CreateFolderModal
+        isOpen={createFolderModal}
+        onClose={() => setCreateFolderModal(false)}
+        onSave={handleCreateFolder}
+        isLoading={createFolderMutation.isPending}
       />
     </div>
   )

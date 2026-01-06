@@ -74,12 +74,35 @@ export default function SavedWorksheetPage() {
   // Fetch worksheet from DB
   const { data: worksheetData, isLoading, error } = useQuery({
     queryKey: ['worksheet', id],
-    queryFn: () => fetchWorksheet(id!),
+    queryFn: async () => {
+      console.log('[SavedWorksheetPage] Fetching worksheet:', id)
+      const result = await fetchWorksheet(id!)
+      console.log('[SavedWorksheetPage] Fetch result:', {
+        hasContent: !!result?.content,
+        hasAssignments: !!(result?.content as any)?.assignments,
+      })
+      return result
+    },
     enabled: !!id && status === 'authenticated',
+    retry: 1,
   })
 
   // Extract worksheet content
   const worksheet = worksheetData?.content as Worksheet | null
+
+  // Debug logging
+  useEffect(() => {
+    if (error) {
+      console.error('[SavedWorksheetPage] Query error:', error)
+    }
+    if (worksheetData) {
+      console.log('[SavedWorksheetPage] worksheetData loaded:', {
+        id: worksheetData.id,
+        hasContent: !!worksheetData.content,
+        contentKeys: worksheetData.content ? Object.keys(worksheetData.content as object) : [],
+      })
+    }
+  }, [error, worksheetData])
 
   useEffect(() => {
     const handleScroll = () => {
@@ -129,16 +152,26 @@ export default function SavedWorksheetPage() {
   }
 
   if (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Неизвестная ошибка'
     return (
       <div className="mx-auto max-w-3xl px-4 py-10">
         <div className="mb-4 text-xl font-semibold">Ошибка загрузки</div>
-        <p className="mb-6 text-gray-600">Не удалось загрузить рабочий лист.</p>
-        <button
-          onClick={() => navigate('/dashboard')}
-          className="inline-flex h-11 items-center justify-center rounded-md bg-[#8C52FF] px-6 text-white hover:bg-purple-700"
-        >
-          В личный кабинет
-        </button>
+        <p className="mb-2 text-gray-600">Не удалось загрузить рабочий лист.</p>
+        <p className="mb-6 text-sm text-gray-400">{errorMessage}</p>
+        <div className="flex gap-4">
+          <button
+            onClick={() => window.location.reload()}
+            className="inline-flex h-11 items-center justify-center rounded-md border border-[#8C52FF] px-6 text-[#8C52FF] hover:bg-purple-50"
+          >
+            Попробовать снова
+          </button>
+          <button
+            onClick={() => navigate('/worksheets')}
+            className="inline-flex h-11 items-center justify-center rounded-md bg-[#8C52FF] px-6 text-white hover:bg-purple-700"
+          >
+            К списку листов
+          </button>
+        </div>
       </div>
     )
   }
@@ -187,14 +220,30 @@ export default function SavedWorksheetPage() {
                 <span className="text-[10px] font-medium text-gray-500 group-hover:text-indigo-600">Назад</span>
               </Link>
 
+              <Link
+                to="/"
+                className="group flex flex-col items-center gap-0.5 pt-4"
+                title="Создать новый материал"
+              >
+                <div className="flex h-10 w-10 items-center justify-center rounded-full border border-indigo-100 bg-white shadow-sm transition-all group-hover:bg-indigo-50 group-active:scale-95">
+                  <svg className="h-5 w-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
+                  </svg>
+                </div>
+                <span className="text-[10px] font-medium text-gray-500 group-hover:text-indigo-600">Новая генерация</span>
+              </Link>
+
               <button
                 onClick={handlePrint}
-                className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-gray-700 shadow hover:bg-gray-50 hover:text-indigo-600 transition-all"
+                className="group flex flex-col items-center gap-0.5 pt-4"
                 title="Распечатать"
               >
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                </svg>
+                <div className="flex h-10 w-10 items-center justify-center rounded-full border border-indigo-100 bg-white shadow-sm transition-all group-hover:bg-indigo-50 group-active:scale-95">
+                  <svg className="h-5 w-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                  </svg>
+                </div>
+                <span className="text-[10px] font-medium text-gray-500 group-hover:text-indigo-600">Печать</span>
               </button>
 
               <button

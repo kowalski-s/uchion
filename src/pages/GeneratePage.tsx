@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { GenerateSchema, GenerateFormValues } from '../lib/schemas'
@@ -10,6 +10,7 @@ import CustomSelect from '../components/ui/CustomSelect'
 import { useAuth } from '../lib/auth'
 import { getGenerationsLeft, incrementGuestUsage, canGenerate, GUEST_LIMIT } from '../lib/limits'
 import Header from '../components/Header'
+import { fetchFolders } from '../lib/dashboard-api'
 
 export default function GeneratePage() {
   const navigate = useNavigate()
@@ -21,9 +22,18 @@ export default function GeneratePage() {
   const [progress, setProgress] = useState(0)
   const [generationsLeft, setGenerationsLeft] = useState(getGenerationsLeft(user))
 
+  // Fetch folders only for authenticated users
+  const { data: foldersData } = useQuery({
+    queryKey: ['folders'],
+    queryFn: fetchFolders,
+    enabled: !!user,
+  })
+
+  const folders = foldersData?.folders || []
+
   const form = useForm<GenerateFormValues>({
     resolver: zodResolver(GenerateSchema),
-    defaultValues: { subject: 'math', grade: 3, topic: '' }
+    defaultValues: { subject: 'math', grade: 3, topic: '', folderId: null }
   })
 
   const mutation = useMutation({
@@ -82,7 +92,7 @@ export default function GeneratePage() {
       setGenerationsLeft(prev => prev - 1)
     }
 
-    mutation.mutate({ subject: values.subject, grade: values.grade, topic: values.topic })
+    mutation.mutate({ subject: values.subject, grade: values.grade, topic: values.topic, folderId: values.folderId })
   }
 
   return (
@@ -168,6 +178,25 @@ export default function GeneratePage() {
                 <p className="text-sm text-red-500">{form.formState.errors.topic.message}</p>
               )}
             </div>
+
+            {/* Folder selector - only for authenticated users */}
+            {user && folders.length > 0 && (
+              <Controller
+                control={form.control}
+                name="folderId"
+                render={({ field }) => (
+                  <CustomSelect
+                    label="Сохранить в папку"
+                    value={field.value ?? ''}
+                    onChange={(val) => field.onChange(val === '' ? null : val)}
+                    options={[
+                      { label: 'Без папки', value: '' },
+                      ...folders.map(f => ({ label: f.name, value: f.id }))
+                    ]}
+                  />
+                )}
+              />
+            )}
 
             {errorText && (
               <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">

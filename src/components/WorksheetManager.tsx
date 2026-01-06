@@ -1,15 +1,15 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import {
   fetchWorksheets,
   deleteWorksheet,
-  duplicateWorksheet,
   updateWorksheet,
+  fetchFolders,
   formatSubjectName,
 } from '../lib/dashboard-api'
-import type { WorksheetListItem } from '../../shared/types'
+import type { WorksheetListItem, FolderWithCount } from '../../shared/types'
 
 // Icons
 function DocumentIcon({ className = "w-5 h-5" }: { className?: string }) {
@@ -28,14 +28,6 @@ function TrashIcon() {
   )
 }
 
-function CopyIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 0 1-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 0 1 1.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 0 0-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 0 1-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 0 0-3.375-3.375h-1.5a1.125 1.125 0 0 1-1.125-1.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H9.75" />
-    </svg>
-  )
-}
-
 function PencilIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
@@ -44,10 +36,18 @@ function PencilIcon() {
   )
 }
 
-function PlusIcon() {
+function FolderIcon({ className = "w-5 h-5", color }: { className?: string; color?: string }) {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+    <svg xmlns="http://www.w3.org/2000/svg" fill={color || "none"} viewBox="0 0 24 24" strokeWidth={1.5} stroke={color || "currentColor"} className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 0 1 4.5 9.75h15A2.25 2.25 0 0 1 21.75 12v.75m-8.69-6.44-2.12-2.12a1.5 1.5 0 0 0-1.061-.44H4.5A2.25 2.25 0 0 0 2.25 6v12a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9a2.25 2.25 0 0 0-2.25-2.25h-5.379a1.5 1.5 0 0 1-1.06-.44Z" />
+    </svg>
+  )
+}
+
+function FolderMoveIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9.776c.112-.017.227-.026.344-.026h15.812c.117 0 .232.009.344.026m-16.5 0a2.25 2.25 0 0 0-1.883 2.542l.857 6a2.25 2.25 0 0 0 2.227 1.932H19.05a2.25 2.25 0 0 0 2.227-1.932l.857-6a2.25 2.25 0 0 0-1.883-2.542m-16.5 0V6A2.25 2.25 0 0 1 6 3.75h3.879a1.5 1.5 0 0 1 1.06.44l2.122 2.12a1.5 1.5 0 0 0 1.06.44H18A2.25 2.25 0 0 1 20.25 9v.776" />
     </svg>
   )
 }
@@ -83,13 +83,6 @@ function RenameModal({
   isLoading: boolean
 }) {
   const [title, setTitle] = useState(currentTitle)
-
-  // Reset title when modal opens with new currentTitle
-  useEffect(() => {
-    if (isOpen) {
-      setTitle(currentTitle)
-    }
-  }, [isOpen, currentTitle])
 
   if (!isOpen) return null
 
@@ -130,74 +123,139 @@ function RenameModal({
   )
 }
 
+// Move to Folder Modal
+function MoveToFolderModal({
+  isOpen,
+  onClose,
+  folders,
+  currentFolderId,
+  onMove,
+  isLoading,
+}: {
+  isOpen: boolean
+  onClose: () => void
+  folders: FolderWithCount[]
+  currentFolderId: string | null | undefined
+  onMove: (folderId: string | null) => void
+  isLoading: boolean
+}) {
+  if (!isOpen) return null
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-bold text-slate-900">Переместить в папку</h3>
+          <button onClick={onClose} className="p-1 hover:bg-slate-100 rounded-lg">
+            <XMarkIcon />
+          </button>
+        </div>
+        <div className="space-y-2 max-h-64 overflow-y-auto">
+          <button
+            onClick={() => onMove(null)}
+            disabled={isLoading || currentFolderId === null || currentFolderId === undefined}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
+              currentFolderId === null || currentFolderId === undefined
+                ? 'bg-purple-50 text-[#8C52FF] cursor-default'
+                : 'hover:bg-slate-50'
+            }`}
+          >
+            <DocumentIcon className="w-5 h-5 text-slate-400" />
+            <span className="font-medium">Без папки</span>
+          </button>
+          {folders.map((folder) => (
+            <button
+              key={folder.id}
+              onClick={() => onMove(folder.id)}
+              disabled={isLoading || currentFolderId === folder.id}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
+                currentFolderId === folder.id
+                  ? 'bg-purple-50 text-[#8C52FF] cursor-default'
+                  : 'hover:bg-slate-50'
+              }`}
+            >
+              <FolderIcon className="w-5 h-5" color={folder.color} />
+              <span className="font-medium">{folder.name}</span>
+              <span className="ml-auto text-sm text-slate-400">{folder.worksheetCount}</span>
+            </button>
+          ))}
+        </div>
+        {folders.length === 0 && (
+          <p className="text-center text-slate-400 py-4">Папок пока нет</p>
+        )}
+        <div className="mt-4 pt-4 border-t">
+          <button
+            onClick={onClose}
+            className="w-full px-4 py-2.5 bg-slate-100 hover:bg-slate-200 rounded-xl font-medium transition-colors"
+          >
+            Отмена
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function WorksheetManager() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { user, status } = useAuth()
+  const { status } = useAuth()
   const [renameModal, setRenameModal] = useState<{ id: string; title: string } | null>(null)
+  const [moveModal, setMoveModal] = useState<{ id: string; currentFolderId: string | null } | null>(null)
 
-  // Debug: log mount and auth status
-  useEffect(() => {
-    console.log('[Frontend] WorksheetManager MOUNTED')
-    console.log('[Frontend] Auth status:', status)
-    console.log('[Frontend] User:', user ? { id: user.id, email: user.email } : 'null')
-    return () => console.log('[Frontend] WorksheetManager UNMOUNTED')
-  }, [])
-
-  // Debug: log auth changes
-  useEffect(() => {
-    console.log('[Frontend] Auth changed - status:', status, 'user:', user?.id)
-  }, [status, user])
-
-  // Fetch recent worksheets (limit 5 for dashboard)
-  const { data: worksheets, isLoading: isLoadingWorksheets, isFetching, error, isError, status: queryStatus } = useQuery({
-    queryKey: ['worksheets'],
-    queryFn: () => {
-      console.log('[Frontend] WorksheetManager - queryFn EXECUTING (limit 5)')
-      return fetchWorksheets({ limit: 5 })
-    },
+  // Fetch folders for move modal
+  const { data: foldersData } = useQuery({
+    queryKey: ['folders'],
+    queryFn: fetchFolders,
     enabled: status === 'authenticated',
   })
 
-  // Debug: log query state
-  useEffect(() => {
-    console.log('[Frontend] Query state:', {
-      queryStatus,
-      isLoading: isLoadingWorksheets,
-      isFetching,
-      isError,
-      error: error?.message,
-      dataCount: worksheets?.length,
-      enabled: status === 'authenticated',
-    })
-  }, [queryStatus, isLoadingWorksheets, isFetching, isError, error, worksheets, status])
+  // Fetch only 5 recent worksheets for dashboard
+  const { data: worksheets, isLoading: isLoadingWorksheets } = useQuery({
+    queryKey: ['worksheets', 'recent'],
+    queryFn: () => fetchWorksheets({ limit: 5 }),
+    enabled: status === 'authenticated',
+  })
+
+  // Get total count
+  const { data: allWorksheets } = useQuery({
+    queryKey: ['worksheets', 'all'],
+    queryFn: () => fetchWorksheets({ limit: 1000 }),
+    enabled: status === 'authenticated',
+  })
+
+  const folders = foldersData?.folders || []
+  const totalCount = allWorksheets?.length || 0
 
   // Mutations
   const deleteMutation = useMutation({
     mutationFn: deleteWorksheet,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['worksheets'] })
-    },
-  })
-
-  const duplicateMutation = useMutation({
-    mutationFn: duplicateWorksheet,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['worksheets'] })
+      queryClient.invalidateQueries({ queryKey: ['folders'] })
     },
   })
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: { title?: string } }) => updateWorksheet(id, data),
+    mutationFn: ({ id, data }: { id: string; data: { title?: string; folderId?: string | null } }) =>
+      updateWorksheet(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['worksheets'] })
+      queryClient.invalidateQueries({ queryKey: ['folders'] })
       setRenameModal(null)
+      setMoveModal(null)
     },
   })
 
   const handleRename = (title: string) => {
-    if (renameModal) {
-      updateMutation.mutate({ id: renameModal.id, data: { title } })
+    if (renameModal && title.trim()) {
+      updateMutation.mutate({ id: renameModal.id, data: { title: title.trim() } })
+    }
+  }
+
+  const handleMove = (folderId: string | null) => {
+    if (moveModal) {
+      updateMutation.mutate({ id: moveModal.id, data: { folderId } })
     }
   }
 
@@ -206,21 +264,21 @@ export default function WorksheetManager() {
     return `${formatSubjectName(ws.subject)}, ${ws.grade} класс`
   }
 
-  const worksheetCount = worksheets?.length || 0
-
   return (
     <div>
-      {/* Header with arrow navigation */}
-      <Link
-        to="/worksheets"
-        className="flex items-center gap-3 mb-4 group cursor-pointer"
-      >
-        <span className="section-badge">{worksheetCount}</span>
-        <h2 className="text-lg font-bold text-slate-900">Рабочие листы</h2>
-        <ArrowRightIcon className="w-5 h-5 text-slate-400 group-hover:text-[#8C52FF] group-hover:translate-x-1 transition-all" />
-      </Link>
+      {/* Header with arrow to full list */}
+      <div className="flex items-center gap-3 mb-4">
+        <span className="section-badge">{totalCount}</span>
+        <Link
+          to="/worksheets"
+          className="flex items-center gap-2 group"
+        >
+          <h2 className="text-lg font-bold text-slate-900 group-hover:text-[#8C52FF] transition-colors">Рабочие листы</h2>
+          <ArrowRightIcon className="w-5 h-5 text-slate-400 group-hover:text-[#8C52FF] transition-colors" />
+        </Link>
+      </div>
 
-      {/* Worksheets List */}
+      {/* Worksheets List - only 5 recent */}
       <div className="glass-container p-4 md:p-6">
         {isLoadingWorksheets ? (
           <div className="flex justify-center py-10">
@@ -229,7 +287,7 @@ export default function WorksheetManager() {
               <div className="absolute inset-0 animate-spin rounded-full h-10 w-10 border-t-2 border-[#8C52FF]"></div>
             </div>
           </div>
-        ) : worksheetCount === 0 ? (
+        ) : !worksheets || worksheets.length === 0 ? (
           <div className="text-center py-10">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-purple-100 rounded-2xl mb-4">
               <DocumentIcon className="w-8 h-8 text-[#8C52FF]" />
@@ -239,7 +297,7 @@ export default function WorksheetManager() {
           </div>
         ) : (
           <div className="space-y-3">
-            {worksheets?.map((ws) => (
+            {worksheets.map((ws) => (
               <div
                 key={ws.id}
                 className="worksheet-card flex items-center gap-4 cursor-pointer hover:bg-slate-50 transition-colors"
@@ -266,23 +324,14 @@ export default function WorksheetManager() {
                   >
                     <PencilIcon />
                   </button>
-                  {/* Duplicate */}
+                  {/* Move to folder */}
                   <button
-                    onClick={() => duplicateMutation.mutate(ws.id)}
-                    disabled={duplicateMutation.isPending}
-                    className="p-2 text-slate-300 hover:text-[#8C52FF] hover:bg-purple-50 rounded-lg transition-all disabled:opacity-50"
-                    title="Создать копию"
+                    onClick={() => setMoveModal({ id: ws.id, currentFolderId: ws.folderId || null })}
+                    className="p-2 text-slate-300 hover:text-[#8C52FF] hover:bg-purple-50 rounded-lg transition-all"
+                    title="Переместить в папку"
                   >
-                    <CopyIcon />
+                    <FolderMoveIcon />
                   </button>
-                  {/* Create based on this */}
-                  <Link
-                    to={`/?subject=${ws.subject}&grade=${ws.grade}&topic=${encodeURIComponent(ws.topic)}`}
-                    className="p-2 text-slate-300 hover:text-emerald-500 hover:bg-emerald-50 rounded-lg transition-all"
-                    title="Создать на основе"
-                  >
-                    <PlusIcon />
-                  </Link>
                   {/* Delete */}
                   <button
                     onClick={() => {
@@ -303,12 +352,21 @@ export default function WorksheetManager() {
         )}
       </div>
 
-      {/* Rename Modal */}
+      {/* Modals */}
       <RenameModal
         isOpen={!!renameModal}
         onClose={() => setRenameModal(null)}
         currentTitle={renameModal?.title || ''}
         onSave={handleRename}
+        isLoading={updateMutation.isPending}
+      />
+
+      <MoveToFolderModal
+        isOpen={!!moveModal}
+        onClose={() => setMoveModal(null)}
+        folders={folders}
+        currentFolderId={moveModal?.currentFolderId}
+        onMove={handleMove}
         isLoading={updateMutation.isPending}
       />
     </div>

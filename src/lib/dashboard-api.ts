@@ -55,18 +55,35 @@ export async function fetchRecentWorksheets(): Promise<WorksheetListItem[]> {
 }
 
 export async function fetchWorksheet(id: string): Promise<WorksheetListItem & { content: unknown }> {
+  console.log('[Dashboard API] fetchWorksheet called with id:', id)
+
   const res = await fetch(`/api/worksheets/${id}`, {
     credentials: 'include',
   })
 
+  console.log('[Dashboard API] fetchWorksheet response status:', res.status)
+  console.log('[Dashboard API] fetchWorksheet response headers:', Object.fromEntries(res.headers.entries()))
+
   if (!res.ok) {
-    if (res.status === 401) throw new Error('Unauthorized')
-    if (res.status === 403) throw new Error('Access denied')
-    if (res.status === 404) throw new Error('Worksheet not found')
-    throw new Error('Failed to fetch worksheet')
+    const errorBody = await res.text().catch(() => 'Unable to read error body')
+    console.error('[Dashboard API] fetchWorksheet error:', res.status, errorBody)
+
+    if (res.status === 401) throw new Error('Требуется авторизация')
+    if (res.status === 403) throw new Error('Нет доступа к этому листу')
+    if (res.status === 404) throw new Error('Лист не найден')
+    if (res.status === 500) throw new Error('Ошибка сервера: ' + errorBody)
+    throw new Error(`Ошибка загрузки: ${res.status}`)
   }
 
   const data = await res.json()
+  console.log('[Dashboard API] fetchWorksheet raw data:', JSON.stringify(data).substring(0, 500))
+
+  if (!data.worksheet) {
+    console.error('[Dashboard API] fetchWorksheet - worksheet is undefined in response')
+    throw new Error('Сервер вернул пустой ответ')
+  }
+
+  console.log('[Dashboard API] fetchWorksheet success, content has assignments:', !!(data.worksheet?.content?.assignments))
   return data.worksheet
 }
 
@@ -77,6 +94,8 @@ export interface UpdateWorksheetData {
 }
 
 export async function updateWorksheet(id: string, data: UpdateWorksheetData): Promise<void> {
+  console.log('[Dashboard API] updateWorksheet called:', { id, data })
+
   const res = await fetch(`/api/worksheets/${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
@@ -84,16 +103,27 @@ export async function updateWorksheet(id: string, data: UpdateWorksheetData): Pr
     body: JSON.stringify(data),
   })
 
+  console.log('[Dashboard API] updateWorksheet response status:', res.status)
+
   if (!res.ok) {
-    if (res.status === 401) throw new Error('Unauthorized')
-    if (res.status === 403) throw new Error('Access denied')
-    if (res.status === 404) throw new Error('Worksheet not found')
+    const errorBody = await res.text().catch(() => 'Unable to read error body')
+    console.error('[Dashboard API] updateWorksheet error:', res.status, errorBody)
+
+    if (res.status === 401) throw new Error('Требуется авторизация')
+    if (res.status === 403) throw new Error('Нет доступа')
+    if (res.status === 404) throw new Error('Лист не найден')
     if (res.status === 400) {
-      const error = await res.json()
-      throw new Error(error.error || 'Validation error')
+      try {
+        const error = JSON.parse(errorBody)
+        throw new Error(error.error || 'Ошибка валидации')
+      } catch {
+        throw new Error('Ошибка валидации')
+      }
     }
-    throw new Error('Failed to update worksheet')
+    throw new Error('Не удалось обновить лист')
   }
+
+  console.log('[Dashboard API] updateWorksheet success')
 }
 
 export async function deleteWorksheet(id: string): Promise<void> {
