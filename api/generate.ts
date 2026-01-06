@@ -138,13 +138,19 @@ export default async function handler(
         .where(eq(users.id, userId))
 
       // Save worksheet to database
-      await db.insert(worksheets).values({
-        userId,
-        subject: input.subject,
-        grade: input.grade,
-        topic: input.topic,
-        content: JSON.stringify(finalWorksheet),
-      })
+      try {
+        await db.insert(worksheets).values({
+          userId,
+          subject: input.subject,
+          grade: input.grade,
+          topic: input.topic,
+          difficulty: 'medium',
+          content: JSON.stringify(finalWorksheet),
+        })
+      } catch (dbError) {
+        // Log database error but don't block worksheet delivery
+        console.error('[API] Failed to save worksheet to database:', dbError)
+      }
     }
 
     sendEvent({ type: 'result', data: { worksheet: finalWorksheet } })
