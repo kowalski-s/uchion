@@ -1,10 +1,17 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { eq, and, isNull, asc } from 'drizzle-orm'
+import { eq, and, isNull, asc, count } from 'drizzle-orm'
 import { z } from 'zod'
 import { db } from '../../db/index.js'
-import { folders, worksheets } from '../../db/schema.js'
+import { folders, worksheets, subscriptions } from '../../db/schema.js'
 import { withAuth, type AuthUser } from '../_lib/auth/middleware.js'
 import { checkRateLimit } from '../_lib/auth/rate-limit.js'
+
+// Folder limits by subscription plan
+const FOLDER_LIMITS = {
+  free: 2,
+  basic: 10,
+  premium: 10,
+} as const
 
 // Validation schema for creating folder
 const CreateFolderSchema = z.object({
@@ -139,6 +146,38 @@ async function handleCreate(
   const { name, color, parentId } = parse.data
 
   try {
+    // Get user's subscription plan
+    const [subscription] = await db
+      .select({ plan: subscriptions.plan })
+      .from(subscriptions)
+      .where(eq(subscriptions.userId, user.id))
+      .limit(1)
+
+    const userPlan = subscription?.plan || 'free'
+    const folderLimit = FOLDER_LIMITS[userPlan]
+
+    // Count user's existing folders
+    const [{ value: folderCount }] = await db
+      .select({ value: count() })
+      .from(folders)
+      .where(and(
+        eq(folders.userId, user.id),
+        isNull(folders.deletedAt)
+      ))
+
+    // Check if limit reached
+    if (folderCount >= folderLimit) {
+      console.log('[API folders/index] Folder limit reached:', { userId: user.id, plan: userPlan, count: folderCount, limit: folderLimit })
+      return res.status(403).json({
+        error: 'Достигнут лимит папок',
+        message: userPlan === 'free'
+          ? `Бесплатный тариф позволяет создать до ${folderLimit} папок. Перейдите на платный тариф для создания до 10 папок.`
+          : `Достигнут максимальный лимит папок (${folderLimit}). Удалите ненужные папки, чтобы создать новые.`,
+        limit: folderLimit,
+        current: folderCount,
+      })
+    }
+
     // Validate parent folder if provided
     if (parentId) {
       const [parent] = await db
