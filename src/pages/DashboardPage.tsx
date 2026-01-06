@@ -137,7 +137,6 @@ export default function DashboardPage() {
                 <span className="text-xs text-slate-400 uppercase tracking-wider font-semibold">Генерации</span>
                 <p className="text-sm font-bold text-slate-900">{user.generationsLeft} из {maxGenerations}</p>
               </div>
-              <ArrowRightIcon className="w-4 h-4 text-slate-300 group-hover:text-[#8C52FF] group-hover:translate-x-1 transition-all" />
             </div>
             {/* Progress bar */}
             <div className="progress-bar-container">
@@ -162,7 +161,6 @@ export default function DashboardPage() {
               <span className="text-xs text-slate-400 uppercase tracking-wider font-semibold">Тариф</span>
               <p className="text-lg font-bold text-slate-900">{formatPlanName(subscriptionPlan)}</p>
             </div>
-            <ArrowRightIcon className="w-4 h-4 text-slate-300 group-hover:text-[#8C52FF] group-hover:translate-x-1 transition-all" />
           </div>
 
           {/* Gift Certificate - Special card */}
@@ -178,7 +176,6 @@ export default function DashboardPage() {
               <span className="text-xs text-emerald-600 uppercase tracking-wider font-semibold">Дополнительный</span>
               <p className="text-base font-bold text-emerald-700">бонус</p>
             </div>
-            <ArrowRightIcon className="w-4 h-4 text-emerald-300 group-hover:text-emerald-600 group-hover:translate-x-1 transition-all" />
           </div>
         </div>
 
