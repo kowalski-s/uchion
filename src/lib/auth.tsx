@@ -64,23 +64,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Check authentication on mount
   const checkAuth = useCallback(async () => {
+    console.log('[Auth] checkAuth starting...')
     try {
       const response = await fetch('/api/auth/me', {
         credentials: 'include', // Important: send cookies
       })
 
+      console.log('[Auth] /api/auth/me response status:', response.status)
+
       if (response.ok) {
         const data = await response.json()
+        console.log('[Auth] User data received:', { id: data.user?.id, email: data.user?.email })
         setUser(data.user)
         setStatus('authenticated')
+        console.log('[Auth] Status set to: authenticated')
       } else if (response.status === 401) {
+        console.log('[Auth] Got 401, trying to refresh token...')
         // Try to refresh token
         const refreshed = await tryRefresh()
         if (!refreshed) {
+          console.log('[Auth] Refresh failed, setting unauthenticated')
           setUser(null)
           setStatus('unauthenticated')
         }
       } else {
+        console.log('[Auth] Got non-200/401 response, setting unauthenticated')
         setUser(null)
         setStatus('unauthenticated')
       }

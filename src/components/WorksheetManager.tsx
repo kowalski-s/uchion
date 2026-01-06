@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
+import { useAuth } from '../lib/auth'
 import {
   fetchWorksheets,
   deleteWorksheet,
@@ -132,21 +133,44 @@ function RenameModal({
 export default function WorksheetManager() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { user, status } = useAuth()
   const [renameModal, setRenameModal] = useState<{ id: string; title: string } | null>(null)
 
+  // Debug: log mount and auth status
+  useEffect(() => {
+    console.log('[Frontend] WorksheetManager MOUNTED')
+    console.log('[Frontend] Auth status:', status)
+    console.log('[Frontend] User:', user ? { id: user.id, email: user.email } : 'null')
+    return () => console.log('[Frontend] WorksheetManager UNMOUNTED')
+  }, [])
+
+  // Debug: log auth changes
+  useEffect(() => {
+    console.log('[Frontend] Auth changed - status:', status, 'user:', user?.id)
+  }, [status, user])
+
   // Fetch recent worksheets (limit 5 for dashboard)
-  const { data: worksheets, isLoading: isLoadingWorksheets, isFetching } = useQuery({
+  const { data: worksheets, isLoading: isLoadingWorksheets, isFetching, error, isError, status: queryStatus } = useQuery({
     queryKey: ['worksheets'],
     queryFn: () => {
-      console.log('[Frontend] WorksheetManager - fetching worksheets (limit 5)')
+      console.log('[Frontend] WorksheetManager - queryFn EXECUTING (limit 5)')
       return fetchWorksheets({ limit: 5 })
     },
+    enabled: status === 'authenticated',
   })
 
-  // Debug logs
+  // Debug: log query state
   useEffect(() => {
-    console.log('[Frontend] WorksheetManager - data updated:', { count: worksheets?.length, isFetching })
-  }, [worksheets, isFetching])
+    console.log('[Frontend] Query state:', {
+      queryStatus,
+      isLoading: isLoadingWorksheets,
+      isFetching,
+      isError,
+      error: error?.message,
+      dataCount: worksheets?.length,
+      enabled: status === 'authenticated',
+    })
+  }, [queryStatus, isLoadingWorksheets, isFetching, isError, error, worksheets, status])
 
   // Mutations
   const deleteMutation = useMutation({

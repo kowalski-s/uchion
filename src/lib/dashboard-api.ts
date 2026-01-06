@@ -17,22 +17,36 @@ export async function fetchWorksheets(options?: FetchWorksheetsOptions): Promise
   }
 
   const url = `/api/worksheets${params.toString() ? `?${params}` : ''}`
-  console.log('[Frontend API] Fetching worksheets:', { url, options })
+  console.log('[Frontend API] ==== fetchWorksheets START ====')
+  console.log('[Frontend API] URL:', url)
+  console.log('[Frontend API] Options:', options)
 
-  const res = await fetch(url, {
-    credentials: 'include',
-  })
+  try {
+    const res = await fetch(url, {
+      credentials: 'include',
+    })
 
-  if (!res.ok) {
-    if (res.status === 401) {
-      throw new Error('Unauthorized')
+    console.log('[Frontend API] Response status:', res.status)
+    console.log('[Frontend API] Response headers:', Object.fromEntries(res.headers.entries()))
+
+    if (!res.ok) {
+      const errorText = await res.text()
+      console.error('[Frontend API] Error response body:', errorText)
+      if (res.status === 401) {
+        throw new Error('Unauthorized')
+      }
+      throw new Error(`Failed to fetch worksheets: ${res.status} ${errorText}`)
     }
-    throw new Error('Failed to fetch worksheets')
-  }
 
-  const data = await res.json()
-  console.log('[Frontend API] Worksheets received:', { count: data.worksheets?.length })
-  return data.worksheets
+    const data = await res.json()
+    console.log('[Frontend API] Worksheets received:', { count: data.worksheets?.length })
+    console.log('[Frontend API] ==== fetchWorksheets END (success) ====')
+    return data.worksheets
+  } catch (error) {
+    console.error('[Frontend API] ==== fetchWorksheets FAILED ====')
+    console.error('[Frontend API] Error:', error)
+    throw error
+  }
 }
 
 // Legacy function for backwards compatibility
