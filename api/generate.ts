@@ -127,12 +127,7 @@ export default async function handler(
     }
 
     const id = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : String(Date.now())
-    const finalWorksheet: Worksheet = {
-      ...worksheet,
-      id,
-      grade: `${input.grade} класс`,
-      pdfBase64: pdfBase64 ?? ''
-    }
+    let dbId: string | null = null
 
     // Decrement limit and save worksheet for authenticated users
     if (userId) {
@@ -144,21 +139,38 @@ export default async function handler(
         })
         .where(eq(users.id, userId))
 
-      // Save worksheet to database
+      // Save worksheet to database and get the record ID
       try {
-        await db.insert(worksheets).values({
+        const tempWorksheet = {
+          ...worksheet,
+          id,
+          grade: `${input.grade} класс`,
+          pdfBase64: pdfBase64 ?? ''
+        }
+
+        const [inserted] = await db.insert(worksheets).values({
           userId,
           folderId: input.folderId || null,
           subject: input.subject,
           grade: input.grade,
           topic: input.topic,
           difficulty: 'medium',
-          content: JSON.stringify(finalWorksheet),
-        })
+          content: JSON.stringify(tempWorksheet),
+        }).returning({ id: worksheets.id })
+
+        dbId = inserted?.id || null
       } catch (dbError) {
         // Log database error but don't block worksheet delivery
         console.error('[API] Failed to save worksheet to database:', dbError)
       }
+    }
+
+    // Use dbId as the worksheet id if available, otherwise use generated id
+    const finalWorksheet: Worksheet = {
+      ...worksheet,
+      id: dbId || id,
+      grade: `${input.grade} класс`,
+      pdfBase64: pdfBase64 ?? ''
     }
 
     sendEvent({ type: 'result', data: { worksheet: finalWorksheet } })

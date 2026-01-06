@@ -1,10 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../lib/auth'
 import { fetchWorksheet, formatSubjectName } from '../lib/dashboard-api'
 import { buildWorksheetPdf } from '../lib/pdf-client'
 import type { Worksheet } from '../../shared/types'
+import { useWorksheetEditor } from '../hooks/useWorksheetEditor'
+import EditableWorksheetContent from '../components/EditableWorksheetContent'
+import EditModeToolbar from '../components/EditModeToolbar'
+import UnsavedChangesDialog, { useBeforeUnload } from '../components/UnsavedChangesDialog'
 
 function LoadingSpinner() {
   return (
@@ -16,12 +20,6 @@ function LoadingSpinner() {
     </div>
   )
 }
-
-const PageContainer = ({ children, id, className = '' }: { children: React.ReactNode, id?: string, className?: string }) => (
-  <div id={id} className={`mx-auto max-w-[210mm] bg-white p-[15mm] shadow-lg border border-gray-100 rounded-xl mb-12 last:mb-0 print:max-w-none print:w-full print:shadow-none print:p-[10mm] print:border-0 print:rounded-none print:mb-0 print:mx-0 ${className}`}>
-    {children}
-  </div>
-)
 
 const SidebarNav = ({ activePage }: { activePage: number }) => (
   <nav className="hidden xl:flex flex-col gap-2 fixed left-8 top-32 w-40 text-sm print:hidden">
@@ -52,18 +50,15 @@ const SidebarNav = ({ activePage }: { activePage: number }) => (
   </nav>
 )
 
-const shouldShowAnswerField = (text: string) => {
-  const lower = text.toLowerCase()
-  const hiddenKeywords = ['подчеркни', 'обведи', 'зачеркни', 'раскрась', 'соедини']
-  return !hiddenKeywords.some(k => lower.includes(k))
-}
-
 export default function SavedWorksheetPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { status } = useAuth()
   const worksheetRef = useRef<HTMLDivElement | null>(null)
   const [activePage, setActivePage] = useState(1)
+  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
+  const [pendingNavigation, setPendingNavigation] = useState<string | null>(null)
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -74,17 +69,31 @@ export default function SavedWorksheetPage() {
   // Fetch worksheet from DB
   const { data: worksheetData, isLoading, error } = useQuery({
     queryKey: ['worksheet', id],
-    queryFn: async () => {      const result = await fetchWorksheet(id!)
-            return result
+    queryFn: async () => {
+      const result = await fetchWorksheet(id!)
+      return result
     },
     enabled: !!id && status === 'authenticated',
     retry: 1,
   })
 
   // Extract worksheet content
-  const worksheet = worksheetData?.content as Worksheet | null
+  const initialWorksheet = worksheetData?.content as Worksheet | null
 
-    useEffect(() => {
+  // Worksheet editor hook
+  const editor = useWorksheetEditor({
+    initialWorksheet,
+    worksheetId: id,
+    onSaveSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['worksheet', id] })
+    },
+  })
+
+  // Browser beforeunload warning
+  useBeforeUnload(editor.isDirty, editor.isEditMode)
+
+  // Handle scroll for sidebar nav
+  useEffect(() => {
     const handleScroll = () => {
       const p1 = document.getElementById('page1')
       const p2 = document.getElementById('page2')
@@ -110,13 +119,15 @@ export default function SavedWorksheetPage() {
   }
 
   const handleDownloadPdf = async () => {
-    if (!worksheet) return
+    // Use the current worksheet state (with edits if any)
+    const currentWorksheet = editor.worksheet
+    if (!currentWorksheet) return
     try {
-      const blob = await buildWorksheetPdf(worksheet)
+      const blob = await buildWorksheetPdf(currentWorksheet)
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `${(worksheet.topic || 'worksheet').replace(/\s+/g, '-')}.pdf`
+      a.download = `${(currentWorksheet.topic || 'worksheet').replace(/\s+/g, '-')}.pdf`
       document.body.appendChild(a)
       a.click()
       a.remove()
@@ -125,6 +136,50 @@ export default function SavedWorksheetPage() {
       console.error('PDF download error:', err)
       alert('Не удалось создать PDF. Попробуйте еще раз.')
     }
+  }
+
+  // Handle navigation with unsaved changes check
+  const handleNavigate = (to: string) => {
+    if (editor.isDirty && editor.isEditMode) {
+      setPendingNavigation(to)
+      setShowUnsavedDialog(true)
+    } else {
+      navigate(to)
+    }
+  }
+
+  // Handle cancel with unsaved changes check
+  const handleCancel = () => {
+    if (editor.isDirty) {
+      setPendingNavigation(null)
+      setShowUnsavedDialog(true)
+    } else {
+      editor.exitEditMode()
+    }
+  }
+
+  // Dialog handlers
+  const handleDialogSave = async () => {
+    const success = await editor.saveChanges()
+    if (success) {
+      setShowUnsavedDialog(false)
+      if (pendingNavigation) {
+        navigate(pendingNavigation)
+      }
+    }
+  }
+
+  const handleDialogDiscard = () => {
+    editor.discardChanges()
+    setShowUnsavedDialog(false)
+    if (pendingNavigation) {
+      navigate(pendingNavigation)
+    }
+  }
+
+  const handleDialogCancel = () => {
+    setShowUnsavedDialog(false)
+    setPendingNavigation(null)
   }
 
   if (status === 'loading' || isLoading) {
@@ -156,7 +211,7 @@ export default function SavedWorksheetPage() {
     )
   }
 
-  if (!worksheet) {
+  if (!editor.worksheet) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-10">
         <div className="mb-4 text-xl font-semibold">Лист не найден</div>
@@ -175,68 +230,97 @@ export default function SavedWorksheetPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 print:bg-white">
+      {/* Unsaved changes dialog */}
+      <UnsavedChangesDialog
+        isOpen={showUnsavedDialog}
+        isSaving={editor.isSaving}
+        onSave={handleDialogSave}
+        onDiscard={handleDialogDiscard}
+        onCancel={handleDialogCancel}
+      />
+
       {/* HEADER */}
       <header className="border-b bg-white shadow-sm sticky top-0 z-50 print:hidden">
         <div className="mx-auto max-w-7xl px-6 py-3">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-6">
+            {/* Left: Logo + Back button */}
+            <div className="flex items-center gap-3">
               <Link to="/" className="text-xl font-bold text-indigo-600">УчиОн</Link>
-              <div className="hidden sm:block">
-                <div className="text-sm font-medium text-gray-900">{displayTitle}</div>
-                <div className="text-xs text-gray-500">{worksheet.topic}</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <Link
-                to="/worksheets"
-                className="group flex flex-col items-center gap-0.5 pt-4"
+              <button
+                onClick={() => handleNavigate('/worksheets')}
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-indigo-100 bg-white shadow-sm transition-all hover:bg-indigo-50 active:scale-95"
                 title="К списку листов"
               >
-                <div className="flex h-10 w-10 items-center justify-center rounded-full border border-indigo-100 bg-white shadow-sm transition-all group-hover:bg-indigo-50 group-active:scale-95">
-                  <svg className="h-5 w-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.75 19.5 8.25 12l7.5-7.5" />
-                  </svg>
-                </div>
-                <span className="text-[10px] font-medium text-gray-500 group-hover:text-indigo-600">Назад</span>
-              </Link>
-
-              <Link
-                to="/"
-                className="group flex flex-col items-center gap-0.5 pt-4"
-                title="Создать новый материал"
-              >
-                <div className="flex h-10 w-10 items-center justify-center rounded-full border border-indigo-100 bg-white shadow-sm transition-all group-hover:bg-indigo-50 group-active:scale-95">
-                  <svg className="h-5 w-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
-                  </svg>
-                </div>
-                <span className="text-[10px] font-medium text-gray-500 group-hover:text-indigo-600">Новая генерация</span>
-              </Link>
-
-              <button
-                onClick={handlePrint}
-                className="group flex flex-col items-center gap-0.5 pt-4"
-                title="Распечатать"
-              >
-                <div className="flex h-10 w-10 items-center justify-center rounded-full border border-indigo-100 bg-white shadow-sm transition-all group-hover:bg-indigo-50 group-active:scale-95">
-                  <svg className="h-5 w-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                  </svg>
-                </div>
-                <span className="text-[10px] font-medium text-gray-500 group-hover:text-indigo-600">Печать</span>
+                <svg className="h-5 w-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.75 19.5 8.25 12l7.5-7.5" />
+                </svg>
               </button>
+            </div>
 
-              <button
-                onClick={handleDownloadPdf}
-                className="group flex flex-col items-center gap-0.5 pt-4"
-              >
-                <div className="flex h-10 w-10 items-center justify-center rounded-full border border-indigo-100 bg-white shadow-sm transition-all group-hover:bg-indigo-50 group-active:scale-95">
-                  <svg className="h-5 w-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                  </svg>
-                </div>
-                <span className="text-[10px] font-medium text-gray-500 group-hover:text-indigo-600">Скачать PDF</span>
-              </button>
+            {/* Center: Subject, grade, topic */}
+            <div className="hidden sm:block text-center flex-1 px-4">
+              <div className="text-sm font-medium text-gray-900">
+                {formatSubjectName(worksheetData?.subject || '')}, {worksheetData?.grade} класс
+                {editor.isEditMode && <span className="ml-2 text-indigo-500">(редактирование)</span>}
+              </div>
+              <div className="text-xs text-gray-500 truncate max-w-md mx-auto">{editor.worksheet.topic}</div>
+            </div>
+
+            {/* Right: Action buttons */}
+            <div className="flex items-center gap-4">
+              {/* Edit mode toolbar */}
+              <EditModeToolbar
+                isEditMode={editor.isEditMode}
+                isDirty={editor.isDirty}
+                isSaving={editor.isSaving}
+                error={editor.error}
+                onEdit={editor.enterEditMode}
+                onSave={editor.saveChanges}
+                onCancel={handleCancel}
+              />
+
+              {/* Navigation buttons - only show when not in edit mode */}
+              {!editor.isEditMode && (
+                <>
+                  <button
+                    onClick={() => handleNavigate('/')}
+                    className="group flex flex-col items-center gap-0.5 pt-4"
+                    title="Создать новый материал"
+                  >
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full border border-indigo-100 bg-white shadow-sm transition-all group-hover:bg-indigo-50 group-active:scale-95">
+                      <svg className="h-5 w-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
+                      </svg>
+                    </div>
+                    <span className="text-[10px] font-medium text-gray-500 group-hover:text-indigo-600">Новая генерация</span>
+                  </button>
+
+                  <button
+                    onClick={handlePrint}
+                    className="group flex flex-col items-center gap-0.5 pt-4"
+                    title="Распечатать"
+                  >
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full border border-indigo-100 bg-white shadow-sm transition-all group-hover:bg-indigo-50 group-active:scale-95">
+                      <svg className="h-5 w-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                      </svg>
+                    </div>
+                    <span className="text-[10px] font-medium text-gray-500 group-hover:text-indigo-600">Печать</span>
+                  </button>
+
+                  <button
+                    onClick={handleDownloadPdf}
+                    className="group flex flex-col items-center gap-0.5 pt-4"
+                  >
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full border border-indigo-100 bg-white shadow-sm transition-all group-hover:bg-indigo-50 group-active:scale-95">
+                      <svg className="h-5 w-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                    </div>
+                    <span className="text-[10px] font-medium text-gray-500 group-hover:text-indigo-600">Скачать PDF</span>
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -245,220 +329,18 @@ export default function SavedWorksheetPage() {
       <SidebarNav activePage={activePage} />
 
       <main className="py-12 print:py-0">
-        <div id="worksheet-pdf-root" className="worksheet-pdf-root">
-          <div ref={worksheetRef}>
-            {/* PAGE 1 */}
-            <PageContainer id="page1">
-              {/* HEADER */}
-              <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between border-b-2 border-gray-100 pb-4 gap-4">
-                <div className="flex items-center gap-2 text-indigo-600">
-                  <span className="text-2xl font-bold tracking-tight">УчиОн</span>
-                </div>
-                <div className="text-sm text-gray-500 w-full sm:w-auto sm:min-w-[320px]">
-                  <div className="flex flex-col gap-2 w-full max-w-full">
-                    <div className="flex items-center gap-2 w-full">
-                      <span className="whitespace-nowrap">Имя и фамилия:</span>
-                      <div className="border-b border-gray-300 flex-1 min-w-0"></div>
-                    </div>
-                    <div className="flex items-center gap-2 w-full">
-                      <span className="whitespace-nowrap">Дата:</span>
-                      <div className="border-b border-gray-300 flex-1 min-w-0"></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <h1 className="mb-6 text-center text-3xl font-bold text-gray-900">{worksheet.topic}</h1>
-
-              {/* ASSIGNMENTS */}
-              <section className="flex flex-col">
-                <h2 className="mb-6 flex items-center gap-3 text-xl font-bold text-gray-900 print:hidden">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-white">E</span>
-                  Задания
-                </h2>
-                <h2 className="hidden print:flex mb-4 text-lg font-bold text-gray-900 border-b pb-2 items-center gap-2">
-                  <span className="flex h-6 w-6 items-center justify-center rounded bg-indigo-600 text-white text-xs">E</span>
-                  Задания
-                </h2>
-
-                <div className="flex flex-col gap-6">
-                  {worksheet.assignments.map((task, i) => (
-                    <div key={i} className={`task-block break-inside-avoid ${i === 0 ? 'mt-2' : ''}`}>
-                      <div className="mb-3 text-lg font-medium text-gray-900 leading-tight">
-                        <span className="mr-2 text-indigo-600 print:text-black">{i + 1}.</span>
-                        {task.text}
-                      </div>
-                      {shouldShowAnswerField(task.text) && (
-                        <div className="mt-3 h-48 w-full rounded-lg border-2 border-dashed border-gray-200 bg-gray-50/30 print:border-gray-300 print:h-32"></div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </section>
-            </PageContainer>
-
-            <div className="page-break"></div>
-
-            {/* PAGE 2 */}
-            <PageContainer id="page2">
-              <section className="h-full flex flex-col">
-                <h2 className="mb-6 flex items-center gap-3 text-xl font-bold text-gray-900 print:hidden">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-white">T</span>
-                  Мини-тест
-                </h2>
-                <h2 className="hidden print:flex mb-4 text-lg font-bold text-gray-900 border-b pb-2 items-center gap-2">
-                  <span className="flex h-6 w-6 items-center justify-center rounded bg-indigo-600 text-white text-xs">T</span>
-                  Мини-тест
-                </h2>
-
-                <div className="grid gap-6">
-                  {worksheet.test.map((q, i) => (
-                    <div key={i} className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm break-inside-avoid print:border print:border-gray-300 print:shadow-none print:p-4">
-                      <div className="mb-3 font-medium text-gray-900">{i + 1}. {q.question}</div>
-                      <div className="space-y-2">
-                        {q.options.map((opt, idx) => (
-                          <div key={idx} className="flex items-center gap-3">
-                            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-gray-200 text-xs font-bold text-gray-500">
-                              {String.fromCharCode(65 + idx)}
-                            </div>
-                            <span className="text-gray-700">{opt}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            </PageContainer>
-
-            <div className="page-break"></div>
-
-            {/* PAGE 3 */}
-            <PageContainer id="page3" className="flex flex-col">
-              <section className="mb-8 break-inside-avoid">
-                <div className="rounded-xl bg-gray-50 p-6">
-                  <h3 className="mb-4 font-bold text-gray-900">Oценка урока</h3>
-                  <div className="space-y-3">
-                    <label className="flex items-center gap-3">
-                      <div className="h-5 w-5 rounded border border-gray-300 bg-white" />
-                      <span>Все понял</span>
-                    </label>
-                    <label className="flex items-center gap-3">
-                      <div className="h-5 w-5 rounded border border-gray-300 bg-white" />
-                      <span>Было немного сложно</span>
-                    </label>
-                    <label className="flex items-center gap-3">
-                      <div className="h-5 w-5 rounded border border-gray-300 bg-white" />
-                      <span>Нужна помощь</span>
-                    </label>
-                  </div>
-                </div>
-              </section>
-
-              <section className="break-inside-avoid flex-grow">
-                <div className="rounded-xl bg-gray-50 p-6 h-full min-h-[600px] print:min-h-0">
-                  <h3 className="mb-4 font-bold text-gray-900">Заметки</h3>
-                  <div className="space-y-8">
-                    {Array.from({ length: 14 }).map((_, i) => (
-                      <div key={i} className="border-b border-gray-300" />
-                    ))}
-                  </div>
-                </div>
-              </section>
-            </PageContainer>
-          </div>
-
-          <div className="page-break"></div>
-
-          {/* PAGE 4: ANSWERS */}
-          <PageContainer id="page4">
-            <h2 className="mb-8 text-center text-2xl font-bold text-gray-900">Ответы</h2>
-            <div className="grid gap-8 md:grid-cols-2 answers-grid">
-              <div className="break-inside-avoid">
-                <h3 className="mb-4 text-lg font-bold text-indigo-600">Задания</h3>
-                <ul className="space-y-4">
-                  {worksheet.answers.assignments.map((ans, i) => (
-                    <li key={i} className="rounded-lg bg-gray-50 p-3 text-sm text-gray-800 border border-gray-100 print:border-gray-200">
-                      <span className="font-bold text-indigo-500 mr-2">{i + 1}.</span>
-                      {ans}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <div className="break-inside-avoid">
-                <h3 className="mb-4 text-lg font-bold text-indigo-600">Мини-тест</h3>
-                <ul className="space-y-2">
-                  {worksheet.answers.test.map((ans, i) => (
-                    <li key={i} className="flex items-center gap-3 rounded-lg bg-gray-50 px-4 py-3 text-sm font-medium text-gray-800 border border-gray-100 print:border-gray-200">
-                      <span className="font-bold text-indigo-500">{i + 1}.</span>
-                      <span>{ans}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </PageContainer>
+        <div ref={worksheetRef}>
+          <EditableWorksheetContent
+            worksheet={editor.worksheet}
+            isEditMode={editor.isEditMode}
+            onUpdateAssignment={editor.updateAssignment}
+            onUpdateTestQuestion={editor.updateTestQuestion}
+            onUpdateTestOption={editor.updateTestOption}
+            onUpdateAssignmentAnswer={editor.updateAssignmentAnswer}
+            onUpdateTestAnswer={editor.updateTestAnswer}
+          />
         </div>
       </main>
-
-      <style>{`
-        .worksheet-pdf-root {
-          background: white;
-          padding: 16px 24px;
-          max-width: 800px;
-          margin: 0 auto;
-        }
-
-        @media print {
-          @page { margin: 10mm; size: auto; }
-          body {
-            background: white;
-            margin: 0;
-            padding: 0;
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-          }
-
-          main {
-            padding: 0 !important;
-            margin: 0 !important;
-          }
-
-          .mx-auto.max-w-\\[210mm\\] {
-            max-width: none !important;
-            width: 100% !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            border: none !important;
-            box-shadow: none !important;
-            border-radius: 0 !important;
-          }
-
-          #page1 {
-            padding-top: 0 !important;
-          }
-
-          .page-break { page-break-before: always; }
-
-          .task-block, .card, .exercise, .break-inside-avoid {
-            page-break-inside: avoid !important;
-            break-inside: avoid !important;
-          }
-
-          .task-block {
-             margin-bottom: 12px;
-          }
-
-          .answers-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            column-gap: 8mm;
-            row-gap: 2mm;
-          }
-
-          nav, header, button, .print\\:hidden { display: none !important; }
-        }
-      `}</style>
     </div>
   )
 }
