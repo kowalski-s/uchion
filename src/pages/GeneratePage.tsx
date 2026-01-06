@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { GenerateSchema, GenerateFormValues } from '../lib/schemas'
@@ -13,6 +13,7 @@ import Header from '../components/Header'
 
 export default function GeneratePage() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const saveSession = useSessionStore(s => s.saveSession)
   const setCurrent = useSessionStore(s => s.setCurrent)
   const { user } = useAuth()
@@ -51,6 +52,11 @@ export default function GeneratePage() {
         pdfBase64: worksheet.pdfBase64
       })
       setCurrent(sessionId)
+
+      // Invalidate worksheets queries to trigger refetch in Dashboard
+      console.log('[Frontend] Invalidating worksheets queries after successful generation')
+      queryClient.invalidateQueries({ queryKey: ['worksheets'] })
+
       navigate('/worksheet/' + sessionId)
     },
     onError: () => {

@@ -135,10 +135,18 @@ export default function WorksheetManager() {
   const [renameModal, setRenameModal] = useState<{ id: string; title: string } | null>(null)
 
   // Fetch recent worksheets (limit 5 for dashboard)
-  const { data: worksheets, isLoading: isLoadingWorksheets } = useQuery({
+  const { data: worksheets, isLoading: isLoadingWorksheets, isFetching } = useQuery({
     queryKey: ['worksheets'],
-    queryFn: () => fetchWorksheets({ limit: 5 }),
+    queryFn: () => {
+      console.log('[Frontend] WorksheetManager - fetching worksheets (limit 5)')
+      return fetchWorksheets({ limit: 5 })
+    },
   })
+
+  // Debug logs
+  useEffect(() => {
+    console.log('[Frontend] WorksheetManager - data updated:', { count: worksheets?.length, isFetching })
+  }, [worksheets, isFetching])
 
   // Mutations
   const deleteMutation = useMutation({

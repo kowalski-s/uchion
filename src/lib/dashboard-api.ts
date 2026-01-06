@@ -17,6 +17,8 @@ export async function fetchWorksheets(options?: FetchWorksheetsOptions): Promise
   }
 
   const url = `/api/worksheets${params.toString() ? `?${params}` : ''}`
+  console.log('[Frontend API] Fetching worksheets:', { url, options })
+
   const res = await fetch(url, {
     credentials: 'include',
   })
@@ -29,6 +31,7 @@ export async function fetchWorksheets(options?: FetchWorksheetsOptions): Promise
   }
 
   const data = await res.json()
+  console.log('[Frontend API] Worksheets received:', { count: data.worksheets?.length })
   return data.worksheets
 }
 
