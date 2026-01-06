@@ -46,8 +46,11 @@ export default async function handler(
   let userId: string | null = null
   const token = getTokenFromCookie(req, ACCESS_TOKEN_COOKIE)
 
+  console.log('[AUTH] Token from cookie:', token ? `${token.substring(0, 20)}...` : 'NO TOKEN')
+
   if (token) {
     const payload = verifyAccessToken(token)
+    console.log('[AUTH] Token verification result:', payload ? `userId: ${payload.sub}` : 'INVALID TOKEN')
     if (payload) {
       userId = payload.sub
 
@@ -128,7 +131,9 @@ export default async function handler(
     }
 
     // Decrement limit and save worksheet for authenticated users
+    console.log('[DB] userId before save block:', userId)
     if (userId) {
+      console.log('[DB] Decrementing limit for user:', userId)
       await db
         .update(users)
         .set({
@@ -138,19 +143,23 @@ export default async function handler(
         .where(eq(users.id, userId))
 
       // Save worksheet to database
+      console.log('[DB] About to insert worksheet for user:', userId)
       try {
-        await db.insert(worksheets).values({
+        const insertResult = await db.insert(worksheets).values({
           userId,
           subject: input.subject,
           grade: input.grade,
           topic: input.topic,
           difficulty: 'medium',
           content: JSON.stringify(finalWorksheet),
-        })
+        }).returning({ id: worksheets.id })
+        console.log('[DB] Worksheet saved successfully, id:', insertResult[0]?.id)
       } catch (dbError) {
         // Log database error but don't block worksheet delivery
         console.error('[API] Failed to save worksheet to database:', dbError)
       }
+    } else {
+      console.log('[DB] SKIPPING save - no userId (guest user)')
     }
 
     sendEvent({ type: 'result', data: { worksheet: finalWorksheet } })
