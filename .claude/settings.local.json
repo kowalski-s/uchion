@@ -33,7 +33,9 @@
       "Bash(npm view:*)",
       "Bash(node -e:*)",
       "Bash(npx depcheck:*)",
-      "Bash(npm run smoke:*)"
+      "Bash(npm run smoke:*)",
+      "Bash(cat:*)",
+      "Bash(timeout 10 npx tsx:*)"
     ]
   }
 }
