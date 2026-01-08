@@ -50,7 +50,12 @@ app.use('/api', healthRoutes)
 // ==================== STATIC FILES ====================
 
 // Serve static files from dist folder (production build)
-const distPath = path.join(__dirname, 'dist')
+// In dev (tsx): __dirname is project root, dist is ./dist
+// In prod (compiled): __dirname is dist-server/, dist is ../dist
+const isCompiledServer = __dirname.endsWith('dist-server')
+const distPath = isCompiledServer
+  ? path.join(__dirname, '..', 'dist')
+  : path.join(__dirname, 'dist')
 app.use(express.static(distPath))
 
 // SPA fallback - serve index.html for all non-API routes
