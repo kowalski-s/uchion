@@ -168,7 +168,7 @@ export async function exchangeYandexCode(params: YandexExchangeParams): Promise<
     throw new Error('Failed to exchange authorization code')
   }
 
-  const tokens: YandexTokenResponse = await tokenResponse.json()
+  const tokens = await tokenResponse.json() as YandexTokenResponse
 
   // Get user info
   const userResponse = await fetch('https://login.yandex.ru/info?format=json', {
@@ -182,7 +182,7 @@ export async function exchangeYandexCode(params: YandexExchangeParams): Promise<
     throw new Error('Failed to get user info')
   }
 
-  const userInfo: YandexUserInfo = await userResponse.json()
+  const userInfo = await userResponse.json() as YandexUserInfo
 
   // Yandex provides email in default_email or emails array
   const email = userInfo.default_email || userInfo.emails?.[0]
