@@ -111,8 +111,15 @@ router.post('/', async (req: Request, res: Response) => {
 
     let pdfBase64: string | null = null
     try {
+      console.log('[API] About to call buildPdf...')
+      console.log('[API] Worksheet topic:', worksheet.topic)
+      console.log('[API] Worksheet assignments count:', worksheet.assignments?.length)
       pdfBase64 = await buildPdf(worksheet, input as GeneratePayload)
+      console.log('[API] buildPdf completed, base64 length:', pdfBase64?.length)
     } catch (e) {
+      console.error('[API] PDF generation error:', e)
+      console.error('[API] Error details:', e instanceof Error ? e.message : String(e))
+      console.error('[API] Error stack:', e instanceof Error ? e.stack : 'no stack')
       sendEvent({ type: 'error', code: 'PDF_ERROR', message: 'Ошибка генерации PDF.' })
       res.end()
       return

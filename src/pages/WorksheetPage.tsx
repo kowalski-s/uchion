@@ -137,11 +137,27 @@ export default function WorksheetPage() {
   }
 
   const handleDownloadPdf = async () => {
-    // Use the current worksheet state (with edits if any)
     const currentWorksheet = editor.worksheet
     if (!currentWorksheet) return
+
     try {
-      const blob = await buildWorksheetPdf(currentWorksheet)
+      let blob: Blob
+
+      // If we have server-generated PDF, use it directly
+      if (currentWorksheet.pdfBase64 && currentWorksheet.pdfBase64.length > 0) {
+        console.log('[PDF] Using server-generated PDF, base64 length:', currentWorksheet.pdfBase64.length)
+        const binaryString = atob(currentWorksheet.pdfBase64)
+        const bytes = new Uint8Array(binaryString.length)
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i)
+        }
+        blob = new Blob([bytes], { type: 'application/pdf' })
+      } else {
+        // Fallback to client-side generation (for edited worksheets or if server PDF missing)
+        console.log('[PDF] Falling back to client-side PDF generation')
+        blob = await buildWorksheetPdf(currentWorksheet)
+      }
+
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url

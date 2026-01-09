@@ -121,6 +121,7 @@ export default async function handler(
     try {
       pdfBase64 = await buildPdf(worksheet, input as GeneratePayload)
     } catch (e) {
+      console.error('[API] PDF generation error:', e)
       sendEvent({ type: 'error', code: 'PDF_ERROR', message: 'Ошибка генерации PDF.' })
       res.end()
       return
