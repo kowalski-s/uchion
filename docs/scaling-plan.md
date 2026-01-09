@@ -1,65 +1,140 @@
 # Scaling Plan
 
-## 1. MVP (Текущий этап)
+## 1. Current State (MVP)
 
-### Архитектура
-- **Frontend**: SPA (React/Vite) на Vercel Edge.
-- **Backend**: Serverless Functions.
-- **AI**: Прямой вызов OpenAI (gpt-4o-mini).
-- **State**: Client-side (Zustand + LocalStorage).
-- **Database**: Отсутствует.
+### Architecture
+- **Frontend**: SPA (React/Vite)
+- **Backend**: Express.js server
+- **AI**: Direct OpenAI calls (gpt-5-mini)
+- **Database**: PostgreSQL (Supabase)
+- **Hosting**: VPS via Dokploy
 
-### Ограничения
-- Лимиты Vercel Function Timeout (10-60 сек). Решено через SSE.
-- Отсутствие истории генераций (хранится только в браузере).
-
----
-
-## 2. Этап 1: Persistence & Auth (Q2 2025)
-
-### Цель
-Добавить сохранение истории и личные кабинеты.
-
-### Изменения
-1.  **Database**: Подключение Supabase (PostgreSQL).
-    - Таблицы: `users`, `worksheets`, `generations_log`.
-2.  **Auth**: Custom OAuth 2.0 (Yandex/Telegram).
-3.  **API**: Новые эндпоинты:
-    - `GET /api/worksheets` (список).
-    - `GET /api/worksheets/:id` (детали).
+### Implemented
+- User authentication (Yandex, Telegram OAuth)
+- Worksheet generation with AI
+- PDF generation
+- Personal cabinet (worksheets, folders)
+- Rate limiting (in-memory)
 
 ---
 
-## 3. Этап 2: Performance & Caching (Q3 2025)
+## 2. Phase 1: Performance & Caching (Next)
 
-### Цель
-Снизить расходы на AI и ускорить отдачу.
+### Goal
+Reduce AI costs and speed up delivery.
 
-### Изменения
-1.  **Semantic Caching**:
-    - Перед генерацией ищем похожие темы в Vector Store (Pinecone/pgvector).
-    - Если есть совпадение > 95%, отдаем готовый JSON без вызова LLM.
-2.  **Rate Limiting**:
-    - Redis (Upstash) для ограничения запросов по IP/User ID.
-
----
-
-## 4. Этап 3: Advanced AI (Q4 2025)
-
-### Цель
-Повышение качества контента.
-
-### Изменения
-1.  **Custom Fine-tuning**:
-    - Обучение модели на лучших сгенерированных листах (оцененных учителями).
-2.  **Multi-agent System**:
-    - Разделение на агентов: Методист (структура), Автор (текст), Корректор (валидация).
+### Changes
+1. **Semantic Caching**:
+   - Before generation, search for similar topics in Vector Store
+   - If match > 95%, return cached JSON without LLM call
+2. **Distributed Rate Limiting**:
+   - Redis (Upstash) for request limiting by IP/User ID
+   - Replace in-memory store
+3. **Response Caching**:
+   - Cache popular worksheet templates
+   - CDN for static assets
 
 ---
 
-## 5. Миграция с Vercel (при необходимости)
+## 3. Phase 2: Advanced AI (Later)
 
-Если Serverless станет дорогим:
-1.  **Docker**: Упаковка API в контейнер.
-2.  **Hosting**: Переезд на VPS (Hetzner/DigitalOcean) или Coolify.
-3.  **CDN**: Cloudflare для статики.
+### Goal
+Improve content quality.
+
+### Changes
+1. **Custom Fine-tuning**:
+   - Train model on best generated worksheets (teacher-rated)
+2. **Multi-agent System**:
+   - Split into agents: Methodologist (structure), Author (text), Corrector (validation)
+3. **Multiple AI Providers**:
+   - Fallback to alternative models (YandexGPT)
+   - Cost optimization routing
+
+---
+
+## 4. Phase 3: Horizontal Scaling (If Needed)
+
+### When
+- >1000 concurrent users
+- Response times degrading
+- Single server at capacity
+
+### Changes
+1. **Load Balancing**:
+   - Multiple Express instances behind nginx/Traefik
+   - Sticky sessions for SSE connections
+2. **Queue System**:
+   - Background job processing for AI generation
+   - BullMQ or similar
+3. **Database Scaling**:
+   - Connection pooling (pgBouncer)
+   - Read replicas if needed
+
+---
+
+## 5. Infrastructure Options
+
+### Current: Dokploy on VPS
+- Simple, cost-effective
+- Good for <500 users
+- Easy deployment via Git
+
+### Future Options
+1. **Kubernetes (K8s)**:
+   - Auto-scaling
+   - Complex but powerful
+2. **Managed Services**:
+   - Render, Railway, Fly.io
+   - Simpler than K8s, more expensive
+
+---
+
+## 6. Monitoring & Observability
+
+### Current
+- Health check endpoint
+- Console logging
+- Dokploy dashboard
+
+### Planned
+1. **Metrics**:
+   - Prometheus + Grafana
+   - Request latency, error rates
+2. **Alerting**:
+   - PagerDuty or similar
+   - Alerts for: high error rate, slow responses, AI failures
+3. **Logging**:
+   - Structured logs (JSON)
+   - Log aggregation (Loki, Elasticsearch)
+
+---
+
+## 7. Cost Optimization
+
+### AI Costs
+- Monitor token usage per generation
+- Set `max_output_tokens` limits
+- Cache common topics
+- Consider cheaper models for validation
+
+### Infrastructure Costs
+- Right-size VPS based on usage
+- Use CDN for static assets
+- Optimize Docker images
+
+---
+
+## 8. Migration Checklist
+
+### Before Scaling
+- [ ] Add Redis for rate limiting
+- [ ] Implement semantic caching
+- [ ] Add proper monitoring
+- [ ] Load test current setup
+- [ ] Document runbooks
+
+### During Scaling
+- [ ] Zero-downtime deployment
+- [ ] Database migration plan
+- [ ] Rollback procedures
+- [ ] User communication plan

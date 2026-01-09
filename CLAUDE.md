@@ -12,22 +12,33 @@ Uchion is an AI-powered worksheet generator for elementary school (grades 1-4) i
 
 ### Local Development
 ```bash
-npm run dev              # Start Vite dev server (frontend only)
-vercel dev              # Run full stack locally (frontend + serverless functions)
+npm run dev              # Start both frontend (Vite) and backend (Express) servers
+npm run dev:frontend     # Start Vite dev server only (port 5173)
+npm run dev:server       # Start Express API server only (port 3000)
 ```
 
-**Important**: Use `vercel dev` for testing API endpoints locally. The Vite dev server proxies `/api` to `localhost:3000`.
+**Important**: Use `npm run dev` for full-stack development. Vite proxies `/api` requests to the Express server on `localhost:3000`.
 
 ### Testing
 ```bash
-npm run smoke           # Run smoke tests against all subject/grade combinations
-SMOKE_REAL_AI=true npm run smoke  # Run smoke tests with real OpenAI (costs money)
+npm run smoke                     # Run smoke tests (uses DummyProvider)
+SMOKE_REAL_AI=true npm run smoke  # Run with real OpenAI (costs money)
+npm run test                      # Run unit tests (Vitest)
+npm run test:e2e                  # Run E2E tests (Playwright)
 ```
 
-### Build & Preview
+### Build & Production
 ```bash
-npm run build           # Production build
-npm run preview         # Preview production build
+npm run build            # Build frontend (Vite) + backend (TypeScript)
+npm run start            # Start production server (node dist-server/server.js)
+```
+
+### Database
+```bash
+npm run db:generate      # Generate Drizzle migrations
+npm run db:migrate       # Run migrations
+npm run db:push          # Push schema to database
+npm run db:studio        # Open Drizzle Studio
 ```
 
 ## Architecture
@@ -37,27 +48,30 @@ npm run preview         # Preview production build
   - SPA with React Router
   - State: Zustand (sessions) + React Query (async)
   - Forms: React Hook Form + Zod validation
-- **Backend**: Vercel Serverless Functions (Node.js)
-  - Single endpoint: `POST /api/generate`
-  - Responds via Server-Sent Events (SSE) for progress streaming
-- **Shared Layer**: `shared/types.ts` - Single source of truth for types/schemas used by both client and server
+- **Backend**: Express.js (Node.js)
+  - RESTful API with SSE for progress streaming
+  - Authentication: Custom OAuth 2.0 (Yandex, Telegram)
+  - Database: PostgreSQL with Drizzle ORM
+- **Shared Layer**: `shared/` - Single source of truth for types/schemas
 
 ### Key Directories
 ```
-/api                    # Serverless functions (backend)
-  /_lib                # Backend utilities
+/server                 # Express server
+  /routes              # API route handlers
+  /middleware          # Auth, rate-limit, cookies
+/api                   # Legacy Vercel functions (being deprecated)
+  /_lib                # Backend utilities (AI, PDF, auth)
     /ai                # AI-specific modules (prompts, schema, validator)
-    ai-provider.ts     # AI provider abstraction (OpenAI vs Dummy)
-    pdf.ts             # Server-side PDF generation (pdfkit)
-  generate.ts          # Main API endpoint
+    /auth              # Authentication (tokens, cookies, OAuth)
 /src                   # Frontend React app
   /components          # UI components
-  /pages               # React Router pages (GeneratePage, WorksheetPage)
-  /lib                 # Frontend utilities (API client, schemas, pdf-lib)
+  /pages               # React Router pages
+  /lib                 # Frontend utilities
   /store               # Zustand state management
 /shared                # Shared types between frontend/backend
+/db                    # Database schema and migrations
 /docs                  # Architecture documentation
-/scripts               # Testing scripts (smoke tests, PDF dumps)
+/scripts               # Testing scripts
 ```
 
 ## AI Generation Flow
@@ -93,29 +107,72 @@ The system implements a **two-phase generation-validation loop**:
 
 ### Development (.env.local)
 ```bash
+# Database
+DATABASE_URL=postgresql://user:password@host:5432/database
+
+# AI Provider
 AI_PROVIDER=dummy           # Use 'dummy' for local dev (free, no API calls)
 # OPENAI_API_KEY=xxx        # Not needed if using dummy provider
+
+# Auth
+AUTH_SECRET=your-dev-secret-min-32-chars  # JWT signing secret
+
+# OAuth (optional for local dev)
+YANDEX_CLIENT_ID=xxx
+YANDEX_CLIENT_SECRET=xxx
+TELEGRAM_BOT_TOKEN=xxx
+TELEGRAM_BOT_USERNAME=xxx
+VITE_TELEGRAM_BOT_USERNAME=xxx
 ```
 
-### Production (Vercel)
+### Production (Dokploy)
 ```bash
-AI_PROVIDER=openai          # Required for production
-OPENAI_API_KEY=xxx          # Required for production
-UCHION_VECTOR_STORE_ID=xxx  # Optional: enables RAG context retrieval
+# Database
+DATABASE_URL=postgresql://...
+
+# AI Provider
+AI_PROVIDER=openai
+OPENAI_API_KEY=sk-...
+UCHION_VECTOR_STORE_ID=vs_...  # Optional: enables RAG context
+
+# Auth (use different secret than dev!)
+AUTH_SECRET=production-secret-min-32-chars
+
+# OAuth
+YANDEX_CLIENT_ID=xxx
+YANDEX_CLIENT_SECRET=xxx
+TELEGRAM_BOT_TOKEN=xxx
+TELEGRAM_BOT_USERNAME=xxx
+VITE_TELEGRAM_BOT_USERNAME=xxx
 ```
 
 **Provider Selection Logic** (`api/_lib/ai-provider.ts`):
 - Uses `OpenAIProvider` if `NODE_ENV=production` AND `AI_PROVIDER=openai` AND `OPENAI_API_KEY` is set
 - Otherwise uses `DummyProvider` (returns hardcoded math worksheet)
 
+## Authentication
+
+Custom OAuth 2.0 implementation with:
+- **Yandex OAuth** - Primary login method
+- **Telegram Login Widget** - Secondary login method
+- **JWT tokens** - Access (1h) + Refresh (7d) with rotation
+- **httpOnly cookies** - Secure token storage
+- **Rate limiting** - In-memory (Redis planned)
+
+Key files:
+- `api/_lib/auth/tokens.ts` - JWT signing/verification
+- `api/_lib/auth/oauth.ts` - PKCE, state validation
+- `server/middleware/auth.ts` - Route protection
+- `server/routes/auth.ts` - Auth endpoints
+
 ## Important Patterns
 
 ### Type Safety (Shared Layer)
-All data structures are defined in `shared/types.ts` with Zod schemas. Both frontend and backend import from this single source to maintain contract consistency.
+All data structures are defined with Zod schemas. Both frontend and backend import from `shared/` to maintain contract consistency.
 
-**Key types**:
-- `WorksheetJson` - Internal AI response format (strict structured output)
-- `Worksheet` - Final format sent to client (includes PDF)
+**Key types** (`shared/worksheet.ts`):
+- `WorksheetJson` - Internal AI response format
+- `Worksheet` - Final format sent to client
 - `GeneratePayload` - API request params
 
 ### SSE Progress Streaming
@@ -124,81 +181,80 @@ The `/api/generate` endpoint uses Server-Sent Events to stream progress:
 - Success: `{ type: 'result', data: { worksheet } }`
 - Error: `{ type: 'error', code, message }`
 
-Frontend consumes via `EventSource` in `src/lib/api.ts`.
+### Protected Routes
+Use middleware from `server/middleware/auth.ts`:
+```typescript
+import { withAuth, withAdminAuth, withOptionalAuth } from '../middleware/auth.js'
 
-### AI Prompts Configuration
-Subject-specific prompts are stored in `api/_lib/ai/prompts.ts` under `SUBJECT_CONFIG`:
-- `RUSSIAN_SYSTEM_PROMPT` - Focuses on FGOS orthography, word transfer rules
-- `MATH_SYSTEM_PROMPT` - Grade-appropriate arithmetic, word problems, geometry
+// Requires authentication
+router.get('/protected', withAuth, (req, res) => {
+  const userId = req.user!.id
+})
 
-When modifying prompts, ensure they:
-1. Specify exact output structure (7 assignments, 10 tests)
-2. Enforce age-appropriate content per grade level
-3. Include FGOS compliance requirements
+// Requires admin role
+router.get('/admin', withAdminAuth, (req, res) => { })
 
-### PDF Generation Duality
-- **Server** (`api/_lib/pdf.ts`): Production-quality PDF using `pdfkit`
-- **Client** (`src/lib/pdf-client.ts`): Backup/preview using `pdf-lib`
-
-Most users will only interact with server-generated PDFs.
+// Optional auth (userId may be undefined)
+router.get('/public', withOptionalAuth, (req, res) => { })
+```
 
 ## Testing Strategy
 
 ### Smoke Tests (`scripts/smoke-generate.ts`)
 - Tests all combinations: 2 subjects × 4 grades = 8 test cases
-- Validates:
-  - Worksheet schema compliance
-  - Correct counts (7 assignments, 10 tests)
-  - Non-empty PDF generation
-- Run with `npm run smoke` (uses DummyProvider, fast)
-- Run with `SMOKE_REAL_AI=true npm run smoke` (uses OpenAI, costs money, slower)
+- Validates worksheet schema compliance, counts, PDF generation
+- Run with `npm run smoke` (DummyProvider) or `SMOKE_REAL_AI=true npm run smoke` (OpenAI)
 
-**When to run smoke tests**:
-- After modifying AI provider logic
-- After changing worksheet schemas
-- Before deploying to production
+### Unit Tests (Vitest)
+- `npm run test` - Watch mode
+- `npm run test:run` - Single run
+- `npm run test:coverage` - With coverage
 
-### Manual PDF Testing (`scripts/dump-pdf.ts`)
-Visual inspection of PDF output quality.
+### E2E Tests (Playwright)
+- `npm run test:e2e` - Headless
+- `npm run test:e2e:ui` - Interactive UI
 
 ## Common Modifications
 
 ### Adding a New Subject
 1. Add subject to `SubjectSchema` in `shared/types.ts`
-2. Create new system prompt in `api/_lib/ai/prompts.ts` under `SUBJECT_CONFIG`
-3. Update frontend subject selector in `src/pages/GeneratePage.tsx`
-4. Add test cases to smoke tests
+2. Create system prompt in `api/_lib/ai/prompts.ts` under `SUBJECT_CONFIG`
+3. Update frontend subject selector
+4. Add smoke test cases
 
 ### Modifying Worksheet Structure
-1. Update `WORKSHEET_JSON_SCHEMA` in `api/_lib/ai/schema.ts` (AI output format)
-2. Update corresponding types in `shared/types.ts`
-3. Update parser in `api/_lib/ai-provider.ts` (`parseWorksheetText` method)
-4. Update PDF layout in `api/_lib/pdf.ts` (`buildPdf` function)
-5. Update validation logic in `api/_lib/ai/validator.ts`
-
-### Adjusting Validation Strictness
-Modify validation prompts and scoring in `api/_lib/ai/validator.ts`:
-- `validateWorksheet` - Main validation function
-- `analyzeValidationIssues` - Categorizes issues by type
-- `regenerateProblemBlocks` - Handles self-correction
+1. Update `WORKSHEET_JSON_SCHEMA` in `api/_lib/ai/schema.ts`
+2. Update types in `shared/types.ts`
+3. Update parser in `api/_lib/ai-provider.ts`
+4. Update PDF layout in `api/_lib/pdf.ts`
+5. Update validation in `api/_lib/ai/validator.ts`
 
 ## Deployment
 
-Deployed on Vercel with automatic deploys from `main` branch.
+### Production Setup (Dokploy)
+1. Build: `npm run build`
+2. Start: `npm run start` (runs `node dist-server/server.js`)
+3. Port: `3000` (configurable via `PORT` env var)
+4. Health check: `GET /api/health`
 
-**Vercel Configuration** (`vercel.json`):
-- API routes: `/api/*` → serverless functions
-- SPA fallback: `/*` → `index.html`
-
-**Build Output**:
-- Frontend: Static files in `dist/`
-- Functions: `api/*.ts` compiled to Node.js functions
+### Docker
+```dockerfile
+FROM node:20-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+COPY dist/ ./dist/
+COPY dist-server/ ./dist-server/
+COPY public/ ./public/
+EXPOSE 3000
+CMD ["node", "dist-server/server.js"]
+```
 
 ## Critical Notes
 
-1. **Never commit API keys** - Use environment variables via Vercel dashboard
-2. **Validate all AI outputs** - The validation loop is critical for quality control
-3. **Grade-level accuracy matters** - Content must match Russian FGOS standards for elementary school
-4. **SSE connections have timeouts** - Vercel Functions have 10s timeout on Hobby plan, 60s on Pro
+1. **Never commit API keys** - Use environment variables via Dokploy
+2. **Different AUTH_SECRET for dev/prod** - Prevents token cross-environment usage
+3. **Validate all AI outputs** - The validation loop is critical for quality
+4. **Grade-level accuracy matters** - Content must match Russian FGOS standards
 5. **Token limits** - `max_output_tokens: 6000` prevents cost overruns
 6. **Dummy provider** - Always use for local dev to avoid API costs

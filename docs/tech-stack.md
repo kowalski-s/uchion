@@ -2,43 +2,88 @@
 
 ## 1. Frontend
 
-- **Framework**: React 18 (SPA).
-- **Language**: TypeScript 5.
-- **Build Tool**: Vite.
-- **Routing**: React Router 6.
-- **State Management**: Zustand (Global Store), React Query (Async State).
-- **Styling**: Tailwind CSS + shadcn/ui.
-- **Forms**: React Hook Form + Zod.
-- **PDF Generation (Client)**: `pdf-lib` (для быстрого превью/фолбека).
+- **Framework**: React 18 (SPA)
+- **Language**: TypeScript 5
+- **Build Tool**: Vite 7
+- **Routing**: React Router 6
+- **State Management**: Zustand (global store), React Query (async state)
+- **Styling**: Tailwind CSS + Headless UI
+- **Forms**: React Hook Form + Zod
+- **PDF Generation (Client)**: `pdf-lib` (fallback/preview)
 
 ## 2. Backend
 
-- **Runtime**: Node.js 18+ (Vercel Serverless Functions).
-- **API Style**: REST (JSON) + Server-Sent Events (SSE).
-- **Validation**: Zod (Shared Schema).
-- **PDF Generation (Server)**: `pdfkit` (для продакшн-качества).
+- **Runtime**: Node.js 20+
+- **Framework**: Express.js 5
+- **Language**: TypeScript
+- **API Style**: REST (JSON) + Server-Sent Events (SSE)
+- **Validation**: Zod (shared schemas)
+- **PDF Generation (Server)**: `pdfkit`
+- **Database**: PostgreSQL + Drizzle ORM
 
-## 3. AI & ML
+## 3. Authentication
 
-- **Generation Model**: `gpt-5-mini`.
-- **Validation Model**: `gpt-4.1-mini`.
-- **Integration**: OpenAI Node.js SDK.
-- **Structured Output**: Zod Schemas.
-- **Validator**: Самописный модуль валидации на базе LLM.
+- **Strategy**: Custom OAuth 2.0
+- **Providers**: Yandex OAuth, Telegram Login Widget
+- **Tokens**: JWT (access 1h + refresh 7d with rotation)
+- **Security**: PKCE, timing-safe comparisons, httpOnly cookies
 
-## 4. Shared Layer
+## 4. AI & ML
+
+- **Generation Model**: `gpt-5-mini`
+- **Validation Model**: `gpt-4.1-mini`
+- **Integration**: OpenAI Node.js SDK
+- **Structured Output**: Zod schemas
+- **Validator**: Custom LLM-based validation module
+
+## 5. Shared Layer
 
 - **Path**: `shared/`
-- **Content**: Zod схемы, TypeScript интерфейсы.
-- **Goal**: Гарантия совместимости клиент-сервер.
+- **Content**: Zod schemas, TypeScript interfaces
+- **Goal**: Guarantee client-server compatibility
 
-## 5. Инфраструктура и QA
+## 6. Database
 
-- **Hosting**: Vercel (Frontend + Functions).
+- **Database**: PostgreSQL
+- **ORM**: Drizzle ORM
+- **Hosting**: Supabase (current) or self-hosted
+- **Migrations**: `drizzle-kit`
+
+## 7. Infrastructure & QA
+
+- **Hosting**: Self-hosted VPS via Dokploy
 - **Local Dev**:
-  - `npm run dev` (Vite) + `vercel dev` (Functions).
-  - Proxy: Vite proxy `/api` → `localhost:3000`.
+  - `npm run dev` (Vite + Express concurrent)
+  - Proxy: Vite proxies `/api` → `localhost:3000`
 - **Testing**:
-  - Smoke Tests: `tsx scripts/smoke-generate.ts`.
-  - PDF Visual Tests: `scripts/dump-pdf.ts`.
-- **Linting**: ESLint + Prettier.
+  - Unit: Vitest
+  - E2E: Playwright
+  - Smoke: `tsx scripts/smoke-generate.ts`
+- **Linting**: ESLint + Prettier
+
+## 8. Key Dependencies
+
+### Production
+```
+express           # Web framework
+drizzle-orm       # Database ORM
+openai            # AI integration
+pdf-lib           # Client PDF
+pdfkit (planned)  # Server PDF (via puppeteer-core)
+zod               # Validation
+react             # UI framework
+zustand           # State management
+@tanstack/react-query  # Async state
+react-hook-form   # Form handling
+```
+
+### Development
+```
+vite              # Frontend build
+typescript        # Type checking
+vitest            # Unit tests
+playwright        # E2E tests
+drizzle-kit       # DB migrations
+tsx               # TypeScript execution
+concurrently      # Parallel processes
+```

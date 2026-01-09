@@ -95,7 +95,7 @@ VITE_TELEGRAM_BOT_USERNAME=your-bot-username
   - User agent
   - Success status
   - Error message (if applicable)
-- Current implementation: Console logs (visible in Vercel logs)
+- Current implementation: Console logs (visible in server logs)
 - Production TODO: Add database storage + SIEM integration
 
 **3. Enhanced OAuth State Validation**
@@ -139,7 +139,7 @@ VITE_TELEGRAM_BOT_USERNAME=your-bot-username
 ### Test Scenarios
 
 #### 1. Telegram Login - Happy Path ✅
-1. Start dev server: `vercel dev` or `npm run dev`
+1. Start dev server: `npm run dev`
 2. Navigate to `/login`
 3. Click "Войти через Telegram" button
 4. Authorize in Telegram app
@@ -213,10 +213,8 @@ LIMIT 10;
 
 ### Log Verification
 
-**Check Vercel logs for audit events:**
-```bash
-vercel logs
-```
+**Check server logs for audit events:**
+Look in your server console or Dokploy logs for:
 
 **Look for:**
 - `[AUDIT] auth.login.success` - Successful logins
@@ -268,7 +266,7 @@ If Telegram Login has issues:
    - Enable admin queries
 
 2. **Distributed Rate Limiting**
-   - Migrate to Upstash Redis or Vercel KV
+   - Migrate to Upstash Redis or self-hosted Redis
    - Share limits across multiple instances
 
 3. **SIEM Integration**
@@ -288,7 +286,7 @@ If Telegram Login has issues:
 - **Audit Logging**: Console.log, no database writes yet
 - **State Validation**: Simple timestamp check, negligible impact
 
-**Vercel Function Execution Times:**
+**Typical Execution Times:**
 - Telegram callback: ~200-400ms (includes DB query + crypto)
 - Yandex OAuth callback: ~300-500ms (includes external API call)
 
@@ -306,7 +304,7 @@ This migration ensures compliance with:
 ## Support
 
 For issues or questions:
-1. Check Vercel logs: `vercel logs`
+1. Check server logs (Dokploy dashboard or container logs)
 2. Review database state (see SQL queries above)
 3. Verify environment variables are set correctly
 4. Check Telegram bot configuration via @BotFather

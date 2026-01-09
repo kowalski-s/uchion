@@ -1,221 +1,275 @@
-# NextAuth.js Setup Guide
+# Authentication Setup Guide
 
-## Установка завершена
+## Overview
 
-NextAuth.js настроен для работы с Vercel Functions + Drizzle ORM + Supabase PostgreSQL.
+Uchion uses a custom OAuth 2.0 implementation with JWT tokens. This guide covers setup for development and production.
 
-## Файлы конфигурации
+## Quick Start
 
-- `api/_lib/auth/adapter.ts` - Drizzle адаптер для NextAuth
-- `api/_lib/auth/config.ts` - Конфигурация NextAuth с providers
-- `api/auth/[...nextauth].ts` - Vercel Function для обработки auth routes
+### 1. Copy environment example
 
-## Providers
+```bash
+cp .env.example .env.local
+```
 
-Настроены три способа авторизации:
-
-1. **Email/Password (Credentials)** - встроенная авторизация
-2. **Yandex OAuth** - авторизация через Яндекс
-3. **Telegram Login** - авторизация через Telegram
-
-## Переменные окружения
-
-### Обязательные
+### 2. Configure required variables
 
 ```bash
 # Database
 DATABASE_URL=postgresql://user:password@host:5432/database
 
-# NextAuth
-NEXTAUTH_URL=http://localhost:3000
-NEXTAUTH_SECRET=<generate with: openssl rand -base64 32>
+# Auth Secret (generate with: openssl rand -base64 32)
+AUTH_SECRET=your-secret-minimum-32-characters
+
+# OAuth Providers (optional for local dev)
+YANDEX_CLIENT_ID=...
+YANDEX_CLIENT_SECRET=...
+TELEGRAM_BOT_TOKEN=...
+TELEGRAM_BOT_USERNAME=...
+VITE_TELEGRAM_BOT_USERNAME=...
 ```
 
-### OAuth Providers (опциональные)
+### 3. Apply database migrations
 
 ```bash
-# Yandex OAuth
-YANDEX_CLIENT_ID=your-yandex-client-id
-YANDEX_CLIENT_SECRET=your-yandex-client-secret
-
-# Telegram Login
-TELEGRAM_BOT_TOKEN=your-telegram-bot-token
-TELEGRAM_BOT_USERNAME=your-telegram-bot-username
+npm run db:push
 ```
 
-## Настройка OAuth Providers
+### 4. Start development
+
+```bash
+npm run dev
+```
+
+---
+
+## Setting Up OAuth Providers
 
 ### Yandex OAuth
 
-1. Перейдите в [Yandex OAuth](https://oauth.yandex.ru/)
-2. Создайте новое приложение
-3. Выберите необходимые права доступа (минимум: email, имя)
-4. Добавьте Callback URI:
-   - Development: `http://localhost:3000/api/auth/callback/yandex`
-   - Production: `https://yourdomain.com/api/auth/callback/yandex`
-5. Скопируйте ID приложения и Пароль приложения в `.env`
+1. Go to [Yandex OAuth](https://oauth.yandex.ru/)
+2. Create new application
+3. Select required permissions:
+   - `login:email` - User email
+   - `login:info` - User name
+4. Add Callback URIs:
+   - Development: `http://localhost:5173/api/auth/yandex/callback`
+   - Production: `https://yourdomain.com/api/auth/yandex/callback`
+5. Copy Client ID and Client Secret to `.env.local`
 
-### Telegram Login
+```bash
+YANDEX_CLIENT_ID=your-client-id
+YANDEX_CLIENT_SECRET=your-client-secret
+```
 
-1. Создайте бота через [@BotFather](https://t.me/BotFather) в Telegram
-2. Отправьте команду `/newbot` и следуйте инструкциям
-3. Получите токен бота и сохраните его в `TELEGRAM_BOT_TOKEN`
-4. Установите домен для виджета: `/setdomain` → введите ваш домен
-5. Сохраните username бота (без @) в `TELEGRAM_BOT_USERNAME`
+### Telegram Login Widget
 
-## Генерация NEXTAUTH_SECRET
+1. Create a bot via [@BotFather](https://t.me/BotFather)
+2. Send `/newbot` and follow instructions
+3. Get bot token and save to `TELEGRAM_BOT_TOKEN`
+4. Set domain for widget: `/setdomain` → enter your domain
+5. Save bot username (without @) to `TELEGRAM_BOT_USERNAME`
+
+```bash
+TELEGRAM_BOT_TOKEN=123456789:ABC-DEF...
+TELEGRAM_BOT_USERNAME=YourBotName
+VITE_TELEGRAM_BOT_USERNAME=YourBotName  # For frontend widget
+```
+
+---
+
+## Generating AUTH_SECRET
 
 ```bash
 # Linux/Mac
 openssl rand -base64 32
 
 # Windows (PowerShell)
-[Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Maximum 256 }))
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 ```
+
+**Important**: Use different secrets for development and production!
+
+---
 
 ## API Endpoints
 
-После настройки доступны следующие endpoints:
+### Authentication Flow
 
-- `POST /api/auth/signin` - Вход
-- `POST /api/auth/signout` - Выход
-- `GET /api/auth/session` - Получить текущую сессию
-- `GET /api/auth/csrf` - CSRF token
-- `GET /api/auth/providers` - Список доступных providers
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/auth/yandex/redirect` | GET | Start Yandex OAuth flow |
+| `/api/auth/yandex/callback` | GET | Yandex OAuth callback |
+| `/api/auth/telegram/callback` | GET | Telegram login callback |
+| `/api/auth/logout` | POST | Logout (revokes tokens) |
+| `/api/auth/refresh` | POST | Refresh access token |
+| `/api/auth/me` | GET | Get current user info |
 
-### Авторизация через провайдеры
+### Testing Auth
 
-- `GET /api/auth/signin/yandex` - Вход через Яндекс
-- `GET /api/auth/telegram/callback` - Вход через Telegram
-- `POST /api/auth/signin/credentials` - Вход через Email/Password
+```bash
+# Check health
+curl http://localhost:3000/api/health
 
-## Middleware для защиты API
-
-Используйте `withAuth` или `withAdminAuth` для защиты API routes:
-
-```typescript
-import { withAuth } from './_lib/auth'
-
-export default withAuth(async (req, res, userId) => {
-  // userId автоматически передается из сессии
-  // Пользователь уже аутентифицирован
-
-  return res.status(200).json({ message: 'Protected route', userId })
-})
+# Check auth (should return 401)
+curl http://localhost:3000/api/auth/me
 ```
 
-Для admin-only routes:
+---
+
+## Protecting Routes
+
+### Backend (Express)
 
 ```typescript
-import { withAdminAuth } from './_lib/auth'
+import { Router } from 'express'
+import { withAuth, withAdminAuth, withOptionalAuth } from '../middleware/auth.js'
 
-export default withAdminAuth(async (req, res, userId) => {
-  // Только пользователи с role='admin' могут получить доступ
-  return res.status(200).json({ message: 'Admin only route' })
+const router = Router()
+
+// Requires authentication
+router.get('/protected', withAuth, (req, res) => {
+  const user = req.user // { id, email, role }
+  res.json({ userId: user.id })
+})
+
+// Requires admin role
+router.get('/admin-only', withAdminAuth, (req, res) => {
+  res.json({ message: 'Admin access granted' })
+})
+
+// Optional auth (guests allowed)
+router.get('/public', withOptionalAuth, (req, res) => {
+  if (req.user) {
+    res.json({ greeting: `Hello, ${req.user.email}` })
+  } else {
+    res.json({ greeting: 'Hello, guest' })
+  }
 })
 ```
-
-## Использование в коде
 
 ### Frontend (React)
 
-Установите клиент NextAuth:
-
-```bash
-npm install next-auth
-```
-
-Используйте в компонентах:
-
-```tsx
-import { signIn, signOut, useSession } from 'next-auth/react'
-
-function LoginButton() {
-  const { data: session } = useSession()
-
-  if (session) {
-    return (
-      <button onClick={() => signOut()}>
-        Sign out {session.user?.email}
-      </button>
-    )
-  }
-
-  return <button onClick={() => signIn()}>Sign in</button>
-}
-```
-
-### Backend (API)
-
-Получение сессии в Vercel Function:
-
 ```typescript
-import { getServerSession } from 'next-auth/next'
-import { authOptions } from './_lib/auth/config'
+// src/lib/api.ts
+export async function fetchWithAuth(url: string, options: RequestInit = {}) {
+  const response = await fetch(url, {
+    ...options,
+    credentials: 'include', // Important: send cookies
+  })
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const session = await getServerSession(req, res, authOptions)
-
-  if (!session) {
-    return res.status(401).json({ error: 'Unauthorized' })
+  if (response.status === 401) {
+    // Token expired, try refresh
+    const refreshed = await refreshToken()
+    if (refreshed) {
+      return fetch(url, { ...options, credentials: 'include' })
+    }
+    // Redirect to login
+    window.location.href = '/'
   }
 
-  // User is authenticated
-  const userId = (session.user as any).id
-  // ...
+  return response
 }
 ```
 
-## Миграция базы данных
+---
 
-Схема БД уже содержит необходимые таблицы NextAuth:
+## Security Features
 
-- `users` - пользователи
-- `accounts` - OAuth аккаунты
-- `sessions` - сессии
-- `verification_tokens` - токены верификации
+### Token Configuration
+- **Access Token**: 1 hour lifetime, httpOnly cookie
+- **Refresh Token**: 7 days lifetime, rotated on each use
+- **Cookie Settings**: Secure (prod), SameSite=Lax, httpOnly
 
-Для применения миграций:
+### OAuth Security
+- **PKCE**: Code challenge/verifier for Yandex OAuth
+- **State Validation**: Timestamped state with timing-safe comparison
+- **Signature Verification**: HMAC-SHA256 for Telegram data
 
-```bash
-npm run db:push
+### Rate Limiting
+| Endpoint | Limit |
+|----------|-------|
+| OAuth redirect | 20/10min |
+| OAuth callback | 10/5min |
+| Token refresh | 10/1min |
+| `/api/auth/me` | 60/1min |
+
+---
+
+## Database Schema
+
+### users table
+```sql
+id          UUID PRIMARY KEY
+email       VARCHAR UNIQUE
+name        VARCHAR
+role        VARCHAR DEFAULT 'user'  -- 'user' or 'admin'
+provider    VARCHAR                  -- 'yandex' or 'telegram'
+providerId  VARCHAR
+createdAt   TIMESTAMP
+updatedAt   TIMESTAMP
+deletedAt   TIMESTAMP               -- Soft delete
 ```
 
-## Безопасность
+### refresh_tokens table
+```sql
+id          UUID PRIMARY KEY
+userId      UUID REFERENCES users
+jti         VARCHAR UNIQUE          -- Token ID
+expiresAt   TIMESTAMP
+revokedAt   TIMESTAMP               -- For revocation
+createdAt   TIMESTAMP
+```
 
-1. **НИКОГДА не коммитьте `.env`** с реальными ключами
-2. **Используйте HTTPS в продакшене** для всех auth endpoints
-3. **Регулярно ротируйте `NEXTAUTH_SECRET`**
-4. **Проверяйте redirect URLs** в OAuth провайдерах
-5. **Используйте сильные пароли** для базы данных
+---
 
 ## Troubleshooting
 
-### "NEXTAUTH_URL is not set"
+### "AUTH_SECRET must be at least 32 characters"
 
-Убедитесь, что переменная `NEXTAUTH_URL` установлена в `.env`:
-
+Generate a proper secret:
 ```bash
-NEXTAUTH_URL=http://localhost:3000
+openssl rand -base64 32
 ```
-
-### "Database connection error"
-
-Проверьте:
-1. `DATABASE_URL` корректен
-2. База данных доступна
-3. Миграции применены (`npm run db:push`)
 
 ### OAuth redirect mismatch
 
-Убедитесь, что redirect URIs в OAuth провайдере совпадают с:
-- Development: `http://localhost:3000/api/auth/callback/{provider}`
-- Production: `https://yourdomain.com/api/auth/callback/{provider}`
+Ensure callback URLs match exactly:
+- Development: `http://localhost:5173/api/auth/{provider}/callback`
+- Production: `https://yourdomain.com/api/auth/{provider}/callback`
 
-## Дальнейшие шаги
+### Cookies not being set
 
-1. Настройте фронтенд компоненты для входа/регистрации
-2. Добавьте middleware для защиты API routes
-3. Реализуйте email-верификацию
-4. Добавьте функционал "Забыли пароль"
-5. Настройте кастомные страницы входа/регистрации
+Check:
+1. Using `credentials: 'include'` in fetch requests
+2. Same domain for frontend and API
+3. HTTPS in production
+
+### Token expired errors
+
+The frontend should automatically:
+1. Catch 401 responses
+2. Call `/api/auth/refresh`
+3. Retry the original request
+
+---
+
+## File Structure
+
+```
+server/
+├── routes/
+│   └── auth.ts              # All auth endpoints
+└── middleware/
+    ├── auth.ts              # withAuth, withAdminAuth
+    ├── cookies.ts           # Cookie configuration
+    └── rate-limit.ts        # Rate limiting
+
+api/_lib/auth/
+├── tokens.ts                # JWT creation/verification
+├── oauth.ts                 # PKCE, state helpers
+├── cookies.ts               # Cookie settings
+├── rate-limit.ts            # Rate limit configuration
+├── audit-log.ts             # Security event logging
+└── middleware.ts            # Legacy middleware (Vercel)
+```

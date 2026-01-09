@@ -1,90 +1,124 @@
 # Development Setup Guide
 
-## Проблема: "Failed to fetch" при регистрации
-
-Если вы видите ошибку "Failed to fetch" при попытке регистрации, это означает, что **backend API сервер не запущен**.
-
-## Решение
-
-Для работы аутентификации нужно запустить **ОБА** сервера:
-1. **Frontend** (Vite) - на порту 5173
-2. **Backend API** (Vercel dev) - на порту 3000
-
-### Вариант 1: Автоматический запуск (Рекомендуется)
-
-Используйте новую команду `npm run dev`, которая запускает оба сервера одновременно:
+## Quick Start
 
 ```bash
+# Install dependencies
+npm install
+
+# Start development servers (frontend + backend)
 npm run dev
 ```
 
-Вы увидите логи от обоих серверов с префиксами:
-- `[VITE]` - frontend сервер
-- `[API]` - backend API сервер
+This runs both:
+- **Frontend** (Vite) on port 5173
+- **Backend** (Express) on port 3000
 
-### Вариант 2: Ручной запуск
-
-Запустите два терминала:
-
-**Терминал 1 - Frontend:**
-```bash
-npm run dev:frontend
-```
-
-**Терминал 2 - Backend:**
-```bash
-npm run dev:backend
-```
-
-### Вариант 3: Только Vercel dev (медленнее)
-
-Если вы хотите использовать только Vercel dev server для всего:
-
-```bash
-npm run dev:full
-```
-
-Это запустит и frontend и backend на порту 3000, но будет медленнее чем Vite.
-
-## Проверка
-
-После запуска проверьте что:
-1. Frontend доступен на `http://localhost:5173`
-2. Backend API доступен на `http://localhost:3000`
-
-Можно проверить API напрямую:
-```bash
-curl http://localhost:3000/api/auth/csrf
-```
-
-Если получите JSON ответ - всё работает!
-
-## Архитектура
+## Architecture
 
 ```
 ┌─────────────────────┐      Proxy /api/*       ┌─────────────────────┐
-│  Vite Dev Server    │ ──────────────────────> │  Vercel Dev (API)   │
+│  Vite Dev Server    │ ──────────────────────> │  Express Server     │
 │  Port: 5173         │                          │  Port: 3000         │
 │  (Frontend)         │ <────────────────────── │  (Backend)          │
 └─────────────────────┘      API Response       └─────────────────────┘
 ```
 
-- Все запросы на `/api/*` автоматически проксируются с Vite на Vercel dev
-- Настройка прокси находится в `vite.config.ts`
+All requests to `/api/*` are automatically proxied from Vite to Express (configured in `vite.config.ts`).
+
+## Environment Setup
+
+### 1. Copy example environment file
+
+```bash
+cp .env.example .env.local
+```
+
+### 2. Configure variables
+
+```bash
+# Database (required)
+DATABASE_URL=postgresql://user:password@localhost:5432/uchion
+
+# AI Provider (use 'dummy' for free local development)
+AI_PROVIDER=dummy
+
+# Auth (required, generate with: openssl rand -base64 32)
+AUTH_SECRET=your-secret-min-32-chars
+
+# OAuth (optional for local dev)
+YANDEX_CLIENT_ID=...
+YANDEX_CLIENT_SECRET=...
+TELEGRAM_BOT_TOKEN=...
+TELEGRAM_BOT_USERNAME=...
+VITE_TELEGRAM_BOT_USERNAME=...
+```
+
+### 3. Setup database
+
+```bash
+npm run db:push        # Push schema to database
+npm run db:studio      # Open Drizzle Studio (optional)
+```
+
+## Development Commands
+
+### Start servers
+
+```bash
+npm run dev              # Both frontend + backend (recommended)
+npm run dev:frontend     # Frontend only (port 5173)
+npm run dev:server       # Backend only (port 3000)
+```
+
+### Testing
+
+```bash
+npm run test             # Unit tests (Vitest, watch mode)
+npm run test:run         # Unit tests (single run)
+npm run test:e2e         # E2E tests (Playwright)
+npm run smoke            # Smoke tests (AI generation)
+```
+
+### Database
+
+```bash
+npm run db:generate      # Generate migrations
+npm run db:migrate       # Run migrations
+npm run db:push          # Push schema (dev shortcut)
+npm run db:studio        # Open Drizzle Studio
+```
+
+## Verification
+
+### 1. Check frontend
+Open `http://localhost:5173` in browser
+
+### 2. Check backend
+```bash
+curl http://localhost:3000/api/health
+```
+
+Expected response:
+```json
+{"status":"ok","timestamp":"..."}
+```
+
+### 3. Check auth endpoints
+```bash
+curl http://localhost:3000/api/auth/me
+```
 
 ## Troubleshooting
 
-### Ошибка: "Не удалось подключиться к серверу"
+### "Failed to fetch" on auth
 
-**Причина:** Backend сервер не запущен
+**Cause:** Backend server not running
 
-**Решение:** Убедитесь, что запущен `npm run dev` (оба сервера) или `npm run dev:backend`
+**Solution:** Ensure you're using `npm run dev` (runs both servers)
 
-### Ошибка: "Port 3000 is already in use"
+### Port 3000 already in use
 
-**Причина:** Другой процесс использует порт 3000
-
-**Решение:** Остановите другой процесс или измените порт:
 ```bash
 # Windows
 netstat -ano | findstr :3000
@@ -95,8 +129,35 @@ lsof -i :3000
 kill -9 <PID>
 ```
 
-### Ошибка: "Port 5173 is already in use"
+### Port 5173 already in use
 
-**Причина:** Другой процесс использует порт 5173
+Same process, replace 3000 with 5173
 
-**Решение:** Остановите другой процесс на этом порту
+### Database connection failed
+
+1. Check `DATABASE_URL` in `.env.local`
+2. Ensure PostgreSQL is running
+3. Verify credentials and database exists
+
+### OAuth not working
+
+1. Check OAuth credentials in `.env.local`
+2. Verify callback URLs match your OAuth app settings:
+   - Yandex: `http://localhost:5173/api/auth/yandex/callback`
+   - Telegram: Uses Login Widget, no callback needed
+
+## Project Structure
+
+```
+uchion/
+├── server.ts           # Express server entry point
+├── server/
+│   ├── routes/         # API route handlers
+│   └── middleware/     # Auth, rate-limit, cookies
+├── src/                # React frontend
+├── api/                # Legacy (being migrated to server/)
+│   └── _lib/           # Shared backend utilities
+├── shared/             # Shared types (frontend + backend)
+├── db/                 # Database schema
+└── docs/               # Documentation
+```

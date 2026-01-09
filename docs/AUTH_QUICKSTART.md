@@ -1,102 +1,116 @@
-# NextAuth Quick Start
+# Authentication Quick Start
 
-## Быстрая настройка для разработки
+## 5-Minute Setup
 
-### 1. Скопируйте переменные окружения
-
-```bash
-cp .env.example .env
-```
-
-### 2. Настройте обязательные переменные в `.env`
+### 1. Configure environment
 
 ```bash
-# Database (используйте ваш Supabase URL)
-DATABASE_URL=postgresql://user:password@host:5432/database
+# Copy example
+cp .env.example .env.local
 
-# NextAuth
-NEXTAUTH_URL=http://localhost:3000
-NEXTAUTH_SECRET=<сгенерируйте секрет>
+# Edit .env.local with your values:
+DATABASE_URL=postgresql://...
+AUTH_SECRET=<run: openssl rand -base64 32>
 ```
 
-Генерация `NEXTAUTH_SECRET`:
-
-```bash
-# Linux/Mac
-openssl rand -base64 32
-
-# Windows PowerShell
-[Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Maximum 256 }))
-```
-
-### 3. Примените миграции базы данных
+### 2. Push database schema
 
 ```bash
 npm run db:push
 ```
 
-### 4. Запустите проект
+### 3. Start development
 
 ```bash
-vercel dev
+npm run dev
 ```
 
-## Основные endpoints
-
-После запуска доступны:
-
-- `GET /api/auth/session` - текущая сессия
-- `POST /api/auth/register` - регистрация нового пользователя
-- `GET /api/auth/me` - информация о текущем пользователе
-- `POST /api/auth/signin/credentials` - вход (Email/Password)
-- `GET /api/auth/signin/yandex` - вход через Яндекс (требует настройки OAuth)
-- `GET /api/auth/telegram/callback` - вход через Telegram (требует настройки бота)
-
-## Пример регистрации
+### 4. Test authentication
 
 ```bash
-curl -X POST http://localhost:3000/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "user@example.com",
-    "password": "securepassword123",
-    "name": "Test User"
-  }'
+# Health check
+curl http://localhost:3000/api/health
+
+# Should return 401 (not authenticated)
+curl http://localhost:3000/api/auth/me
 ```
 
-## Пример входа
+---
 
-```bash
-curl -X POST http://localhost:3000/api/auth/signin/credentials \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "user@example.com",
-    "password": "securepassword123"
-  }'
+## Testing OAuth (Optional)
+
+### Yandex OAuth
+
+1. Get credentials from [Yandex OAuth](https://oauth.yandex.ru/)
+2. Add to `.env.local`:
+   ```bash
+   YANDEX_CLIENT_ID=your-id
+   YANDEX_CLIENT_SECRET=your-secret
+   ```
+3. Add callback URL in Yandex: `http://localhost:5173/api/auth/yandex/callback`
+4. Open `http://localhost:5173` and click "Login with Yandex"
+
+### Telegram Login
+
+1. Create bot via [@BotFather](https://t.me/BotFather)
+2. Add to `.env.local`:
+   ```bash
+   TELEGRAM_BOT_TOKEN=123:ABC...
+   TELEGRAM_BOT_USERNAME=YourBot
+   VITE_TELEGRAM_BOT_USERNAME=YourBot
+   ```
+3. Set domain in BotFather: `/setdomain` → `localhost`
+4. Open `http://localhost:5173` and use Telegram widget
+
+---
+
+## API Endpoints
+
+| Endpoint | Method | Auth | Description |
+|----------|--------|------|-------------|
+| `/api/health` | GET | No | Health check |
+| `/api/auth/me` | GET | Yes | Current user |
+| `/api/auth/logout` | POST | Yes | Logout |
+| `/api/auth/refresh` | POST | Cookie | Refresh token |
+| `/api/auth/yandex/redirect` | GET | No | Start Yandex OAuth |
+| `/api/auth/telegram/callback` | GET | No | Telegram callback |
+
+---
+
+## Protecting Your Routes
+
+```typescript
+import { withAuth } from '../middleware/auth.js'
+
+// This route requires login
+router.get('/my-data', withAuth, (req, res) => {
+  const userId = req.user!.id
+  // ... fetch user data
+})
 ```
 
-## Настройка OAuth (опционально)
+---
 
-Для работы с Яндекс OAuth и Telegram Login см. [AUTH_SETUP.md](./AUTH_SETUP.md)
+## Frontend Integration
 
-## Структура файлов
+```typescript
+// Always include credentials for auth cookies
+const response = await fetch('/api/auth/me', {
+  credentials: 'include'
+})
 
-```
-api/
-  _lib/
-    auth/
-      adapter.ts      # Drizzle адаптер
-      config.ts       # Конфигурация NextAuth
-      password.ts     # Утилиты для паролей
-      index.ts        # Экспорты
-  auth/
-    [...nextauth].ts  # NextAuth catch-all route
-    register.ts       # Регистрация
-    me.ts            # Текущий пользователь
-types/
-  next-auth.d.ts     # Расширение типов NextAuth
+if (response.ok) {
+  const user = await response.json()
+  console.log('Logged in as:', user.email)
+} else {
+  console.log('Not logged in')
+}
 ```
 
-## Проблемы?
+---
 
-См. раздел Troubleshooting в [AUTH_SETUP.md](./AUTH_SETUP.md)
+## Need More?
+
+- Full setup guide: [AUTH_SETUP.md](./AUTH_SETUP.md)
+- Security details: [AUTH_SUMMARY.md](./AUTH_SUMMARY.md)
+- Architecture: [architecture-overview.md](./architecture-overview.md)

@@ -1,78 +1,126 @@
 # Architecture Overview
 
-## 1. Общая концепция
-Uchion — это веб-сервис для генерации рабочих листов (Worksheets) для начальной школы (1–4 классы) с использованием искусственного интеллекта. Проект реализует полный цикл: от ввода темы учителем до генерации PDF-файла, готового к печати.
+## 1. General Concept
 
-## 2. Архитектура Системы
+Uchion is a web service for generating worksheets for elementary school (grades 1-4) using artificial intelligence. The project implements a complete cycle: from teacher's topic input to generating a print-ready PDF file.
 
-Система построена как **Monorepo** с чётким разделением ответственности:
+## 2. System Architecture
 
-### 2.1 Клиентская часть (Frontend)
-- **Технологии**: React, Vite, TypeScript, Tailwind CSS.
-- **Роутинг**: SPA (Single Page Application) с использованием React Router.
-  - `/` — Страница генерации (`GeneratePage`).
-  - `/worksheet/:sessionId` — Страница просмотра и скачивания (`WorksheetPage`).
-- **Состояние**: Zustand (хранение сессий и кэширование).
-- **Взаимодействие с API**: `fetch` + Server-Sent Events (SSE) для стриминга прогресса.
+The system is built as a **Monorepo** with clear separation of concerns:
 
-### 2.2 Серверная часть (Backend)
-- **Технологии**: Vercel Serverless Functions (Node.js).
-- **API**: Единый endpoint `/api/generate`.
-- **Роль**:
-  - Валидация входных данных (Zod).
-  - Оркестрация AI-генерации.
-  - Валидация и регенерация контента.
-  - Генерация PDF.
+### 2.1 Client Side (Frontend)
+- **Technologies**: React 18, Vite, TypeScript, Tailwind CSS
+- **Routing**: SPA (Single Page Application) with React Router
+  - `/` - Generation page (`GeneratePage`)
+  - `/worksheet/:id` - View and download page (`WorksheetPage`)
+  - `/dashboard` - User dashboard (authenticated)
+- **State**: Zustand (global store) + React Query (async state)
+- **API Interaction**: `fetch` + Server-Sent Events (SSE) for progress streaming
 
-### 2.3 Shared Layer (Общий слой)
-- **Путь**: `shared/worksheet.ts`
-- **Роль**: Единый источник правды для типов и схем данных. Используется и клиентом, и сервером для гарантии контракта.
+### 2.2 Server Side (Backend)
+- **Technologies**: Express.js (Node.js 20+)
+- **API Style**: RESTful JSON + SSE for streaming
+- **Database**: PostgreSQL with Drizzle ORM
+- **Authentication**: Custom OAuth 2.0 (Yandex, Telegram)
+- **Key Endpoints**:
+  - `POST /api/generate` - Worksheet generation (SSE)
+  - `GET/POST/PATCH/DELETE /api/worksheets` - CRUD operations
+  - `GET/POST/PATCH/DELETE /api/folders` - Folder management
+  - `/api/auth/*` - Authentication endpoints
 
----
-
-## 3. Поток Данных (Data Flow)
-
-1.  **Запрос**: Пользователь заполняет форму (Предмет, Класс, Тема) → Клиент отправляет `POST /api/generate`.
-2.  **Генерация (Server)**:
-    *   API вызывает `AIProvider`.
-    *   `AIProvider` выбирает стратегию (OpenAI для Prod, Dummy для Dev).
-    *   Генерируется черновик JSON через LLM.
-3.  **Валидация и Регенерация**:
-    *   Черновик проходит через `Validator` (LLM-based проверка качества).
-    *   Если найдены ошибки, запускается частичная регенерация проблемных блоков.
-    *   Процесс повторяется до успеха или исчерпания попыток.
-4.  **Сборка**:
-    *   Финальный JSON конвертируется в объект `Worksheet`.
-    *   Генерируется PDF (Base64) на сервере.
-5.  **Ответ**: Сервер стримит события (Progress → Result) через SSE клиенту.
-6.  **Рендер**: Клиент отображает лист и предлагает скачать PDF.
+### 2.3 Shared Layer
+- **Path**: `shared/`
+- **Purpose**: Single source of truth for types and data schemas. Used by both client and server to guarantee contract consistency.
 
 ---
 
-## 4. Ключевые Модули
+## 3. Data Flow
+
+1. **Request**: User fills form (Subject, Grade, Topic) → Client sends `POST /api/generate`
+2. **Generation (Server)**:
+   - API calls `AIProvider`
+   - `AIProvider` selects strategy (OpenAI for Prod, Dummy for Dev)
+   - Draft JSON generated via LLM
+3. **Validation and Regeneration**:
+   - Draft passes through `Validator` (LLM-based quality check)
+   - If errors found, partial regeneration of problem blocks starts
+   - Process repeats until success or attempts exhausted
+4. **Assembly**:
+   - Final JSON converted to `Worksheet` object
+   - PDF generated (Base64) on server
+5. **Response**: Server streams events (Progress → Result) via SSE to client
+6. **Render**: Client displays worksheet and offers PDF download
+
+---
+
+## 4. Key Modules
 
 ### AI Provider (`api/_lib/ai-provider.ts`)
-Абстракция над LLM.
-- **DummyProvider**: Локальная заглушка для разработки (не тратит деньги, работает оффлайн).
-- **OpenAIProvider**: Продакшн-решение. Использует Context Retrieval (Vector Store) и GPT-4o-mini.
+Abstraction over LLM.
+- **DummyProvider**: Local stub for development (free, works offline)
+- **OpenAIProvider**: Production solution. Uses GPT models with optional Vector Store context.
 
 ### Validator (`api/_lib/ai/validator.ts`)
-Модуль контроля качества.
-- Анализирует структуру и содержание.
-- Выявляет логические ошибки (например, неверный ответ в тесте).
-- Управляет циклом самоисправления (Self-Correction).
+Quality control module.
+- Analyzes structure and content
+- Identifies logical errors (e.g., incorrect test answer)
+- Manages self-correction cycle
 
 ### PDF Generator
-Двухуровневая генерация:
-- **Server (`api/_lib/pdf.ts`)**: Использует `pdfkit`. Создаёт финальный файл для скачивания.
-- **Client (`src/lib/pdf-client.ts`)**: Использует `pdf-lib`. Создаёт превью "на лету" (опционально) или дублирует серверную логику для надежности.
+Server-side generation:
+- **Server (`api/_lib/pdf.ts`)**: Uses `pdfkit` for production-quality PDFs
+- **Client (`src/lib/pdf-client.ts`)**: Uses `pdf-lib` for backup/preview
+
+### Authentication (`server/routes/auth.ts`, `api/_lib/auth/`)
+Custom OAuth 2.0 implementation:
+- Yandex OAuth with PKCE
+- Telegram Login Widget
+- JWT tokens (access + refresh) with rotation
+- Rate limiting per endpoint
 
 ---
 
-## 5. Инфраструктура
+## 5. Infrastructure
 
-- **Хостинг**: Vercel.
-- **CI/CD**: Автоматические деплои при пуше в main.
+- **Hosting**: Self-hosted VPS via Dokploy
+- **CI/CD**: Git push → Dokploy auto-deploy
+- **Database**: PostgreSQL (Supabase or self-hosted)
 - **Environment**:
-  - `dev`: Vite Proxy (`/api` → `localhost:3000`), Dummy AI.
-  - `prod`: Vercel Functions, OpenAI.
+  - `dev`: Vite + Express, Dummy AI
+  - `prod`: Express server, OpenAI
+
+---
+
+## 6. Directory Structure
+
+```
+uchion/
+├── server.ts              # Express entry point
+├── server/
+│   ├── routes/            # API route handlers
+│   │   ├── auth.ts        # Authentication
+│   │   ├── generate.ts    # AI generation
+│   │   ├── worksheets.ts  # Worksheet CRUD
+│   │   ├── folders.ts     # Folder CRUD
+│   │   └── health.ts      # Health check
+│   └── middleware/
+│       ├── auth.ts        # Auth middleware
+│       ├── cookies.ts     # Cookie handling
+│       └── rate-limit.ts  # Rate limiting
+├── api/
+│   └── _lib/
+│       ├── ai/            # AI modules
+│       │   ├── prompts.ts # System prompts
+│       │   ├── schema.ts  # JSON schemas
+│       │   └── validator.ts
+│       ├── auth/          # Auth utilities
+│       │   ├── tokens.ts  # JWT handling
+│       │   ├── oauth.ts   # OAuth helpers
+│       │   └── cookies.ts # Cookie config
+│       ├── ai-provider.ts # AI abstraction
+│       └── pdf.ts         # PDF generation
+├── src/                   # React frontend
+├── shared/                # Shared types
+├── db/                    # Database schema
+└── docs/                  # Documentation
+```
