@@ -11,6 +11,7 @@ import worksheetsRoutes from './server/routes/worksheets.js'
 import generateRoutes from './server/routes/generate.js'
 import healthRoutes from './server/routes/health.js'
 import adminRoutes from './server/routes/admin.js'
+import telegramRoutes from './server/routes/telegram.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -47,6 +48,7 @@ app.use('/api/folders', foldersRoutes)
 app.use('/api/worksheets', worksheetsRoutes)
 app.use('/api/generate', generateRoutes)
 app.use('/api/admin', adminRoutes)
+app.use('/api/telegram', telegramRoutes)
 app.use('/api', healthRoutes)
 
 // ==================== STATIC FILES ====================
