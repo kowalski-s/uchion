@@ -7,6 +7,7 @@ import { users, worksheets, generations, subscriptions, payments } from '../../d
 import { withAdminAuth } from '../middleware/auth.js'
 import { checkRateLimit } from '../middleware/rate-limit.js'
 import type { AuthenticatedRequest } from '../types.js'
+import { sendAdminAlert, type AlertLevel } from '../../api/_lib/telegram/index.js'
 
 const router = Router()
 
@@ -815,6 +816,63 @@ router.get('/payments', withAdminAuth(async (req: AuthenticatedRequest, res: Res
   } catch (error) {
     console.error('[Admin Payments] Error:', error)
     return res.status(500).json({ error: 'Internal server error' })
+  }
+}))
+
+// ==================== POST /api/admin/test-alert ====================
+// Отправка тестового алерта для проверки системы оповещений
+const TestAlertSchema = z.object({
+  level: z.enum(['info', 'warning', 'critical']).default('info'),
+  message: z.string().min(1).max(500).optional(),
+})
+
+router.post('/test-alert', withAdminAuth(async (req: AuthenticatedRequest, res: Response) => {
+  const rateLimitResult = checkRateLimit(req, {
+    maxRequests: 5,
+    windowSeconds: 60,
+    identifier: `admin:test-alert:${req.user.id}`,
+  })
+  if (!rateLimitResult.success) {
+    const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000)
+    return res
+      .status(429)
+      .setHeader('Retry-After', retryAfter.toString())
+      .json({ error: 'Too many requests' })
+  }
+
+  const parse = TestAlertSchema.safeParse(req.body)
+  if (!parse.success) {
+    return res.status(400).json({
+      error: 'Validation error',
+      details: parse.error.flatten().fieldErrors,
+    })
+  }
+
+  const { level, message } = parse.data
+  const alertLevel = level as AlertLevel
+
+  const testMessage = message || `Тестовый алерт от ${req.user.email}\n\nВремя: ${new Date().toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}`
+
+  try {
+    console.log(`[Admin Test Alert] Sending ${alertLevel} alert from ${req.user.email}`)
+
+    const result = await sendAdminAlert({
+      message: testMessage,
+      level: alertLevel,
+    })
+
+    console.log(`[Admin Test Alert] Result: sent to ${result.sentCount} admins, success: ${result.success}`)
+
+    return res.status(200).json({
+      success: result.success,
+      sentCount: result.sentCount,
+      message: result.sentCount > 0
+        ? `Алерт отправлен ${result.sentCount} админам`
+        : 'Нет подписанных админов для отправки',
+    })
+  } catch (error) {
+    console.error('[Admin Test Alert] Error:', error)
+    return res.status(500).json({ error: 'Failed to send test alert' })
   }
 }))
 
