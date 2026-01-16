@@ -12,6 +12,10 @@ RUN npm ci
 # Copy source files
 COPY . .
 
+# Pass build-time arguments for Vite
+ARG VITE_TELEGRAM_BOT_USERNAME
+ENV VITE_TELEGRAM_BOT_USERNAME=$VITE_TELEGRAM_BOT_USERNAME
+
 # Build frontend (Vite) and server (TypeScript)
 RUN npm run build
 
