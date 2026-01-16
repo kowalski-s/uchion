@@ -22,17 +22,32 @@ const router = Router()
  * - Set TELEGRAM_WEBHOOK_SECRET in environment variables
  */
 router.post('/webhook', async (req: Request, res: Response) => {
+  // Log that we received a request (before any validation)
+  console.log('[Telegram Webhook] Received request')
+
   try {
     // Verify the request is from Telegram using secret token
     const secretToken = req.headers['x-telegram-bot-api-secret-token'] as string | undefined
     const expectedToken = process.env.TELEGRAM_WEBHOOK_SECRET
 
+    // Log secret token status for debugging
+    console.log('[Telegram Webhook] Secret token in request:', secretToken ? 'present' : 'missing')
+    console.log('[Telegram Webhook] Expected token configured:', expectedToken ? 'yes' : 'no')
+
     if (!verifyWebhookSecret(secretToken, expectedToken)) {
-      console.error('[Telegram Webhook] Invalid secret token')
+      console.error('[Telegram Webhook] Invalid secret token - rejecting request')
       return res.status(401).json({ error: 'Unauthorized' })
     }
 
     const update = req.body as TelegramUpdate
+
+    // Log incoming update details
+    console.log('[Telegram Webhook] Update ID:', update?.update_id)
+    if (update?.message) {
+      console.log('[Telegram Webhook] Message from:', update.message.from?.username || update.message.from?.id)
+      console.log('[Telegram Webhook] Chat ID:', update.message.chat?.id)
+      console.log('[Telegram Webhook] Text:', update.message.text)
+    }
 
     // Validate basic update structure
     if (!update || typeof update.update_id !== 'number') {
@@ -46,6 +61,7 @@ router.post('/webhook', async (req: Request, res: Response) => {
       console.error('[Telegram Webhook] Error processing update:', error)
     })
 
+    console.log('[Telegram Webhook] Returning 200 OK')
     // Always return 200 OK to Telegram
     // Even if processing fails, we don't want Telegram to retry
     return res.status(200).json({ ok: true })

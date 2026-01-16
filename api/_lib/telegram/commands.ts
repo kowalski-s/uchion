@@ -165,10 +165,13 @@ async function handleStatus(telegramId: string): Promise<string> {
  * Process an incoming Telegram update (webhook payload)
  */
 export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void> {
+  console.log('[Telegram Bot] Processing update...')
+
   const message = update.message
 
   // Only process text messages from users (not bots)
   if (!message || !message.text || !message.from || message.from.is_bot) {
+    console.log('[Telegram Bot] Skipping: no message, no text, no from, or is_bot')
     return
   }
 
@@ -176,47 +179,60 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
   const chatId = String(message.chat.id)
   const text = message.text.trim()
 
+  console.log(`[Telegram Bot] Processing command from telegramId=${telegramId}, chatId=${chatId}, text="${text}"`)
+
   let response: string
 
   try {
     // Parse command (remove bot username if present, e.g., /subscribe@BotName)
     const command = text.split('@')[0].toLowerCase()
+    console.log(`[Telegram Bot] Parsed command: "${command}"`)
 
     switch (command) {
       case '/subscribe':
+        console.log('[Telegram Bot] Handling /subscribe...')
         response = await handleSubscribe(telegramId, chatId)
         break
 
       case '/unsubscribe':
+        console.log('[Telegram Bot] Handling /unsubscribe...')
         response = await handleUnsubscribe(telegramId)
         break
 
       case '/status':
+        console.log('[Telegram Bot] Handling /status...')
         response = await handleStatus(telegramId)
         break
 
       case '/start':
       case '/help':
+        console.log('[Telegram Bot] Handling /start or /help...')
         response = MESSAGES.HELP
         break
 
       default:
         // Ignore non-command messages or respond with help
         if (text.startsWith('/')) {
+          console.log('[Telegram Bot] Unknown command, returning help')
           response = MESSAGES.HELP
         } else {
+          console.log('[Telegram Bot] Not a command, ignoring')
           // Ignore regular messages
           return
         }
     }
+
+    console.log(`[Telegram Bot] Response: "${response}"`)
   } catch (error) {
     console.error('[Telegram Bot] Error handling command:', error)
     response = MESSAGES.ERROR
   }
 
   // Send response back to the user
-  await sendTelegramMessage({
+  console.log(`[Telegram Bot] Sending response to chatId=${chatId}...`)
+  const sent = await sendTelegramMessage({
     chatId,
     text: response,
   })
+  console.log(`[Telegram Bot] Message sent: ${sent}`)
 }
