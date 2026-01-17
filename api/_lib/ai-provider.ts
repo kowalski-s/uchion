@@ -4,6 +4,7 @@ import type { GeneratePayload } from '../../shared/types'
 import { SUBJECT_CONFIG } from './ai/prompts.js'
 import { WORKSHEET_JSON_SCHEMA } from './ai/schema.js'
 import { timedLLMCall, extractWorksheetJsonFromResponse, buildWorksheetTextFromJson, validateWorksheet, analyzeValidationIssues, regenerateProblemBlocks } from './ai/validator.js'
+import { checkValidationScore } from './alerts/generation-alerts.js'
 
 export type GenerateParams = {
   subject: Subject
@@ -252,6 +253,15 @@ class OpenAIProvider implements AIProvider {
       const validation2 = await validateWorksheet(this.client, params, worksheetText)
       console.log(`[УчиОн] Validation after CLEAN: score=${validation2.score}, issues=${validation2.issues.length}`)
       onProgress?.(90)
+
+      // Check for low quality alert (score < 8)
+      checkValidationScore({
+        score: validation2.score,
+        topic: params.topic,
+        subject: params.subject,
+        grade: params.grade,
+      }).catch((e) => console.error('[Alerts] Failed to check validation score:', e))
+
       if (validation2.score === 10) {
         console.log('[УчиОн] Clean step succeeded.')
         console.log("[GENERATION] Total duration ms =", Date.now() - totalStart);

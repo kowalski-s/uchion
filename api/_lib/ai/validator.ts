@@ -1,20 +1,57 @@
 import type { WorksheetJson, ValidationResult, ValidationIssueAnalysis, Subject } from '../../../shared/types'
 import { SUBJECT_CONFIG } from './prompts.js'
+import { trackAICall } from '../alerts/generation-alerts.js'
+
+// Timeout for OpenAI calls (2 minutes)
+const AI_CALL_TIMEOUT_MS = 120_000
 
 export async function timedLLMCall(label: string, call: () => Promise<any>) {
   const start = Date.now()
   console.log(`[LLM][START] ${label}`)
-  const res = await call()
-  const end = Date.now()
 
-  console.log(`[LLM][END] ${label}`, {
-    duration_ms: end - start,
-    timestamp: new Date().toISOString(),
-    model: res?.model,
-    usage: res?.usage ?? null,
+  // Create a timeout promise
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(() => {
+      reject(new Error('AI_TIMEOUT'))
+    }, AI_CALL_TIMEOUT_MS)
   })
 
-  return res
+  try {
+    // Race between the actual call and the timeout
+    const res = await Promise.race([call(), timeoutPromise])
+    const end = Date.now()
+
+    console.log(`[LLM][END] ${label}`, {
+      duration_ms: end - start,
+      timestamp: new Date().toISOString(),
+      model: res?.model,
+      usage: res?.usage ?? null,
+    })
+
+    // Track successful AI call
+    trackAICall({ success: true, isTimeout: false }).catch((e) =>
+      console.error('[Alerts] Failed to track AI call:', e)
+    )
+
+    return res
+  } catch (error) {
+    const end = Date.now()
+    const isTimeout = error instanceof Error && error.message === 'AI_TIMEOUT'
+
+    console.error(`[LLM][ERROR] ${label}`, {
+      duration_ms: end - start,
+      timestamp: new Date().toISOString(),
+      isTimeout,
+      error: error instanceof Error ? error.message : String(error),
+    })
+
+    // Track failed AI call (timeout or other error)
+    trackAICall({ success: false, isTimeout }).catch((e) =>
+      console.error('[Alerts] Failed to track AI call:', e)
+    )
+
+    throw error
+  }
 }
 
 export function extractWorksheetJsonFromResponse(response: any): WorksheetJson {

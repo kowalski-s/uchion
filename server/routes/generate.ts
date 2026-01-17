@@ -9,6 +9,7 @@ import { buildPdf } from '../../api/_lib/pdf.js'
 import { getTokenFromCookie, ACCESS_TOKEN_COOKIE } from '../middleware/cookies.js'
 import { verifyAccessToken } from '../../api/_lib/auth/tokens.js'
 import { checkGenerateRateLimit } from '../middleware/rate-limit.js'
+import { trackGeneration } from '../../api/_lib/alerts/generation-alerts.js'
 import type { GeneratePayload, Worksheet } from '../../shared/types.js'
 
 const router = Router()
@@ -120,6 +121,8 @@ router.post('/', async (req: Request, res: Response) => {
       console.error('[API] PDF generation error:', e)
       console.error('[API] Error details:', e instanceof Error ? e.message : String(e))
       console.error('[API] Error stack:', e instanceof Error ? e.stack : 'no stack')
+      // Track failed generation for alerts
+      trackGeneration(false).catch((err) => console.error('[Alerts] Failed to track generation:', err))
       sendEvent({ type: 'error', code: 'PDF_ERROR', message: 'Ошибка генерации PDF.' })
       res.end()
       return
@@ -169,11 +172,17 @@ router.post('/', async (req: Request, res: Response) => {
       pdfBase64: pdfBase64 ?? ''
     }
 
+    // Track successful generation for alerts
+    trackGeneration(true).catch((e) => console.error('[Alerts] Failed to track generation:', e))
+
     sendEvent({ type: 'result', data: { worksheet: finalWorksheet } })
     res.end()
 
   } catch (err: unknown) {
     console.error('[API] Generate error:', err)
+
+    // Track failed generation for alerts
+    trackGeneration(false).catch((e) => console.error('[Alerts] Failed to track generation:', e))
 
     const code =
       err instanceof Error && err.message === 'AI_ERROR'

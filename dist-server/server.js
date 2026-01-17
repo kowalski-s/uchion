@@ -10,6 +10,7 @@ import worksheetsRoutes from './server/routes/worksheets.js';
 import generateRoutes from './server/routes/generate.js';
 import healthRoutes from './server/routes/health.js';
 import adminRoutes from './server/routes/admin.js';
+import telegramRoutes from './server/routes/telegram.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
@@ -26,7 +27,7 @@ app.use((_req, res, next) => {
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.setHeader('X-XSS-Protection', '1; mode=block');
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://telegram.org; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://api.openai.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
+    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://oauth.telegram.org; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://api.openai.com; frame-src https://oauth.telegram.org; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
     next();
 });
 // ==================== API ROUTES ====================
@@ -35,6 +36,7 @@ app.use('/api/folders', foldersRoutes);
 app.use('/api/worksheets', worksheetsRoutes);
 app.use('/api/generate', generateRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/telegram', telegramRoutes);
 app.use('/api', healthRoutes);
 // ==================== STATIC FILES ====================
 // Serve static files from dist folder (production build)

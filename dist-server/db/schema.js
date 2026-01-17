@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, integer, varchar, pgEnum, index } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, uuid, integer, varchar, boolean, pgEnum, index } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 // ==================== ENUMS ====================
 export const userRoleEnum = pgEnum('user_role', ['user', 'admin']);
@@ -20,6 +20,9 @@ export const users = pgTable('users', {
     // OAuth provider info
     provider: varchar('provider', { length: 50 }), // 'yandex' | 'telegram'
     providerId: varchar('provider_id', { length: 255 }),
+    // Telegram alerts for admins
+    telegramChatId: varchar('telegram_chat_id', { length: 50 }), // Telegram chat ID for sending alerts
+    wantsAlerts: boolean('wants_alerts').notNull().default(false), // Flag: wants to receive alerts
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
