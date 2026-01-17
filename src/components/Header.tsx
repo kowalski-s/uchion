@@ -56,15 +56,6 @@ export default function Header() {
         <div className="flex items-center gap-4">
           {user ? (
             <>
-              {user.role === 'admin' && (
-                <Link
-                  to="/admin"
-                  className={`glass-btn-neon flex items-center gap-2 px-4 py-2 text-sm font-semibold ${location.pathname.startsWith('/admin') ? 'glass-btn-neon-active' : ''}`}
-                >
-                  <ShieldIcon className="w-4 h-4" />
-                  <span>Админ</span>
-                </Link>
-              )}
               <Link
                 to="/dashboard"
                 className={`glass-btn-neon flex items-center gap-2 px-4 py-2 text-sm font-semibold ${isDashboard ? 'glass-btn-neon-active' : ''}`}
@@ -72,6 +63,15 @@ export default function Header() {
                 <UserIcon className="w-4 h-4" />
                 <span>Личный кабинет</span>
               </Link>
+              {user.role === 'admin' && (
+                <Link
+                  to="/admin"
+                  className={`glass-btn-neon flex items-center justify-center w-10 h-10 ${location.pathname.startsWith('/admin') ? 'glass-btn-neon-active' : ''}`}
+                  title="Админ-панель"
+                >
+                  <ShieldIcon className="w-5 h-5" />
+                </Link>
+              )}
             </>
           ) : (
             <>
