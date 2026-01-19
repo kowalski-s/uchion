@@ -17,6 +17,38 @@ import billingRoutes from './server/routes/billing.js'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
+// ==================== STARTUP CONFIG VALIDATION ====================
+
+function validateProdamusConfig() {
+  const secret = process.env.PRODAMUS_SECRET
+  const payformUrl = process.env.PRODAMUS_PAYFORM_URL
+  const isProduction = process.env.NODE_ENV === 'production'
+  const debugEnabled = process.env.PRODAMUS_DEBUG === 'true'
+
+  console.log('[Startup] ========== PRODAMUS CONFIG CHECK ==========')
+  console.log('[Startup] NODE_ENV:', process.env.NODE_ENV || 'development')
+  console.log('[Startup] PRODAMUS_DEBUG:', debugEnabled ? 'ENABLED' : 'disabled')
+  console.log('[Startup] PRODAMUS_SECRET:', secret ? `SET (${secret.length} chars, starts with "${secret.substring(0, 4)}...")` : 'NOT SET')
+  console.log('[Startup] PRODAMUS_PAYFORM_URL:', payformUrl || 'NOT SET')
+
+  if (isProduction) {
+    if (!secret) {
+      console.error('[Startup] FATAL: PRODAMUS_SECRET is required in production!')
+    }
+    if (!payformUrl) {
+      console.error('[Startup] FATAL: PRODAMUS_PAYFORM_URL is required in production!')
+    }
+    if (secret && payformUrl) {
+      console.log('[Startup] Prodamus config: OK')
+    }
+  } else {
+    console.log('[Startup] Development mode - Prodamus config optional')
+  }
+  console.log('[Startup] ================================================')
+}
+
+validateProdamusConfig()
+
 const app = express()
 const PORT = process.env.PORT || 3000
 

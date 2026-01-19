@@ -108,22 +108,48 @@ function sortObjectKeys(obj: JsonObject): JsonObject {
  * 5. HMAC-SHA256
  */
 export function createProdamusSignature(data: Record<string, unknown>, secretKey: string): string {
+  const DEBUG = process.env.PRODAMUS_DEBUG === 'true'
+
+  if (DEBUG) {
+    console.log('[Prodamus Signature] === START SIGNATURE GENERATION ===')
+    console.log('[Prodamus Signature] Input data:', JSON.stringify(data, null, 2))
+    console.log('[Prodamus Signature] Secret key length:', secretKey?.length || 0)
+    console.log('[Prodamus Signature] Secret key first 4 chars:', secretKey?.substring(0, 4) || 'N/A')
+  }
+
   // Step 1: Convert all values to strings
   const stringData = deepToString(data)
+  if (DEBUG) {
+    console.log('[Prodamus Signature] After deepToString:', JSON.stringify(stringData, null, 2))
+  }
 
   // Step 2: Sort keys alphabetically
   const sortedData = sortObjectKeys(stringData)
+  if (DEBUG) {
+    console.log('[Prodamus Signature] After sortObjectKeys:', JSON.stringify(sortedData, null, 2))
+  }
 
   // Step 3: JSON stringify without spaces
   // Step 4: Escape forward slashes (/ → \/)
   const jsonString = JSON.stringify(sortedData)
     .replace(/\//g, '\\/')
 
+  if (DEBUG) {
+    console.log('[Prodamus Signature] JSON string for signing:')
+    console.log(jsonString)
+    console.log('[Prodamus Signature] JSON string length:', jsonString.length)
+  }
+
   // Step 5: HMAC-SHA256
   const signature = crypto
     .createHmac('sha256', secretKey)
     .update(jsonString, 'utf8')
     .digest('hex')
+
+  if (DEBUG) {
+    console.log('[Prodamus Signature] Generated signature:', signature)
+    console.log('[Prodamus Signature] === END SIGNATURE GENERATION ===')
+  }
 
   return signature
 }
