@@ -150,3 +150,30 @@ export function checkGenerateRateLimit(
     identifier: `generate:guest:${getClientIp(req)}`,
   })
 }
+
+/**
+ * Rate limit for billing create-link endpoint
+ * 10 requests per 10 minutes per user
+ */
+export function checkBillingCreateLinkRateLimit(
+  req: Request,
+  userId: string
+): RateLimitResult {
+  return checkRateLimit(req, {
+    maxRequests: 10,
+    windowSeconds: 10 * 60,
+    identifier: `billing:create-link:${userId}`,
+  })
+}
+
+/**
+ * Rate limit for billing webhook endpoint
+ * 100 requests per minute per IP (webhooks can come in bursts)
+ */
+export function checkBillingWebhookRateLimit(req: Request): RateLimitResult {
+  return checkRateLimit(req, {
+    maxRequests: 100,
+    windowSeconds: 60,
+    identifier: `billing:webhook:${getClientIp(req)}`,
+  })
+}

@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, integer, varchar, boolean, pgEnum, index } from 'drizzle-orm/pg-core'
+import { pgTable, text, timestamp, uuid, integer, varchar, boolean, pgEnum, index, uniqueIndex } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 
 // ==================== ENUMS ====================
@@ -8,6 +8,7 @@ export const subscriptionPlanEnum = pgEnum('subscription_plan', ['free', 'basic'
 export const subscriptionStatusEnum = pgEnum('subscription_status', ['active', 'canceled', 'expired', 'trial'])
 export const generationStatusEnum = pgEnum('generation_status', ['pending', 'processing', 'completed', 'failed'])
 export const paymentStatusEnum = pgEnum('payment_status', ['pending', 'succeeded', 'failed', 'refunded'])
+export const paymentIntentStatusEnum = pgEnum('payment_intent_status', ['created', 'paid', 'failed', 'expired'])
 export const subjectEnum = pgEnum('subject', ['math', 'russian'])
 export const difficultyEnum = pgEnum('difficulty', ['easy', 'medium', 'hard'])
 
@@ -126,6 +127,45 @@ export const payments = pgTable('payments', {
   createdAtIdx: index('payments_created_at_idx').on(table.createdAt),
 }))
 
+// ==================== PAYMENT INTENTS TABLE ====================
+// Tracks payment intents created for Prodamus or other providers
+
+export const paymentIntents = pgTable('payment_intents', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  productCode: varchar('product_code', { length: 100 }).notNull(), // e.g., 'generations_10', 'premium_monthly'
+  amount: integer('amount').notNull(), // Amount in kopecks (rubles * 100)
+  currency: varchar('currency', { length: 3 }).notNull().default('RUB'),
+  status: paymentIntentStatusEnum('status').notNull().default('created'),
+  provider: varchar('provider', { length: 50 }).notNull().default('prodamus'), // 'prodamus', etc.
+  providerOrderId: varchar('provider_order_id', { length: 255 }).notNull().unique(), // Our order ID sent to provider
+  providerPaymentId: varchar('provider_payment_id', { length: 255 }), // Provider's payment ID after success
+  metadata: text('metadata'), // JSON string for extra data
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  paidAt: timestamp('paid_at', { withTimezone: true }),
+  expiresAt: timestamp('expires_at', { withTimezone: true }), // Payment link expiration
+}, (table) => ({
+  userIdIdx: index('payment_intents_user_id_idx').on(table.userId),
+  statusIdx: index('payment_intents_status_idx').on(table.status),
+  providerOrderIdIdx: index('payment_intents_provider_order_id_idx').on(table.providerOrderId),
+  createdAtIdx: index('payment_intents_created_at_idx').on(table.createdAt),
+}))
+
+// ==================== WEBHOOK EVENTS TABLE ====================
+// For idempotency - prevents duplicate webhook processing
+
+export const webhookEvents = pgTable('webhook_events', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  provider: varchar('provider', { length: 50 }).notNull(), // 'prodamus', etc.
+  eventKey: varchar('event_key', { length: 255 }).notNull(), // Unique event identifier from provider
+  rawPayloadHash: varchar('raw_payload_hash', { length: 64 }).notNull(), // SHA-256 hash of raw payload
+  processedAt: timestamp('processed_at', { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  providerEventKeyIdx: uniqueIndex('webhook_events_provider_event_key_idx').on(table.provider, table.eventKey),
+  processedAtIdx: index('webhook_events_processed_at_idx').on(table.processedAt),
+}))
+
 // ==================== REFRESH TOKENS TABLE ====================
 
 export const refreshTokens = pgTable('refresh_tokens', {
@@ -148,6 +188,7 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   generations: many(generations),
   subscription: one(subscriptions),
   payments: many(payments),
+  paymentIntents: many(paymentIntents),
   refreshTokens: many(refreshTokens),
 }))
 
@@ -208,6 +249,13 @@ export const paymentsRelations = relations(payments, ({ one }) => ({
 export const refreshTokensRelations = relations(refreshTokens, ({ one }) => ({
   user: one(users, {
     fields: [refreshTokens.userId],
+    references: [users.id],
+  }),
+}))
+
+export const paymentIntentsRelations = relations(paymentIntents, ({ one }) => ({
+  user: one(users, {
+    fields: [paymentIntents.userId],
     references: [users.id],
   }),
 }))

@@ -1,5 +1,5 @@
 import 'dotenv/config'
-import express from 'express'
+import express, { type Request } from 'express'
 import cookieParser from 'cookie-parser'
 import path from 'path'
 import { fileURLToPath } from 'url'
@@ -12,6 +12,7 @@ import generateRoutes from './server/routes/generate.js'
 import healthRoutes from './server/routes/health.js'
 import adminRoutes from './server/routes/admin.js'
 import telegramRoutes from './server/routes/telegram.js'
+import billingRoutes from './server/routes/billing.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -21,8 +22,25 @@ const PORT = process.env.PORT || 3000
 
 // ==================== MIDDLEWARE ====================
 
-// Parse JSON bodies
-app.use(express.json())
+// Parse JSON bodies with raw body preservation for webhooks
+app.use(express.json({
+  verify: (req, _res, buf) => {
+    // Store raw body for webhook signature verification
+    if (req.url?.includes('/api/billing/') && req.url?.includes('/webhook')) {
+      (req as Request & { rawBody?: string }).rawBody = buf.toString()
+    }
+  }
+}))
+
+// Parse URL-encoded bodies (for Prodamus webhooks)
+app.use(express.urlencoded({
+  extended: true,
+  verify: (req, _res, buf) => {
+    if (req.url?.includes('/api/billing/') && req.url?.includes('/webhook')) {
+      (req as Request & { rawBody?: string }).rawBody = buf.toString()
+    }
+  }
+}))
 
 // Parse cookies
 app.use(cookieParser())
@@ -49,6 +67,7 @@ app.use('/api/worksheets', worksheetsRoutes)
 app.use('/api/generate', generateRoutes)
 app.use('/api/admin', adminRoutes)
 app.use('/api/telegram', telegramRoutes)
+app.use('/api/billing', billingRoutes)
 app.use('/api', healthRoutes)
 
 // ==================== STATIC FILES ====================
