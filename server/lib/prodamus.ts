@@ -36,7 +36,7 @@ export interface ProdamusPaymentData {
   link_expired?: string  // Format: dd.mm.yyyy hh:mm or yyyy-mm-dd hh:mm
 }
 
-type JsonValue = string | number | boolean | null | JsonObject | JsonArray
+type JsonValue = string | JsonObject | JsonArray
 interface JsonObject { [key: string]: JsonValue }
 type JsonArray = JsonValue[]
 
@@ -46,55 +46,66 @@ type InputObject = Record<string, unknown>
 // ==================== HELPERS ====================
 
 /**
- * Recursively converts all values in an object to strings
+ * Recursively converts all values in an object/array to strings
+ * Arrays remain arrays, objects remain objects, but all primitive values become strings
  * This is required by Prodamus signature algorithm
  */
-function deepToString(obj: InputObject): JsonObject {
-  const result: JsonObject = {}
-
-  for (const [key, value] of Object.entries(obj)) {
-    if (value === null || value === undefined) {
-      result[key] = ''
-    } else if (Array.isArray(value)) {
-      // Convert array to object with string indices
-      const arrayObj: JsonObject = {}
-      for (let i = 0; i < value.length; i++) {
-        const item = value[i]
-        if (typeof item === 'object' && item !== null && !Array.isArray(item)) {
-          arrayObj[String(i)] = deepToString(item as InputObject)
-        } else {
-          arrayObj[String(i)] = String(item ?? '')
-        }
-      }
-      result[key] = arrayObj
-    } else if (typeof value === 'object') {
-      result[key] = deepToString(value as InputObject)
-    } else {
-      result[key] = String(value)
-    }
+function deepToString(data: unknown): JsonValue {
+  if (data === null || data === undefined) {
+    return ''
   }
 
-  return result
+  if (Array.isArray(data)) {
+    // Keep arrays as arrays, recursively convert items
+    return data.map(item => deepToString(item))
+  }
+
+  if (typeof data === 'object') {
+    // Convert object, recursively convert values
+    const result: JsonObject = {}
+    for (const [key, value] of Object.entries(data)) {
+      result[key] = deepToString(value)
+    }
+    return result
+  }
+
+  // Convert primitives to strings
+  return String(data)
+}
+
+/**
+ * Wrapper for object input - ensures we return JsonObject
+ */
+function deepToStringObject(obj: InputObject): JsonObject {
+  const result = deepToString(obj)
+  if (typeof result === 'object' && !Array.isArray(result)) {
+    return result as JsonObject
+  }
+  return {}
 }
 
 /**
  * Recursively sorts object keys alphabetically
+ * Arrays are processed recursively but their order is preserved
  * Required for consistent signature generation
  */
-function sortObjectKeys(obj: JsonObject): JsonObject {
-  const sortedKeys = Object.keys(obj).sort()
-  const result: JsonObject = {}
-
-  for (const key of sortedKeys) {
-    const value = obj[key]
-    if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-      result[key] = sortObjectKeys(value as JsonObject)
-    } else {
-      result[key] = value
-    }
+function sortObjectKeys(data: JsonValue): JsonValue {
+  if (Array.isArray(data)) {
+    // Sort items inside array if they are objects, keep array order
+    return data.map(item => sortObjectKeys(item))
   }
 
-  return result
+  if (typeof data === 'object' && data !== null) {
+    const sortedKeys = Object.keys(data).sort()
+    const result: JsonObject = {}
+
+    for (const key of sortedKeys) {
+      result[key] = sortObjectKeys(data[key])
+    }
+    return result
+  }
+
+  return data
 }
 
 /**
@@ -117,14 +128,14 @@ export function createProdamusSignature(data: Record<string, unknown>, secretKey
     console.log('[Prodamus Signature] Secret key first 4 chars:', secretKey?.substring(0, 4) || 'N/A')
   }
 
-  // Step 1: Convert all values to strings
-  const stringData = deepToString(data)
+  // Step 1: Convert all values to strings (arrays stay arrays!)
+  const stringData = deepToStringObject(data)
   if (DEBUG) {
     console.log('[Prodamus Signature] After deepToString:', JSON.stringify(stringData, null, 2))
   }
 
   // Step 2: Sort keys alphabetically
-  const sortedData = sortObjectKeys(stringData)
+  const sortedData = sortObjectKeys(stringData) as JsonObject
   if (DEBUG) {
     console.log('[Prodamus Signature] After sortObjectKeys:', JSON.stringify(sortedData, null, 2))
   }
@@ -155,19 +166,28 @@ export function createProdamusSignature(data: Record<string, unknown>, secretKey
 }
 
 /**
- * Builds URL query string from nested object
- * Converts nested objects to bracket notation: products[0][name]=value
+ * Builds URL query string from nested object/array
+ * Converts nested structures to bracket notation: products[0][name]=value
  */
-function buildQueryString(obj: JsonObject, parentKey?: string): string {
+function buildQueryString(data: JsonValue, parentKey?: string): string {
   const parts: string[] = []
 
-  for (const [key, value] of Object.entries(obj)) {
-    const fullKey = parentKey ? `${parentKey}[${key}]` : key
-
-    if (typeof value === 'object' && value !== null) {
-      parts.push(buildQueryString(value as JsonObject, fullKey))
-    } else {
-      parts.push(`${encodeURIComponent(fullKey)}=${encodeURIComponent(String(value ?? ''))}`)
+  if (Array.isArray(data)) {
+    // Handle arrays: products[0], products[1], etc.
+    for (let i = 0; i < data.length; i++) {
+      const fullKey = parentKey ? `${parentKey}[${i}]` : String(i)
+      parts.push(buildQueryString(data[i], fullKey))
+    }
+  } else if (typeof data === 'object' && data !== null) {
+    // Handle objects
+    for (const [key, value] of Object.entries(data)) {
+      const fullKey = parentKey ? `${parentKey}[${key}]` : key
+      parts.push(buildQueryString(value, fullKey))
+    }
+  } else {
+    // Handle primitives (strings)
+    if (parentKey) {
+      parts.push(`${encodeURIComponent(parentKey)}=${encodeURIComponent(String(data ?? ''))}`)
     }
   }
 
@@ -240,7 +260,7 @@ export function generatePaymentLink(
   const signedData = { ...paymentData, signature }
 
   // Convert to string data for URL building
-  const stringData = deepToString(signedData)
+  const stringData = deepToStringObject(signedData)
 
   // Build query string
   const queryString = buildQueryString(stringData)
