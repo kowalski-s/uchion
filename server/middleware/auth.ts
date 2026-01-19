@@ -38,6 +38,7 @@ export function withAuth(
         .select({
           id: users.id,
           email: users.email,
+          name: users.name,
           role: users.role,
         })
         .from(users)
@@ -52,7 +53,7 @@ export function withAuth(
         return res.status(401).json({ error: 'User not found or deactivated' })
       }
 
-      console.log('[Auth Middleware] User authenticated:', user.id, user.email)
+      console.log('[Auth Middleware] User authenticated:', user.id, user.email, user.name)
 
       // Attach user to request
       ;(req as AuthenticatedRequest).user = user as AuthUser
@@ -106,6 +107,7 @@ export function withOptionalAuth(
         .select({
           id: users.id,
           email: users.email,
+          name: users.name,
           role: users.role,
         })
         .from(users)

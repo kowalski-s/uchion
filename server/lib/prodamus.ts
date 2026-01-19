@@ -26,6 +26,7 @@ export interface ProdamusPaymentData {
   order_id: string
   customer_phone?: string
   customer_email?: string
+  customer_fio?: string  // Customer full name (ФИО)
   products: ProdamusProduct[]
   do: 'pay'
   urlReturn?: string
@@ -215,6 +216,9 @@ export function generatePaymentLink(
   }
 
   // Add optional fields only if present
+  if (data.customer_fio) {
+    paymentData.customer_fio = data.customer_fio
+  }
   if (data.customer_phone) {
     paymentData.customer_phone = data.customer_phone
   }
@@ -314,15 +318,31 @@ export function verifyWebhookSignature(
 
 /**
  * Formats expiration date for Prodamus link_expired parameter
- * @param date - Date object
- * @returns Formatted string: yyyy-mm-dd hh:mm
+ * Prodamus expects Moscow time (UTC+3), so we convert to Moscow timezone
+ * @param date - Date object (in any timezone)
+ * @returns Formatted string in Moscow time: yyyy-mm-dd hh:mm
  */
 export function formatExpirationDate(date: Date): string {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const hours = String(date.getHours()).padStart(2, '0')
-  const minutes = String(date.getMinutes()).padStart(2, '0')
+  // Convert to Moscow timezone (UTC+3)
+  // Intl.DateTimeFormat handles DST automatically
+  const moscowFormatter = new Intl.DateTimeFormat('ru-RU', {
+    timeZone: 'Europe/Moscow',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
+
+  const parts = moscowFormatter.formatToParts(date)
+  const getPart = (type: string) => parts.find(p => p.type === type)?.value || '00'
+
+  const year = getPart('year')
+  const month = getPart('month')
+  const day = getPart('day')
+  const hours = getPart('hour')
+  const minutes = getPart('minute')
 
   return `${year}-${month}-${day} ${hours}:${minutes}`
 }

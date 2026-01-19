@@ -9,6 +9,7 @@ export type ExpressNextFunction = NextFunction
 export interface AuthUser {
   id: string
   email: string
+  name: string | null
   role: 'user' | 'admin'
 }
 

@@ -217,6 +217,7 @@ router.get('/products', (_req, res) => {
 router.post('/prodamus/create-link', withAuth(async (req, res) => {
   const userId = req.user.id
   const userEmail = req.user.email
+  const userName = req.user.name
 
   // Rate limiting
   const rateLimitResult = checkBillingCreateLinkRateLimit(req, userId)
@@ -310,9 +311,16 @@ router.post('/prodamus/create-link', withAuth(async (req, res) => {
       link_expired: formatExpirationDate(expiresAt),
     }
 
+    // Add customer FIO (name)
+    if (userName) {
+      paymentData.customer_fio = userName
+    }
+
     // Add optional customer info
+    // Don't send fake emails like "name@telegram" from Telegram auth
     const email = customerEmail || userEmail
-    if (email) {
+    const isValidEmail = email && !email.endsWith('@telegram') && EMAIL_REGEX.test(email)
+    if (isValidEmail) {
       paymentData.customer_email = email
     }
     if (customerPhone) {
