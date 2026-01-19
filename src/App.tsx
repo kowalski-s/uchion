@@ -5,6 +5,8 @@ import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
 import WorksheetsListPage from './pages/WorksheetsListPage'
 import SavedWorksheetPage from './pages/SavedWorksheetPage'
+import PaymentSuccessPage from './pages/PaymentSuccessPage'
+import PaymentCancelPage from './pages/PaymentCancelPage'
 
 // Admin pages
 import AdminPage, { AdminOverview } from './pages/admin/AdminPage'
@@ -23,6 +25,10 @@ export default function App() {
         <Route path="/worksheet/:sessionId" element={<WorksheetPage />} />
         <Route path="/worksheets" element={<WorksheetsListPage />} />
         <Route path="/worksheets/:id" element={<SavedWorksheetPage />} />
+
+        {/* Payment routes */}
+        <Route path="/payment/success" element={<PaymentSuccessPage />} />
+        <Route path="/payment/cancel" element={<PaymentCancelPage />} />
 
         {/* Admin routes */}
         <Route path="/admin" element={<AdminPage />}>

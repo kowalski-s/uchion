@@ -72,6 +72,13 @@ interface ProductInfo {
 }
 
 const PRODUCTS: Record<string, ProductInfo> = {
+  // Test product (for development only)
+  'generations_5_test': {
+    name: 'Тестовый пакет 5 генераций',
+    price: 1,
+    type: 'generations',
+    value: 5,
+  },
   'generations_10': {
     name: 'Пакет 10 генераций',
     price: 99,

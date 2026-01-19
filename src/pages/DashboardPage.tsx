@@ -1,9 +1,10 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { formatPlanName } from '../lib/dashboard-api'
 import Header from '../components/Header'
 import WorksheetManager from '../components/WorksheetManager'
+import BuyGenerationsModal from '../components/BuyGenerationsModal'
 
 // Icon components (used in stats cards)
 
@@ -79,6 +80,7 @@ function getMaxGenerations(plan: string): number {
 export default function DashboardPage() {
   const navigate = useNavigate()
   const { user, status, signOut } = useAuth()
+  const [showBuyModal, setShowBuyModal] = useState(false)
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -128,14 +130,20 @@ export default function DashboardPage() {
         {/* Stats Cards Row */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
           {/* Generations with progress bar */}
-          <div className="stat-card flex flex-col gap-3 px-5 py-4 rounded-2xl cursor-pointer group">
+          <div
+            className="stat-card flex flex-col gap-3 px-5 py-4 rounded-2xl cursor-pointer group hover:shadow-lg hover:border-purple-200 transition-all"
+            onClick={() => setShowBuyModal(true)}
+          >
             <div className="flex items-center gap-3">
               <div className="p-2 bg-purple-100 rounded-lg group-hover:bg-purple-200 transition-colors">
                 <BoltIcon className="w-5 h-5 text-[#8C52FF]" />
               </div>
               <div className="flex-1 min-w-0">
                 <span className="text-xs text-slate-400 uppercase tracking-wider font-semibold">Генерации</span>
-                <p className="text-sm font-bold text-slate-900">{user.generationsLeft} из {maxGenerations}</p>
+                <p className="text-sm font-bold text-slate-900">{user.generationsLeft} осталось</p>
+              </div>
+              <div className="text-xs text-purple-600 font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
+                + Купить
               </div>
             </div>
             {/* Progress bar */}
@@ -143,12 +151,9 @@ export default function DashboardPage() {
               <div className={progressBarClass} style={{ width: `${progressPercent}%` }}></div>
             </div>
             {isLimitExhausted && (
-              <Link
-                to="/pricing"
-                className="text-xs font-semibold text-[#8C52FF] hover:text-purple-700 transition-colors"
-              >
-                Увеличить лимит →
-              </Link>
+              <span className="text-xs font-semibold text-[#8C52FF]">
+                Нажмите чтобы купить ещё →
+              </span>
             )}
           </div>
 
@@ -236,6 +241,12 @@ export default function DashboardPage() {
           </button>
         </div>
       </main>
+
+      {/* Buy Generations Modal */}
+      <BuyGenerationsModal
+        isOpen={showBuyModal}
+        onClose={() => setShowBuyModal(false)}
+      />
     </div>
   )
 }
