@@ -75,7 +75,7 @@ const PRODUCTS: Record<string, ProductInfo> = {
   // Test product (for development only)
   'generations_5_test': {
     name: 'Тестовый пакет 5 генераций',
-    price: 1,
+    price: 50,
     type: 'generations',
     value: 5,
   },
