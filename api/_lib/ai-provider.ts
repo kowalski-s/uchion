@@ -85,8 +85,12 @@ class DummyProvider implements AIProvider {
 
 class OpenAIProvider implements AIProvider {
   private client: OpenAI
-  constructor(apiKey: string) {
-    this.client = new OpenAI({ apiKey })
+  constructor(apiKey: string, baseURL?: string) {
+    this.client = new OpenAI({
+      apiKey,
+      ...(baseURL && { baseURL })
+    })
+    console.log('[УчиОн] OpenAIProvider initialized', { baseURL: baseURL || 'default (api.openai.com)' })
   }
 
   private async getTextbookContext(params: GenerateParams): Promise<string> {
@@ -175,25 +179,37 @@ class OpenAIProvider implements AIProvider {
         currentUserPrompt += `\n\nВАЖНО: В предыдущей версии были найдены ошибки. ИСПРАВЬ ИХ:\n- ${lastIssues.join('\n- ')}`
       }
 
+      // JSON schema example to guide the model (since NeuroAPI doesn't support json_schema response_format)
+      const jsonSchemaExample = `
+Верни JSON строго по этой схеме:
+{
+  "assignments": [
+    { "index": 1, "type": "theory", "text": "Текст задания 1" },
+    { "index": 2, "type": "apply", "text": "Текст задания 2" },
+    ... (всего 7 заданий, type может быть: theory, apply, error, creative)
+  ],
+  "test": [
+    { "index": 1, "question": "Вопрос 1?", "options": { "A": "Вариант A", "B": "Вариант B", "C": "Вариант C" } },
+    ... (всего 10 вопросов)
+  ],
+  "answers": {
+    "assignments": ["Ответ 1", "Ответ 2", ... (7 ответов)],
+    "test": ["A", "B", "C", ... (10 букв A/B/C)]
+  }
+}`
+
       let completion
       try {
-        // @ts-ignore - Using new responses API
         completion = await timedLLMCall(
           "main-generation",
-          () => (this.client as any).responses.create({
-            model: 'gpt-5-mini',
-            input: [
+          () => this.client.chat.completions.create({
+            model: process.env.AI_MODEL_GENERATION || 'gpt-5-mini',
+            messages: [
               { role: 'system', content: systemPrompt },
-              { role: 'user', content: currentUserPrompt }
+              { role: 'user', content: currentUserPrompt + '\n\n' + jsonSchemaExample }
             ],
-            max_output_tokens: 6000,
-            text: {
-              format: {
-                type: 'json_schema',
-                name: 'worksheet_json',
-                schema: WORKSHEET_JSON_SCHEMA
-              }
-            }
+            max_tokens: 6000,
+            response_format: { type: 'json_object' }
           })
         )
         console.log('[Generator Response]', JSON.stringify(completion, null, 2))
@@ -432,19 +448,24 @@ export function getAIProvider(): AIProvider {
     process.env.NODE_ENV === 'production' ||
     process.env.VERCEL_ENV === 'production'
 
-  const useOpenAI =
-    isProd &&
-    process.env.AI_PROVIDER === 'openai' &&
-    process.env.OPENAI_API_KEY
+  const aiProvider = process.env.AI_PROVIDER
+  const apiKey = process.env.OPENAI_API_KEY
+  const baseURL = process.env.AI_BASE_URL
+
+  // Support both 'openai' (direct OpenAI) and 'neuroapi' (OpenAI-compatible)
+  const useAI =
+    (isProd && aiProvider === 'openai' && apiKey) ||
+    (aiProvider === 'neuroapi' && apiKey)
 
   console.log('[УчиОн] getAIProvider:', {
     isProd,
-    AI_PROVIDER: process.env.AI_PROVIDER,
-    useOpenAI: !!useOpenAI,
+    AI_PROVIDER: aiProvider,
+    AI_BASE_URL: baseURL || 'default',
+    useAI: !!useAI,
   })
 
-  if (useOpenAI) {
-    return new OpenAIProvider(process.env.OPENAI_API_KEY as string)
+  if (useAI) {
+    return new OpenAIProvider(apiKey as string, baseURL)
   }
 
   return new DummyProvider()

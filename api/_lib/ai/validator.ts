@@ -55,6 +55,19 @@ export async function timedLLMCall(label: string, call: () => Promise<any>) {
 }
 
 export function extractWorksheetJsonFromResponse(response: any): WorksheetJson {
+  // Chat Completions API format (standard)
+  if (response.choices?.[0]?.message?.content) {
+    let raw = response.choices[0].message.content.trim()
+    const firstBrace = raw.indexOf('{')
+    const lastBrace = raw.lastIndexOf('}')
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      raw = raw.slice(firstBrace, lastBrace + 1)
+    }
+    if (!raw) throw new Error('Empty AI JSON response')
+    return JSON.parse(raw) as WorksheetJson
+  }
+
+  // Responses API format (legacy OpenAI)
   const output = response.output?.[0]
   const content = output?.content?.[0]
 
@@ -88,6 +101,13 @@ export function extractWorksheetJsonFromResponse(response: any): WorksheetJson {
 
 export function extractTextFromResponse(response: any): string {
   if (!response) return ''
+
+  // Chat Completions API format (standard)
+  if (response.choices?.[0]?.message?.content) {
+    return response.choices[0].message.content
+  }
+
+  // Responses API format (legacy OpenAI)
   if (typeof (response as any).output_text === 'string') return (response as any).output_text
   const output = (response as any).output
   if (Array.isArray(output)) {
@@ -177,13 +197,13 @@ export async function validateWorksheet(openaiClient: any, params: { subject: Su
   try {
     const completion = await timedLLMCall(
       'validator',
-      () => (openaiClient as any).responses.create({
-        model: 'gpt-4.1-mini',
-        input: [
+      () => openaiClient.chat.completions.create({
+        model: process.env.AI_MODEL_VALIDATION || 'gpt-4.1-mini',
+        messages: [
           { role: 'system', content: SUBJECT_CONFIG[params.subject].validatorPrompt },
           { role: 'user', content: `Предмет: ${params.subject}\nКласс: ${params.grade}\nТема: ${params.topic}\n\n${content}` },
         ],
-        max_output_tokens: 600,
+        max_tokens: 600,
       })
     )
 
@@ -249,17 +269,11 @@ export async function regenerateProblemBlocks(params: {
   const userPrompt = userParts.join('\n\n')
 
   const regenerationResponse = await timedLLMCall('regen-problem-blocks', () =>
-    (openai as any).responses.create({
-      model: 'gpt-4.1-mini',
-      max_output_tokens: 800,
-      text: {
-        format: {
-          type: 'json_schema',
-          name: 'worksheet_blocks_patch',
-          schema: WORKSHEET_BLOCKS_PATCH_SCHEMA,
-        },
-      },
-      input: [
+    openai.chat.completions.create({
+      model: process.env.AI_MODEL_VALIDATION || 'gpt-4.1-mini',
+      max_tokens: 800,
+      response_format: { type: 'json_object' },
+      messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },
       ],

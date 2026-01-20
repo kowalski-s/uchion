@@ -31,7 +31,7 @@
 - [ ] Проверка прав на бэкенде
 - [ ] Бэкапы БД (автоматические, hourly)
 - [ ] 30 дней retention для backups
-- [ ] Миграция на Yandex Cloud Managed PostgreSQL (ФЗ-152 compliance)
+- [ ] Миграция на Yandex Cloud Managed PostgreSQL (ФЗ-152 compliance) (ИЛИ ДРУГОЙ СЕРВИС РФ)
 
 ---
 
@@ -40,28 +40,27 @@
 - [x] Самописный OAuth 2.0
 - [x] Добавить Яндекс OAuth
 - [x] Добавить вход через Telegram
-- [x] Защитить роуты (middleware: withAuth, withAdminAuth, withOptionalAuth)
-- [x] Ревью безопасности (timing-safe comparisons, security headers, rate limiting)
-- [x] Логика сессий/токенов (refresh token rotation, 1h access / 7d refresh)
-- [x] Логаут + инвалидация токенов (revokeRefreshToken, revokeAllUserTokens)
-- [ ] **Encryption at rest** для sensitive данных → модуль готов, применить в Фазе 7
-- [x] **Access logs** для аудита (audit-log.ts, события: login, logout, CSRF, rate limit)
-- [ ] **Data export capability** (право на получение данных - ФЗ-152) → Фаза 7
+                                                                                                                                                                     
+- [x] Защитить роуты (middleware: withAuth, withAdminAuth, withOptionalAuth)                                                                                                                           
+- [x] Ревью безопасности (timing-safe comparisons, security headers, rate limiting)                                                                                                                    
+- [x] Логика сессий/токенов (refresh token rotation, 1h access / 7d refresh)                                                                                                                           
+- [x] Логаут + инвалидация токенов (revokeRefreshToken, revokeAllUserTokens)                                                                                                                           
+- [ ] **Encryption at rest** для sensitive данных → модуль готов, применить в Фазе 7                                                                                                                   
+- [x] **Access logs** для аудита (audit-log.ts, события: login, logout, CSRF, rate limit)                                                                                                              
+- [ ] **Data export capability** (право на получение данных - ФЗ-152) → Фаза 7 
 
 ---
-
 ## Фаза 3: Личный кабинет
 
-- [ ] Страница dashboard
-- [ ] Раздел "Мои листы"
-- [ ] CRUD операции с листами
-- [ ] **Функция "Создать на основе"** существующего листа (изменение параметров)
-- [ ] **Организация в папки/категории** (не просто список)
-- [ ] **Понятное именование листов** пользователем (custom titles)
-- [ ] **Редактирование worksheet на сайте** (изменять формулировки заданий)
-- [ ] Отображение лимитов генераций (сколько осталось)
-- [ ] Статус подписки пользователя
-- [ ] Скачивание PDF/DOCX
+- [x] Страница dashboard
+- [x] Раздел "Мои листы"
+- [x] CRUD операции с листами
+- [x] **Организация в папки/категории** (не просто список) (добавить возможность удалять папки и установить лимиты)
+- [x] **Понятное именование листов** пользователем (custom titles)
+- [x] **Редактирование worksheet на сайте** (изменять формулировки заданий)
+- [x] Отображение лимитов генераций (сколько осталось)
+- [x] Статус подписки пользователя
+- [x] Скачивание PDF/DOCX (DOCX не добавлен - пересмотреть решение)
 - [ ] Ревью и тест
 - [ ] Водяной знак на PDF
 
@@ -97,16 +96,16 @@
 ## Фаза 5: Админ-панель
 
 ### Базовый функционал
-- [ ] Список пользователей
-- [ ] Просмотр генераций и ошибок
-- [ ] Список платежей
+- [x] Список пользователей
+- [x] Просмотр генераций и ошибок
+- [x] Список платежей
 
 ### Расширенные функции
 - [ ] **Перезапуск зависшей генерации** с fallback на другого AI провайдера
 - [ ] **Просмотр низкокачественных генераций** (validation score <8) для manual review
 - [ ] **Ручная обработка webhook** для troubleshooting
 - [ ] **AI cost analytics** по провайдерам (OpenAI vs YandexGPT)
-- [ ] **Alert system** на критические события (webhook failures, high error rate, AI timeouts)
+- [x] **Alert system** на критические события (webhook failures, high error rate, AI timeouts) (доделать позже систему алертов, на разные ситуации, идеи в доке)
 - [ ] **Reporting для заказчика** (uptime, активные подписчики, costs, паттерны)
 - [ ] **User reports система** (некорректный контент, ошибки, несоответствие ФГОС)
 - [ ] **Обработка user reports** в dashboard

@@ -13,7 +13,7 @@ export const WORKSHEET_JSON_SCHEMA = {
       items: {
         type: 'object',
         properties: {
-          index: { type: 'integer' },
+          index: { type: 'number' },
           type: { type: 'string', enum: ['theory', 'apply', 'error', 'creative'] },
           text: { type: 'string' },
         },
@@ -26,7 +26,7 @@ export const WORKSHEET_JSON_SCHEMA = {
       items: {
         type: 'object',
         properties: {
-          index: { type: 'integer' },
+          index: { type: 'number' },
           question: { type: 'string' },
           options: {
             type: 'object',
@@ -61,7 +61,7 @@ export const WORKSHEET_BLOCKS_PATCH_SCHEMA = {
       items: {
         type: 'object',
         properties: {
-          index: { type: 'integer' },
+          index: { type: 'number' },
           type: { type: 'string', enum: ['theory', 'apply', 'error', 'creative'] },
           text: { type: 'string' },
         },
@@ -74,7 +74,7 @@ export const WORKSHEET_BLOCKS_PATCH_SCHEMA = {
       items: {
         type: 'object',
         properties: {
-          index: { type: 'integer' },
+          index: { type: 'number' },
           question: { type: 'string' },
           options: {
             type: 'object',
