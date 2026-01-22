@@ -39,11 +39,17 @@ if (IS_PRODUCTION) {
 // ==================== TYPES ====================
 
 interface CreateLinkPayload {
-  productCode: string
+  productCode?: string
+  generationsCount?: number  // Dynamic generations (5-200)
   customerEmail?: string
   customerPhone?: string
   paymentMethod?: string  // 'AC' (card), 'SBP', etc.
 }
+
+// Dynamic pricing configuration
+const PRICE_PER_GENERATION = 20  // rubles
+const MIN_GENERATIONS = 5
+const MAX_GENERATIONS = 200
 
 // Simple email validation regex
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -161,6 +167,26 @@ async function applyProductEffect(
   userId: string,
   productCode: string
 ): Promise<{ success: boolean; message: string }> {
+  // Check for dynamic generations product (format: generations_dynamic_N)
+  const dynamicMatch = productCode.match(/^generations_dynamic_(\d+)$/)
+  if (dynamicMatch) {
+    const generationsCount = parseInt(dynamicMatch[1], 10)
+    if (generationsCount >= MIN_GENERATIONS && generationsCount <= MAX_GENERATIONS) {
+      await db
+        .update(users)
+        .set({
+          generationsLeft: sql`${users.generationsLeft} + ${generationsCount}`,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, userId))
+
+      console.log(`[Billing] Added ${generationsCount} generations (dynamic) to user ${userId}`)
+      return { success: true, message: `Added ${generationsCount} generations` }
+    }
+    return { success: false, message: `Invalid dynamic generations count: ${generationsCount}` }
+  }
+
+  // Fixed product lookup
   const product = PRODUCTS[productCode]
 
   if (!product) {
@@ -231,16 +257,39 @@ router.post('/prodamus/create-link', withAuth(async (req, res) => {
   }
 
   try {
-    const { productCode, customerEmail, customerPhone, paymentMethod } = req.body as CreateLinkPayload
+    const { productCode, generationsCount, customerEmail, customerPhone, paymentMethod } = req.body as CreateLinkPayload
 
-    // Validate product code
-    if (!productCode || typeof productCode !== 'string') {
-      return res.status(400).json({ error: 'Код продукта обязателен' })
-    }
+    // Determine if this is a dynamic generations purchase or fixed product
+    let product: ProductInfo | null = null
+    let effectiveProductCode: string
+    let isDynamicPurchase = false
 
-    const product = PRODUCTS[productCode]
-    if (!product) {
-      return res.status(400).json({ error: 'Неизвестный код продукта' })
+    if (generationsCount !== undefined) {
+      // Dynamic generations purchase
+      if (typeof generationsCount !== 'number' || !Number.isInteger(generationsCount)) {
+        return res.status(400).json({ error: 'Количество генераций должно быть целым числом' })
+      }
+      if (generationsCount < MIN_GENERATIONS || generationsCount > MAX_GENERATIONS) {
+        return res.status(400).json({ error: `Количество генераций должно быть от ${MIN_GENERATIONS} до ${MAX_GENERATIONS}` })
+      }
+
+      isDynamicPurchase = true
+      effectiveProductCode = `generations_dynamic_${generationsCount}`
+      product = {
+        name: `Пакет ${generationsCount} генераций`,
+        price: generationsCount * PRICE_PER_GENERATION,
+        type: 'generations',
+        value: generationsCount,
+      }
+    } else if (productCode) {
+      // Fixed product purchase (legacy support)
+      effectiveProductCode = productCode
+      product = PRODUCTS[productCode] || null
+      if (!product) {
+        return res.status(400).json({ error: 'Неизвестный код продукта' })
+      }
+    } else {
+      return res.status(400).json({ error: 'Укажите количество генераций или код продукта' })
     }
 
     // Validate optional email format
@@ -281,7 +330,7 @@ router.post('/prodamus/create-link', withAuth(async (req, res) => {
       .insert(paymentIntents)
       .values({
         userId,
-        productCode,
+        productCode: effectiveProductCode,
         amount: product.price * 100,  // Store in kopecks
         currency: 'RUB',
         status: 'created',
@@ -304,7 +353,7 @@ router.post('/prodamus/create-link', withAuth(async (req, res) => {
         name: product.name,
         price: String(product.price),
         quantity: '1',
-        sku: productCode,
+        sku: effectiveProductCode,
       }],
       urlSuccess: `${APP_URL}/payment/success?order_id=${orderId}`,
       urlReturn: `${APP_URL}/payment/cancel?order_id=${orderId}`,
@@ -350,7 +399,7 @@ router.post('/prodamus/create-link', withAuth(async (req, res) => {
       console.log('[Billing] === END DEBUG ===')
     }
 
-    console.log(`[Billing] Created payment link for order ${orderId}, user ${userId}, product ${productCode}`)
+    console.log(`[Billing] Created payment link for order ${orderId}, user ${userId}, product ${effectiveProductCode}`)
 
     return res.status(201).json({
       success: true,

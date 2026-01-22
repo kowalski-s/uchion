@@ -26,6 +26,7 @@ export function withAuth(handler) {
                 .select({
                 id: users.id,
                 email: users.email,
+                name: users.name,
                 role: users.role,
             })
                 .from(users)
@@ -35,7 +36,7 @@ export function withAuth(handler) {
                 console.log('[Auth Middleware] User not found in DB for userId:', payload.sub);
                 return res.status(401).json({ error: 'User not found or deactivated' });
             }
-            console.log('[Auth Middleware] User authenticated:', user.id, user.email);
+            console.log('[Auth Middleware] User authenticated:', user.id, user.email, user.name);
             req.user = user;
             return await handler(req, res);
         }
@@ -77,6 +78,7 @@ export function withOptionalAuth(handler) {
                 .select({
                 id: users.id,
                 email: users.email,
+                name: users.name,
                 role: users.role,
             })
                 .from(users)

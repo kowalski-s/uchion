@@ -1,4 +1,7 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+// Load env files - .env.local takes priority over .env
+dotenv.config({ path: '.env.local', override: true });
+dotenv.config({ path: '.env' });
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import path from 'path';
@@ -11,13 +14,58 @@ import generateRoutes from './server/routes/generate.js';
 import healthRoutes from './server/routes/health.js';
 import adminRoutes from './server/routes/admin.js';
 import telegramRoutes from './server/routes/telegram.js';
+import billingRoutes from './server/routes/billing.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+// ==================== STARTUP CONFIG VALIDATION ====================
+function validateProdamusConfig() {
+    const secret = process.env.PRODAMUS_SECRET;
+    const payformUrl = process.env.PRODAMUS_PAYFORM_URL;
+    const isProduction = process.env.NODE_ENV === 'production';
+    const debugEnabled = process.env.PRODAMUS_DEBUG === 'true';
+    console.log('[Startup] ========== PRODAMUS CONFIG CHECK ==========');
+    console.log('[Startup] NODE_ENV:', process.env.NODE_ENV || 'development');
+    console.log('[Startup] PRODAMUS_DEBUG:', debugEnabled ? 'ENABLED' : 'disabled');
+    console.log('[Startup] PRODAMUS_SECRET:', secret ? `SET (${secret.length} chars, starts with "${secret.substring(0, 4)}...")` : 'NOT SET');
+    console.log('[Startup] PRODAMUS_PAYFORM_URL:', payformUrl || 'NOT SET');
+    if (isProduction) {
+        if (!secret) {
+            console.error('[Startup] FATAL: PRODAMUS_SECRET is required in production!');
+        }
+        if (!payformUrl) {
+            console.error('[Startup] FATAL: PRODAMUS_PAYFORM_URL is required in production!');
+        }
+        if (secret && payformUrl) {
+            console.log('[Startup] Prodamus config: OK');
+        }
+    }
+    else {
+        console.log('[Startup] Development mode - Prodamus config optional');
+    }
+    console.log('[Startup] ================================================');
+}
+validateProdamusConfig();
 const app = express();
 const PORT = process.env.PORT || 3000;
 // ==================== MIDDLEWARE ====================
-// Parse JSON bodies
-app.use(express.json());
+// Parse JSON bodies with raw body preservation for webhooks
+app.use(express.json({
+    verify: (req, _res, buf) => {
+        // Store raw body for webhook signature verification
+        if (req.url?.includes('/api/billing/') && req.url?.includes('/webhook')) {
+            req.rawBody = buf.toString();
+        }
+    }
+}));
+// Parse URL-encoded bodies (for Prodamus webhooks)
+app.use(express.urlencoded({
+    extended: true,
+    verify: (req, _res, buf) => {
+        if (req.url?.includes('/api/billing/') && req.url?.includes('/webhook')) {
+            req.rawBody = buf.toString();
+        }
+    }
+}));
 // Parse cookies
 app.use(cookieParser());
 // Security headers (moved from vercel.json)
@@ -37,6 +85,7 @@ app.use('/api/worksheets', worksheetsRoutes);
 app.use('/api/generate', generateRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/telegram', telegramRoutes);
+app.use('/api/billing', billingRoutes);
 app.use('/api', healthRoutes);
 // ==================== STATIC FILES ====================
 // Serve static files from dist folder (production build)
