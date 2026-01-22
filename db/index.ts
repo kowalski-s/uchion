@@ -1,3 +1,12 @@
+import dotenv from 'dotenv'
+import path from 'path'
+// Load env files - .env.local takes priority over .env
+const envLocalPath = path.resolve(process.cwd(), '.env.local')
+console.log('[ENV] Loading from:', envLocalPath)
+const result = dotenv.config({ path: envLocalPath, override: true })
+console.log('[ENV] Loaded .env.local, AI_MODEL_GENERATION =', process.env.AI_MODEL_GENERATION)
+dotenv.config({ path: '.env' })
+
 import { drizzle } from 'drizzle-orm/postgres-js'
 import postgres from 'postgres'
 import * as schema from './schema.js'

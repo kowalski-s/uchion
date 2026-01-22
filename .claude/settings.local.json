@@ -36,7 +36,9 @@
       "Bash(npm run smoke:*)",
       "Bash(cat:*)",
       "Bash(timeout 10 npx tsx:*)",
-      "Bash(timeout 60 npx tsx:*)"
+      "Bash(timeout 60 npx tsx:*)",
+      "WebFetch(domain:docs.polza.ai)",
+      "WebFetch(domain:polza.ai)"
     ]
   }
 }

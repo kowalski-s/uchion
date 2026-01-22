@@ -79,19 +79,21 @@ npm run db:studio        # Open Drizzle Studio
 The system implements a **two-phase generation-validation loop**:
 
 1. **Generation Phase** (`api/_lib/ai-provider.ts`):
-   - Model: `gpt-5-mini`
+   - Model: Configurable via `AI_MODEL_GENERATION` (default: `openai/gpt-4.1-mini` on polza.ai)
    - Uses subject-specific system prompts from `api/_lib/ai/prompts.ts`
-   - Optional: Retrieves context from Vector Store (if `UCHION_VECTOR_STORE_ID` is set)
+   - Optional: Retrieves context from Vector Store (if `UCHION_VECTOR_STORE_ID` is set - OpenAI only)
    - Outputs structured JSON matching `WORKSHEET_JSON_SCHEMA`
+   - Token limit: `max_tokens: 6000` to prevent cost overruns
 
 2. **Validation Phase** (`api/_lib/ai/validator.ts`):
-   - Model: `gpt-4.1-mini`
+   - Model: Configurable via `AI_MODEL_VALIDATION` (default: `openai/gpt-4.1-nano` on polza.ai)
    - Analyzes generated content for:
      - Structural correctness (7 assignments, 10 test questions)
      - Educational quality (age-appropriate, follows FGOS)
      - Answer correctness
      - Topic relevance
    - Returns validation score (0-10) and list of issues
+   - Token limit: `max_tokens: 600` for cost efficiency
 
 3. **Self-Correction (CLEAN step)**:
    - If validation fails, identifies problem blocks (specific assignments or tests)
@@ -110,12 +112,18 @@ The system implements a **two-phase generation-validation loop**:
 # Database
 DATABASE_URL=postgresql://user:password@host:5432/database
 
-# AI Provider
-AI_PROVIDER=dummy           # Use 'dummy' for local dev (free, no API calls)
-# OPENAI_API_KEY=xxx        # Not needed if using dummy provider
+# AI Provider - polza.ai (aggregator with 250+ models)
+AI_PROVIDER=polza                           # Use 'dummy' for free local dev (no API calls)
+OPENAI_API_KEY=sk-your-polza-api-key       # Get from https://polza.ai
+AI_BASE_URL=https://api.polza.ai/api/v1    # polza.ai endpoint
+
+# Models (format: provider/model-name)
+# Recommended: GPT-4.1 family for best quality/price (~0.17₽ per worksheet)
+AI_MODEL_GENERATION=openai/gpt-4.1-mini    # Cost-efficient generation
+AI_MODEL_VALIDATION=openai/gpt-4.1-nano    # Ultra-cheap validation
 
 # Auth
-AUTH_SECRET=your-dev-secret-min-32-chars  # JWT signing secret
+AUTH_SECRET=your-dev-secret-min-32-chars   # JWT signing secret
 
 # OAuth (optional for local dev)
 YANDEX_CLIENT_ID=xxx
@@ -130,10 +138,18 @@ VITE_TELEGRAM_BOT_USERNAME=xxx
 # Database
 DATABASE_URL=postgresql://...
 
-# AI Provider
-AI_PROVIDER=openai
-OPENAI_API_KEY=sk-...
-UCHION_VECTOR_STORE_ID=vs_...  # Optional: enables RAG context
+# AI Provider - polza.ai
+AI_PROVIDER=polza
+OPENAI_API_KEY=sk-prod-polza-api-key
+AI_BASE_URL=https://api.polza.ai/api/v1
+
+# Models - GPT-4.1 family recommended (~0.17₽ per worksheet)
+AI_MODEL_GENERATION=openai/gpt-4.1-mini
+AI_MODEL_VALIDATION=openai/gpt-4.1-nano
+# Alternative: openai/gpt-4.1 for both (higher quality, ~0.7₽ per worksheet)
+
+# Optional: Vector Store (only works with direct OpenAI, not through polza.ai)
+# UCHION_VECTOR_STORE_ID=vs_...
 
 # Auth (use different secret than dev!)
 AUTH_SECRET=production-secret-min-32-chars
@@ -147,8 +163,13 @@ VITE_TELEGRAM_BOT_USERNAME=xxx
 ```
 
 **Provider Selection Logic** (`api/_lib/ai-provider.ts`):
-- Uses `OpenAIProvider` if `NODE_ENV=production` AND `AI_PROVIDER=openai` AND `OPENAI_API_KEY` is set
-- Otherwise uses `DummyProvider` (returns hardcoded math worksheet)
+- Uses `OpenAIProvider` if:
+  - (`NODE_ENV=production` AND `AI_PROVIDER=openai` AND `OPENAI_API_KEY` is set) OR
+  - (`AI_PROVIDER=polza` AND `OPENAI_API_KEY` is set) OR
+  - (`AI_PROVIDER=neuroapi` AND `OPENAI_API_KEY` is set - legacy)
+- Otherwise uses `DummyProvider` (returns hardcoded math worksheet for free local development)
+
+**Note**: polza.ai is fully OpenAI SDK-compatible, so the same `OpenAIProvider` class works for all providers by changing the `baseURL` parameter.
 
 ## Authentication
 
@@ -250,11 +271,33 @@ EXPOSE 3000
 CMD ["node", "dist-server/server.js"]
 ```
 
+## Model Selection and Pricing
+
+### Recommended Models (via polza.ai)
+
+**Best Quality/Price Balance:**
+- Generation: `openai/gpt-4.1-mini` (~0.15₽ per worksheet)
+- Validation: `openai/gpt-4.1-nano` (~0.02₽ per validation)
+- **Total: ~0.17₽ per complete worksheet**
+
+**Higher Quality (2-4x more expensive):**
+- Generation: `openai/gpt-4.1` (~0.7₽ per worksheet)
+- Validation: `openai/gpt-4.1-mini` (~0.08₽ per validation)
+- **Total: ~0.78₽ per complete worksheet**
+
+**Avoid These (expensive reasoning models):**
+- `openai/gpt-5-mini`, `openai/o1`, `openai/o3` series - they generate internal "reasoning tokens" (1500-3000 extra tokens) which multiply costs by 5-10x
+- Example: `gpt-5-mini` costs ~1.5₽ per worksheet vs 0.17₽ for `gpt-4.1-mini`
+
+### Token Limits
+- Generation: `max_tokens: 6000` - prevents cost overruns while allowing full worksheet
+- Validation: `max_tokens: 600` - sufficient for validation feedback
+
 ## Critical Notes
 
 1. **Never commit API keys** - Use environment variables via Dokploy
 2. **Different AUTH_SECRET for dev/prod** - Prevents token cross-environment usage
 3. **Validate all AI outputs** - The validation loop is critical for quality
 4. **Grade-level accuracy matters** - Content must match Russian FGOS standards
-5. **Token limits** - `max_output_tokens: 6000` prevents cost overruns
+5. **Use cost-efficient models** - GPT-4.1 family provides best quality/price ratio
 6. **Dummy provider** - Always use for local dev to avoid API costs

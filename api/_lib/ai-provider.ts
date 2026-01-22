@@ -198,18 +198,20 @@ class OpenAIProvider implements AIProvider {
   }
 }`
 
+      const generationModel = process.env.AI_MODEL_GENERATION || 'gpt-5-mini'
+      console.log('[УчиОн] Using model for generation:', generationModel)
+
       let completion
       try {
         completion = await timedLLMCall(
           "main-generation",
           () => this.client.chat.completions.create({
-            model: process.env.AI_MODEL_GENERATION || 'gpt-5-mini',
+            model: generationModel,
             messages: [
               { role: 'system', content: systemPrompt },
               { role: 'user', content: currentUserPrompt + '\n\n' + jsonSchemaExample }
             ],
-            max_tokens: 6000,
-            response_format: { type: 'json_object' }
+            max_tokens: 6000
           })
         )
         console.log('[Generator Response]', JSON.stringify(completion, null, 2))
@@ -452,9 +454,10 @@ export function getAIProvider(): AIProvider {
   const apiKey = process.env.OPENAI_API_KEY
   const baseURL = process.env.AI_BASE_URL
 
-  // Support both 'openai' (direct OpenAI) and 'neuroapi' (OpenAI-compatible)
+  // Support 'openai' (direct OpenAI), 'polza' (polza.ai), 'neuroapi' (legacy), or any OpenAI-compatible provider
   const useAI =
     (isProd && aiProvider === 'openai' && apiKey) ||
+    (aiProvider === 'polza' && apiKey) ||
     (aiProvider === 'neuroapi' && apiKey)
 
   console.log('[УчиОн] getAIProvider:', {

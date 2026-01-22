@@ -1,4 +1,7 @@
-import 'dotenv/config'
+import dotenv from 'dotenv'
+// Load env files - .env.local takes priority over .env
+dotenv.config({ path: '.env.local', override: true })
+dotenv.config({ path: '.env' })
 import express, { type Request } from 'express'
 import cookieParser from 'cookie-parser'
 import path from 'path'
