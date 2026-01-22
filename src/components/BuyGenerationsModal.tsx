@@ -115,7 +115,7 @@ export default function BuyGenerationsModal({ isOpen, onClose }: BuyGenerationsM
           </button>
 
           <h2 className="text-2xl font-bold text-center">
-            Добавить <span className="text-purple-600">генерации</span>
+            Пополнить <span className="text-[#8C52FF]">генерации</span>
           </h2>
 
           {/* Balance badge */}
@@ -144,7 +144,7 @@ export default function BuyGenerationsModal({ isOpen, onClose }: BuyGenerationsM
               onChange={(e) => setGenerationsCount(parseInt(e.target.value, 10))}
               className="w-full h-2 bg-gradient-to-r from-purple-200 to-purple-400 rounded-lg appearance-none cursor-pointer slider-thumb"
               style={{
-                background: `linear-gradient(to right, #a855f7 0%, #a855f7 ${((generationsCount - MIN_GENERATIONS) / (MAX_GENERATIONS - MIN_GENERATIONS)) * 100}%, #e2e8f0 ${((generationsCount - MIN_GENERATIONS) / (MAX_GENERATIONS - MIN_GENERATIONS)) * 100}%, #e2e8f0 100%)`
+                background: `linear-gradient(to right, #8C52FF 0%, #8C52FF ${((generationsCount - MIN_GENERATIONS) / (MAX_GENERATIONS - MIN_GENERATIONS)) * 100}%, #e2e8f0 ${((generationsCount - MIN_GENERATIONS) / (MAX_GENERATIONS - MIN_GENERATIONS)) * 100}%, #e2e8f0 100%)`
               }}
             />
 
@@ -164,8 +164,8 @@ export default function BuyGenerationsModal({ isOpen, onClose }: BuyGenerationsM
                   onClick={() => setGenerationsCount(option.count)}
                   className={`relative p-3 rounded-xl border-2 transition-all ${
                     generationsCount === option.count
-                      ? 'border-purple-500 bg-purple-50'
-                      : 'border-slate-200 hover:border-purple-300 bg-white'
+                      ? 'border-[#8C52FF] bg-purple-50'
+                      : 'border-slate-200 hover:border-[#8C52FF]/50 bg-white'
                   }`}
                 >
                   {option.discount > 0 && (
@@ -213,8 +213,8 @@ export default function BuyGenerationsModal({ isOpen, onClose }: BuyGenerationsM
             disabled={purchasing}
             className={`w-full py-4 rounded-xl text-white font-semibold text-lg transition-all ${
               purchasing
-                ? 'bg-slate-300 cursor-wait'
-                : 'bg-gradient-to-r from-purple-600 to-pink-500 hover:from-purple-700 hover:to-pink-600 shadow-lg hover:shadow-xl'
+                ? 'bg-purple-300 cursor-wait'
+                : 'bg-[#8C52FF] hover:bg-purple-700 shadow-lg hover:shadow-xl'
             }`}
           >
             {purchasing ? (
@@ -238,7 +238,7 @@ export default function BuyGenerationsModal({ isOpen, onClose }: BuyGenerationsM
           height: 20px;
           border-radius: 50%;
           background: white;
-          border: 3px solid #a855f7;
+          border: 3px solid #8C52FF;
           cursor: pointer;
           box-shadow: 0 2px 6px rgba(0,0,0,0.15);
         }
@@ -247,7 +247,7 @@ export default function BuyGenerationsModal({ isOpen, onClose }: BuyGenerationsM
           height: 20px;
           border-radius: 50%;
           background: white;
-          border: 3px solid #a855f7;
+          border: 3px solid #8C52FF;
           cursor: pointer;
           box-shadow: 0 2px 6px rgba(0,0,0,0.15);
         }
