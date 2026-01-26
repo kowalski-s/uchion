@@ -1,4 +1,10 @@
-import type { Worksheet, Subject, TestQuestion, Assignment, WorksheetAnswers, WorksheetJson, AssignmentType, ValidationResult, ValidationIssueAnalysis } from '../../shared/types'
+import type { Worksheet, Subject, TestQuestion, Assignment, WorksheetAnswers, WorksheetJson } from '../../shared/types'
+
+// Extended worksheet type with validation metadata
+interface WorksheetWithValidation extends Worksheet {
+  json?: WorksheetJson
+  validationStatus?: 'OK' | 'FAIL'
+}
 import OpenAI from 'openai'
 import type { GeneratePayload } from '../../shared/types'
 import { SUBJECT_CONFIG } from './ai/prompts.js'
@@ -110,10 +116,9 @@ class OpenAIProvider implements AIProvider {
       // If the SDK version installed supports it (likely a custom or very new beta feature not fully typed), we try to use it.
       // If `client.vectorStores.search` does not exist in the installed SDK, we might need a workaround or assume it exists at runtime.
       
-      // Let's try to follow the user's snippet exactly, assuming they have a compatible SDK or extended type.
-      // Casting client to any to avoid TS errors for this specific experimental/custom method.
-      
-      const searchResult = await (this.client as any).vectorStores.search(VECTOR_STORE_ID, {
+      // Vector store search is a beta feature with incomplete SDK types
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const searchResult = await (this.client as unknown as { vectorStores: { search: (id: string, params: { query: string; max_num_results: number }) => Promise<{ data?: Array<{ content?: Array<{ type: string; text?: string }> }> }> } }).vectorStores.search(VECTOR_STORE_ID, {
         query,
         max_num_results: 8,
       })
@@ -242,10 +247,10 @@ class OpenAIProvider implements AIProvider {
       if (validation.score === 10) {
         console.log('[УчиОн] Perfect score! Returning result.')
         console.log("[GENERATION] Total duration ms =", Date.now() - totalStart);
-        const base = this.parseWorksheetText(worksheetText, params) as any
-        base.json = worksheetJson
+        const base: WorksheetWithValidation = this.parseWorksheetText(worksheetText, params)
+        base.json = worksheetJson ?? undefined
         base.validationStatus = 'OK'
-        return base as Worksheet
+        return base
       }
 
       // CLEAN step: partial regeneration of problem blocks
@@ -283,10 +288,10 @@ class OpenAIProvider implements AIProvider {
       if (validation2.score === 10) {
         console.log('[УчиОн] Clean step succeeded.')
         console.log("[GENERATION] Total duration ms =", Date.now() - totalStart);
-        const base = this.parseWorksheetText(worksheetText, params) as any
+        const base: WorksheetWithValidation = this.parseWorksheetText(worksheetText, params)
         base.json = worksheetJson ?? undefined
         base.validationStatus = 'OK'
-        return base as Worksheet
+        return base
       }
 
       // If still FAIL, return the latest version without further loops
@@ -304,10 +309,10 @@ class OpenAIProvider implements AIProvider {
 
     onProgress?.(95)
     console.log("[GENERATION] Total duration ms =", Date.now() - totalStart);
-    const base = this.parseWorksheetText(bestContent, params) as any
+    const base: WorksheetWithValidation = this.parseWorksheetText(bestContent, params)
     base.json = worksheetJson ?? undefined
     base.validationStatus = 'FAIL'
-    return base as Worksheet
+    return base
   }
 
   private parseWorksheetText(text: string, params: GenerateParams): Worksheet {

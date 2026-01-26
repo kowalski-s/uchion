@@ -31,7 +31,7 @@ function validateProdamusConfig() {
   console.log('[Startup] ========== PRODAMUS CONFIG CHECK ==========')
   console.log('[Startup] NODE_ENV:', process.env.NODE_ENV || 'development')
   console.log('[Startup] PRODAMUS_DEBUG:', debugEnabled ? 'ENABLED' : 'disabled')
-  console.log('[Startup] PRODAMUS_SECRET:', secret ? `SET (${secret.length} chars, starts with "${secret.substring(0, 4)}...")` : 'NOT SET')
+  console.log('[Startup] PRODAMUS_SECRET:', secret ? 'SET' : 'NOT SET')
   console.log('[Startup] PRODAMUS_PAYFORM_URL:', payformUrl || 'NOT SET')
 
   if (isProduction) {

@@ -1,11 +1,24 @@
 import type { WorksheetJson, ValidationResult, ValidationIssueAnalysis, Subject } from '../../../shared/types'
 import { SUBJECT_CONFIG } from './prompts.js'
 import { trackAICall } from '../alerts/generation-alerts.js'
+import type OpenAI from 'openai'
+
+// OpenAI response types
+interface ChatCompletionResponse {
+  choices?: Array<{ message?: { content?: string | null } }>
+  model?: string
+  usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number }
+  // Legacy Responses API format
+  output?: Array<{ content?: Array<{ json?: unknown; text?: { value?: string } | string }> }>
+  output_text?: string
+}
+
+type OpenAIClient = Pick<OpenAI, 'chat'>
 
 // Timeout for OpenAI calls (2 minutes)
 const AI_CALL_TIMEOUT_MS = 120_000
 
-export async function timedLLMCall(label: string, call: () => Promise<any>) {
+export async function timedLLMCall<T extends ChatCompletionResponse>(label: string, call: () => Promise<T>): Promise<T> {
   const start = Date.now()
   console.log(`[LLM][START] ${label}`)
 
@@ -54,7 +67,7 @@ export async function timedLLMCall(label: string, call: () => Promise<any>) {
   }
 }
 
-export function extractWorksheetJsonFromResponse(response: any): WorksheetJson {
+export function extractWorksheetJsonFromResponse(response: ChatCompletionResponse): WorksheetJson {
   // Chat Completions API format (standard)
   if (response.choices?.[0]?.message?.content) {
     let raw = response.choices[0].message.content.trim()
@@ -75,19 +88,22 @@ export function extractWorksheetJsonFromResponse(response: any): WorksheetJson {
     return content.json as WorksheetJson
   }
 
-  if (content && 'text' in content && content.text?.value) {
-    let raw = content.text.value.trim()
-    const firstBrace = raw.indexOf('{')
-    const lastBrace = raw.lastIndexOf('}')
-    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-      raw = raw.slice(firstBrace, lastBrace + 1)
+  if (content && 'text' in content && content.text) {
+    const textValue = typeof content.text === 'string' ? content.text : content.text.value
+    if (textValue) {
+      let raw = textValue.trim()
+      const firstBrace = raw.indexOf('{')
+      const lastBrace = raw.lastIndexOf('}')
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        raw = raw.slice(firstBrace, lastBrace + 1)
+      }
+      if (!raw) throw new Error('Empty AI JSON response')
+      return JSON.parse(raw) as WorksheetJson
     }
-    if (!raw) throw new Error('Empty AI JSON response')
-    return JSON.parse(raw) as WorksheetJson
   }
 
   if ('output_text' in response && typeof response.output_text === 'string' && response.output_text) {
-    let raw = (response as any).output_text.trim()
+    let raw = response.output_text.trim()
     const firstBrace = raw.indexOf('{')
     const lastBrace = raw.lastIndexOf('}')
     if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
@@ -99,7 +115,7 @@ export function extractWorksheetJsonFromResponse(response: any): WorksheetJson {
   throw new Error('AI response did not contain JSON content')
 }
 
-export function extractTextFromResponse(response: any): string {
+export function extractTextFromResponse(response: ChatCompletionResponse | null | undefined): string {
   if (!response) return ''
 
   // Chat Completions API format (standard)
@@ -108,18 +124,19 @@ export function extractTextFromResponse(response: any): string {
   }
 
   // Responses API format (legacy OpenAI)
-  if (typeof (response as any).output_text === 'string') return (response as any).output_text
-  const output = (response as any).output
+  if (typeof response.output_text === 'string') return response.output_text
+  const output = response.output
   if (Array.isArray(output)) {
     const first = output[0]
     const firstContent = first?.content?.[0]
     if (firstContent && typeof firstContent.json === 'object') {
       try {
         return JSON.stringify(firstContent.json)
-      } catch {}
+      } catch { /* ignore parse errors */ }
     }
     const text = firstContent?.text
     if (typeof text === 'string') return text
+    if (typeof text === 'object' && text?.value) return text.value
   }
   return ''
 }
@@ -193,7 +210,7 @@ export function buildWorksheetTextFromJson(json: WorksheetJson): string {
   return parts.join('\n')
 }
 
-export async function validateWorksheet(openaiClient: any, params: { subject: Subject; grade: number; topic: string }, content: string): Promise<{ score: number; issues: string[] }> {
+export async function validateWorksheet(openaiClient: OpenAIClient, params: { subject: Subject; grade: number; topic: string }, content: string): Promise<{ score: number; issues: string[] }> {
   try {
     const completion = await timedLLMCall(
       'validator',
@@ -240,7 +257,7 @@ export async function regenerateProblemBlocks(params: {
   topic: string
   original: WorksheetJson
   analysis: ValidationIssueAnalysis
-  openai: any
+  openai: OpenAIClient
   onProgress?: (percent: number) => void
 }): Promise<WorksheetJson> {
   const { subject, grade, topic, original, analysis, openai, onProgress } = params

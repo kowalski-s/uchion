@@ -306,18 +306,18 @@ export default function AdminUserDetailPage() {
                       {formatDateTime(gen.createdAt)}
                     </td>
                     <td className="px-6 py-3">
-                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(gen.status)}`}>
-                        {formatGenerationStatus(gen.status)}
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
+                        Завершено
                       </span>
                     </td>
                     <td className="px-6 py-3 text-sm text-slate-600">
-                      {gen.worksheetSubject ? formatSubjectName(gen.worksheetSubject) : '-'}
+                      {gen.subject ? formatSubjectName(gen.subject) : '-'}
                     </td>
                     <td className="px-6 py-3 text-sm text-slate-600">
-                      {gen.worksheetGrade ? `${gen.worksheetGrade} класс` : '-'}
+                      {gen.grade ? `${gen.grade} класс` : '-'}
                     </td>
                     <td className="px-6 py-3 text-sm text-slate-600 max-w-xs truncate">
-                      {gen.worksheetTopic || '-'}
+                      {gen.topic || '-'}
                     </td>
                   </tr>
                 ))}

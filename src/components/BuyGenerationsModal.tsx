@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useSessionStore } from '../store/session'
+import { useAuth } from '../lib/auth'
 
 interface BuyGenerationsModalProps {
   isOpen: boolean
@@ -31,7 +31,7 @@ export default function BuyGenerationsModal({ isOpen, onClose }: BuyGenerationsM
   const [purchasing, setPurchasing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const { user } = useSessionStore()
+  const { user } = useAuth()
   const currentBalance = user?.generationsLeft ?? 0
 
   // Calculate price with potential discount
