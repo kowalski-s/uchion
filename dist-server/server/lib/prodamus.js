@@ -81,8 +81,7 @@ export function createProdamusSignature(data, secretKey) {
     if (DEBUG) {
         console.log('[Prodamus Signature] === START SIGNATURE GENERATION ===');
         console.log('[Prodamus Signature] Input data:', JSON.stringify(data, null, 2));
-        console.log('[Prodamus Signature] Secret key length:', secretKey?.length || 0);
-        console.log('[Prodamus Signature] Secret key first 4 chars:', secretKey?.substring(0, 4) || 'N/A');
+        console.log('[Prodamus Signature] Secret key:', secretKey ? 'configured' : 'NOT SET');
     }
     // Step 1: Convert all values to strings (arrays stay arrays!)
     const stringData = deepToStringObject(data);

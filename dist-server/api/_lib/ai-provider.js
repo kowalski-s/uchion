@@ -74,8 +74,8 @@ class OpenAIProvider {
             // However, the user explicitly provided the code snippet using `client.vectorStores.search`.
             // If the SDK version installed supports it (likely a custom or very new beta feature not fully typed), we try to use it.
             // If `client.vectorStores.search` does not exist in the installed SDK, we might need a workaround or assume it exists at runtime.
-            // Let's try to follow the user's snippet exactly, assuming they have a compatible SDK or extended type.
-            // Casting client to any to avoid TS errors for this specific experimental/custom method.
+            // Vector store search is a beta feature with incomplete SDK types
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const searchResult = await this.client.vectorStores.search(VECTOR_STORE_ID, {
                 query,
                 max_num_results: 8,
@@ -186,7 +186,7 @@ class OpenAIProvider {
                 console.log('[УчиОн] Perfect score! Returning result.');
                 console.log("[GENERATION] Total duration ms =", Date.now() - totalStart);
                 const base = this.parseWorksheetText(worksheetText, params);
-                base.json = worksheetJson;
+                base.json = worksheetJson ?? undefined;
                 base.validationStatus = 'OK';
                 return base;
             }

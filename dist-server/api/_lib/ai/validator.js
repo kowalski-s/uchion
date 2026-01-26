@@ -58,16 +58,19 @@ export function extractWorksheetJsonFromResponse(response) {
     if (content && 'json' in content && content.json) {
         return content.json;
     }
-    if (content && 'text' in content && content.text?.value) {
-        let raw = content.text.value.trim();
-        const firstBrace = raw.indexOf('{');
-        const lastBrace = raw.lastIndexOf('}');
-        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-            raw = raw.slice(firstBrace, lastBrace + 1);
+    if (content && 'text' in content && content.text) {
+        const textValue = typeof content.text === 'string' ? content.text : content.text.value;
+        if (textValue) {
+            let raw = textValue.trim();
+            const firstBrace = raw.indexOf('{');
+            const lastBrace = raw.lastIndexOf('}');
+            if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+                raw = raw.slice(firstBrace, lastBrace + 1);
+            }
+            if (!raw)
+                throw new Error('Empty AI JSON response');
+            return JSON.parse(raw);
         }
-        if (!raw)
-            throw new Error('Empty AI JSON response');
-        return JSON.parse(raw);
     }
     if ('output_text' in response && typeof response.output_text === 'string' && response.output_text) {
         let raw = response.output_text.trim();
@@ -99,11 +102,13 @@ export function extractTextFromResponse(response) {
             try {
                 return JSON.stringify(firstContent.json);
             }
-            catch { }
+            catch { /* ignore parse errors */ }
         }
         const text = firstContent?.text;
         if (typeof text === 'string')
             return text;
+        if (typeof text === 'object' && text?.value)
+            return text.value;
     }
     return '';
 }

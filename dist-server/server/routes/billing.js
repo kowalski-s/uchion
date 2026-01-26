@@ -303,8 +303,7 @@ router.post('/prodamus/create-link', withAuth(async (req, res) => {
         if (DEBUG) {
             console.log('[Billing] === PAYMENT LINK DEBUG ===');
             console.log('[Billing] PRODAMUS_PAYFORM_URL:', PRODAMUS_PAYFORM_URL);
-            console.log('[Billing] PRODAMUS_SECRET length:', PRODAMUS_SECRET?.length || 0);
-            console.log('[Billing] PRODAMUS_SECRET first 4 chars:', PRODAMUS_SECRET?.substring(0, 4) || 'N/A');
+            console.log('[Billing] PRODAMUS_SECRET:', PRODAMUS_SECRET ? 'configured' : 'NOT SET');
             console.log('[Billing] Payment data:', JSON.stringify(paymentData, null, 2));
             console.log('[Billing] Generated URL:', paymentUrl);
             console.log('[Billing] URL length:', paymentUrl.length);
