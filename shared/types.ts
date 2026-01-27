@@ -58,7 +58,7 @@ export interface WorksheetListItem {
   id: string
   folderId?: string | null
   title?: string | null
-  subject: 'math' | 'russian'
+  subject: 'math' | 'algebra' | 'geometry' | 'russian'
   grade: number
   topic: string
   difficulty?: 'easy' | 'medium' | 'hard'

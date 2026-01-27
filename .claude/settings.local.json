@@ -39,7 +39,13 @@
       "Bash(timeout 60 npx tsx:*)",
       "WebFetch(domain:docs.polza.ai)",
       "WebFetch(domain:polza.ai)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(dir:*)",
+      "Bash(./node_modules/.bin/tsc:*)",
+      "Bash(node node_modules/typescript/bin/tsc:*)",
+      "Bash(npm run build:server:*)",
+      "Bash(timeout /t 5 /nobreak)",
+      "Bash(findstr:*)"
     ]
   }
 }

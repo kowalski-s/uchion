@@ -1,4 +1,8 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node'
+import type { Request, Response } from 'express'
+
+// Legacy file - use Express types instead of Vercel types
+type VercelRequest = Request
+type VercelResponse = Response
 
 // ==================== COOKIE NAMES ====================
 

@@ -9,13 +9,116 @@ interface EditableWorksheetContentProps {
   onUpdateTestOption: (questionIndex: number, optionIndex: number, value: string) => void
   onUpdateAssignmentAnswer: (index: number, value: string) => void
   onUpdateTestAnswer: (index: number, value: string) => void
+  // Matching task editing
+  onUpdateMatchingInstruction?: (assignmentIndex: number, value: string) => void
+  onUpdateMatchingLeftItem?: (assignmentIndex: number, itemIndex: number, value: string) => void
+  onUpdateMatchingRightItem?: (assignmentIndex: number, itemIndex: number, value: string) => void
 }
 
 const shouldShowAnswerField = (text: string) => {
+  // Don't show answer field for matching tasks
+  if (text.startsWith('<!--MATCHING:')) return false
   const lower = text.toLowerCase()
   const hiddenKeywords = ['подчеркни', 'обведи', 'зачеркни', 'раскрась', 'соедини']
   return !hiddenKeywords.some(k => lower.includes(k))
 }
+
+// Parse matching task data from text
+interface MatchingData {
+  type: 'matching'
+  instruction: string
+  leftColumn: string[]
+  rightColumn: string[]
+}
+
+const parseMatchingData = (text: string): MatchingData | null => {
+  const match = text.match(/<!--MATCHING:(.*?)-->/)
+  if (!match) return null
+  try {
+    return JSON.parse(match[1]) as MatchingData
+  } catch {
+    return null
+  }
+}
+
+// Matching task component
+interface MatchingTaskProps {
+  data: MatchingData
+  isEditMode: boolean
+  assignmentIndex: number
+  onUpdateInstruction?: (assignmentIndex: number, value: string) => void
+  onUpdateLeftItem?: (assignmentIndex: number, itemIndex: number, value: string) => void
+  onUpdateRightItem?: (assignmentIndex: number, itemIndex: number, value: string) => void
+}
+
+const MatchingTask = ({
+  data,
+  isEditMode,
+  assignmentIndex,
+  onUpdateInstruction,
+  onUpdateLeftItem,
+  onUpdateRightItem,
+}: MatchingTaskProps) => (
+  <div className="matching-task">
+    {isEditMode ? (
+      <input
+        type="text"
+        value={data.instruction}
+        onChange={(e) => onUpdateInstruction?.(assignmentIndex, e.target.value)}
+        className="w-full mb-4 p-2 border border-indigo-200 rounded-lg bg-indigo-50/30 focus:outline-none focus:ring-2 focus:ring-indigo-400 text-gray-700"
+        placeholder="Инструкция для задания"
+      />
+    ) : (
+      <p className="mb-4 text-gray-700">{data.instruction}</p>
+    )}
+    <div className="flex gap-8 justify-between">
+      {/* Left column */}
+      <div className="flex-1 space-y-3">
+        {data.leftColumn.map((item, i) => (
+          <div
+            key={i}
+            className={`px-4 py-3 bg-white border rounded-lg text-gray-800 ${isEditMode ? 'border-indigo-200' : 'border-gray-200'}`}
+          >
+            <span className="font-medium text-indigo-600 mr-2">{i + 1}.</span>
+            {isEditMode ? (
+              <input
+                type="text"
+                value={item}
+                onChange={(e) => onUpdateLeftItem?.(assignmentIndex, i, e.target.value)}
+                className="flex-1 bg-transparent border-none outline-none"
+                style={{ width: 'calc(100% - 30px)', display: 'inline-block' }}
+              />
+            ) : (
+              item
+            )}
+          </div>
+        ))}
+      </div>
+      {/* Right column */}
+      <div className="flex-1 space-y-3">
+        {data.rightColumn.map((item, i) => (
+          <div
+            key={i}
+            className={`px-4 py-3 bg-white border rounded-lg text-gray-800 ${isEditMode ? 'border-indigo-200' : 'border-gray-200'}`}
+          >
+            <span className="font-medium text-indigo-600 mr-2">{String.fromCharCode(1072 + i)})</span>
+            {isEditMode ? (
+              <input
+                type="text"
+                value={item}
+                onChange={(e) => onUpdateRightItem?.(assignmentIndex, i, e.target.value)}
+                className="flex-1 bg-transparent border-none outline-none"
+                style={{ width: 'calc(100% - 30px)', display: 'inline-block' }}
+              />
+            ) : (
+              item
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+)
 
 // Editable text area for assignments
 const EditableTextArea = ({
@@ -90,6 +193,9 @@ export default function EditableWorksheetContent({
   onUpdateTestOption,
   onUpdateAssignmentAnswer,
   onUpdateTestAnswer,
+  onUpdateMatchingInstruction,
+  onUpdateMatchingLeftItem,
+  onUpdateMatchingRightItem,
 }: EditableWorksheetContentProps) {
   return (
     <div id="worksheet-pdf-root" className="worksheet-pdf-root">
@@ -129,72 +235,90 @@ export default function EditableWorksheetContent({
           </h2>
 
           <div className="flex flex-col gap-6">
-            {worksheet.assignments.map((task, i) => (
-              <div key={i} className={`task-block break-inside-avoid ${i === 0 ? 'mt-2' : ''} ${isEditMode ? 'bg-indigo-50/20 p-4 rounded-xl border border-indigo-100' : ''}`}>
-                <div className="mb-3 text-lg font-medium text-gray-900 leading-tight">
-                  <span className="mr-2 text-indigo-600 print:text-black">{i + 1}.</span>
-                  <EditableTextArea
-                    value={task.text}
-                    onChange={(value) => onUpdateAssignment(i, 'text', value)}
-                    isEditMode={isEditMode}
-                  />
+            {worksheet.assignments.map((task, i) => {
+              const matchingData = parseMatchingData(task.text)
+
+              return (
+                <div key={i} className={`task-block break-inside-avoid ${i === 0 ? 'mt-2' : ''} ${isEditMode ? 'bg-indigo-50/20 p-4 rounded-xl border border-indigo-100' : ''}`}>
+                  <div className="mb-3 text-lg font-medium text-gray-900 leading-tight">
+                    <span className="mr-2 text-indigo-600 print:text-black">{i + 1}.</span>
+                    {matchingData ? (
+                      <MatchingTask
+                        data={matchingData}
+                        isEditMode={isEditMode}
+                        assignmentIndex={i}
+                        onUpdateInstruction={onUpdateMatchingInstruction}
+                        onUpdateLeftItem={onUpdateMatchingLeftItem}
+                        onUpdateRightItem={onUpdateMatchingRightItem}
+                      />
+                    ) : (
+                      <EditableTextArea
+                        value={task.text}
+                        onChange={(value) => onUpdateAssignment(i, 'text', value)}
+                        isEditMode={isEditMode}
+                      />
+                    )}
+                  </div>
+                  {shouldShowAnswerField(task.text) && (
+                    <div className="mt-3 h-48 w-full rounded-lg border-2 border-dashed border-gray-200 bg-gray-50/30 print:border-gray-300 print:h-32"></div>
+                  )}
                 </div>
-                {shouldShowAnswerField(task.text) && (
-                  <div className="mt-3 h-48 w-full rounded-lg border-2 border-dashed border-gray-200 bg-gray-50/30 print:border-gray-300 print:h-32"></div>
-                )}
-              </div>
-            ))}
+              )
+            })}
           </div>
         </section>
       </PageContainer>
 
-      <div className="page-break"></div>
+      {/* PAGE 2: Test - only show if there are test questions */}
+      {worksheet.test.length > 0 && (
+        <>
+          <div className="page-break"></div>
+          <PageContainer id="page2">
+            <section className="h-full flex flex-col">
+              <h2 className="mb-6 flex items-center gap-3 text-xl font-bold text-gray-900 print:hidden">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-white">T</span>
+                Мини-тест
+                {isEditMode && <span className="text-sm font-normal text-indigo-500 ml-2">(режим редактирования)</span>}
+              </h2>
+              <h2 className="hidden print:flex mb-4 text-lg font-bold text-gray-900 border-b pb-2 items-center gap-2">
+                <span className="flex h-6 w-6 items-center justify-center rounded bg-indigo-600 text-white text-xs">T</span>
+                Мини-тест
+              </h2>
 
-      {/* PAGE 2: Test */}
-      <PageContainer id="page2">
-        <section className="h-full flex flex-col">
-          <h2 className="mb-6 flex items-center gap-3 text-xl font-bold text-gray-900 print:hidden">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-white">T</span>
-            Мини-тест
-            {isEditMode && <span className="text-sm font-normal text-indigo-500 ml-2">(режим редактирования)</span>}
-          </h2>
-          <h2 className="hidden print:flex mb-4 text-lg font-bold text-gray-900 border-b pb-2 items-center gap-2">
-            <span className="flex h-6 w-6 items-center justify-center rounded bg-indigo-600 text-white text-xs">T</span>
-            Мини-тест
-          </h2>
-
-          <div className="grid gap-6">
-            {worksheet.test.map((q, i) => (
-              <div key={i} className={`rounded-xl border bg-white p-5 shadow-sm break-inside-avoid print:border print:border-gray-300 print:shadow-none print:p-4 ${isEditMode ? 'border-indigo-200 bg-indigo-50/20' : 'border-gray-100'}`}>
-                <div className="mb-3 font-medium text-gray-900">
-                  <span className="mr-2">{i + 1}.</span>
-                  <EditableInput
-                    value={q.question}
-                    onChange={(value) => onUpdateTestQuestion(i, value)}
-                    isEditMode={isEditMode}
-                    className="font-medium"
-                  />
-                </div>
-                <div className="space-y-2">
-                  {q.options.map((opt, idx) => (
-                    <div key={idx} className="flex items-center gap-3">
-                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-gray-200 text-xs font-bold text-gray-500">
-                        {String.fromCharCode(65 + idx)}
-                      </div>
+              <div className="grid gap-6">
+                {worksheet.test.map((q, i) => (
+                  <div key={i} className={`rounded-xl border bg-white p-5 shadow-sm break-inside-avoid print:border print:border-gray-300 print:shadow-none print:p-4 ${isEditMode ? 'border-indigo-200 bg-indigo-50/20' : 'border-gray-100'}`}>
+                    <div className="mb-3 font-medium text-gray-900">
+                      <span className="mr-2">{i + 1}.</span>
                       <EditableInput
-                        value={opt}
-                        onChange={(value) => onUpdateTestOption(i, idx, value)}
+                        value={q.question}
+                        onChange={(value) => onUpdateTestQuestion(i, value)}
                         isEditMode={isEditMode}
-                        className="text-gray-700 flex-1"
+                        className="font-medium"
                       />
                     </div>
-                  ))}
-                </div>
+                    <div className="space-y-2">
+                      {q.options.map((opt, idx) => (
+                        <div key={idx} className="flex items-center gap-3">
+                          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-gray-200 text-xs font-bold text-gray-500">
+                            {String.fromCharCode(65 + idx)}
+                          </div>
+                          <EditableInput
+                            value={opt}
+                            onChange={(value) => onUpdateTestOption(i, idx, value)}
+                            isEditMode={isEditMode}
+                            className="text-gray-700 flex-1"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </section>
-      </PageContainer>
+            </section>
+          </PageContainer>
+        </>
+      )}
 
       <div className="page-break"></div>
 
@@ -240,7 +364,7 @@ export default function EditableWorksheetContent({
           Ответы
           {isEditMode && <span className="text-sm font-normal text-indigo-500 ml-2">(режим редактирования)</span>}
         </h2>
-        <div className="grid gap-8 md:grid-cols-2 answers-grid">
+        <div className={`grid gap-8 ${worksheet.test.length > 0 ? 'md:grid-cols-2' : ''} answers-grid`}>
           <div className="break-inside-avoid">
             <h3 className="mb-4 text-lg font-bold text-indigo-600">Задания</h3>
             <ul className="space-y-4">
@@ -257,22 +381,24 @@ export default function EditableWorksheetContent({
               ))}
             </ul>
           </div>
-          <div className="break-inside-avoid">
-            <h3 className="mb-4 text-lg font-bold text-indigo-600">Мини-тест</h3>
-            <ul className="space-y-2">
-              {worksheet.answers.test.map((ans, i) => (
-                <li key={i} className={`flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium text-gray-800 border ${isEditMode ? 'bg-indigo-50/30 border-indigo-200' : 'bg-gray-50 border-gray-100'} print:border-gray-200`}>
-                  <span className="font-bold text-indigo-500">{i + 1}.</span>
-                  <EditableInput
-                    value={ans}
-                    onChange={(value) => onUpdateTestAnswer(i, value)}
-                    isEditMode={isEditMode}
-                    className="font-medium"
-                  />
-                </li>
-              ))}
-            </ul>
-          </div>
+          {worksheet.test.length > 0 && (
+            <div className="break-inside-avoid">
+              <h3 className="mb-4 text-lg font-bold text-indigo-600">Мини-тест</h3>
+              <ul className="space-y-2">
+                {worksheet.answers.test.map((ans, i) => (
+                  <li key={i} className={`flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium text-gray-800 border ${isEditMode ? 'bg-indigo-50/30 border-indigo-200' : 'bg-gray-50 border-gray-100'} print:border-gray-200`}>
+                    <span className="font-bold text-indigo-500">{i + 1}.</span>
+                    <EditableInput
+                      value={ans}
+                      onChange={(value) => onUpdateTestAnswer(i, value)}
+                      isEditMode={isEditMode}
+                      className="font-medium"
+                    />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       </PageContainer>
 

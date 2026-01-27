@@ -1,4 +1,8 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node'
+import type { Request, Response } from 'express'
+
+// Legacy file - use Express types instead of Vercel types
+type VercelRequest = Request
+type VercelResponse = Response
 import { eq, and, isNull } from 'drizzle-orm'
 import { db } from '../../../db/index.js'
 import { users } from '../../../db/schema.js'

@@ -1,0 +1,351 @@
+import {
+  getSubjectConfig,
+  getGradeConfig,
+  type TaskTypeId,
+  getTaskType,
+  type DifficultyLevel,
+  getDifficulty,
+  type WorksheetFormatId,
+  getWorksheetFormat,
+  getFormatVariant,
+} from './config/index.js'
+
+// =============================================================================
+// Types
+// =============================================================================
+
+export interface PromptParams {
+  subject: string
+  grade: number
+  topic: string
+  taskTypes: TaskTypeId[]
+  difficulty: DifficultyLevel
+  format: WorksheetFormatId
+  variantIndex: number
+}
+
+// =============================================================================
+// Block 1: Role and Context
+// =============================================================================
+
+const BASE_ROLE_PROMPT = `
+Ты - опытный методист и составитель учебных материалов для российских школ.
+
+Твоя задача - создавать качественные задания для рабочих листов, которые:
+- Соответствуют российской школьной программе (ФГОС)
+- Подходят по сложности для указанного класса
+- Имеют однозначные правильные ответы
+- Используют понятные формулировки для возраста ученика
+
+Все задания на русском языке.
+`.trim()
+
+// =============================================================================
+// Block 2: Subject
+// =============================================================================
+
+function getSubjectBlock(subjectId: string): string {
+  const config = getSubjectConfig(subjectId)
+  if (!config) return ''
+
+  // Если systemPrompt заполнен - используем его
+  if (config.systemPrompt) {
+    return `ПРЕДМЕТ: ${config.name}\n\n${config.systemPrompt}`
+  }
+
+  // Базовые блоки по предметам (пока systemPrompt пустой)
+  const basePrompts: Record<string, string> = {
+    math: `
+ПРЕДМЕТ: Математика (1-6 класс)
+
+Особенности:
+- Все вычисления должны быть корректными и проверяемыми
+- Числа соответствуют уровню класса
+- Текстовые задачи на реальные жизненные ситуации
+- Ответы - конкретные числа или выражения
+    `.trim(),
+
+    algebra: `
+ПРЕДМЕТ: Алгебра (7-11 класс)
+
+Особенности:
+- Строгая математическая запись
+- Уравнения и выражения записывать корректно
+- Ответы могут быть числами, выражениями или множествами
+- Использовать стандартные обозначения (x, y, a, b)
+    `.trim(),
+
+    geometry: `
+ПРЕДМЕТ: Геометрия (7-11 класс)
+
+Особенности:
+- Чёткие геометрические формулировки
+- Если нужен чертёж - описать словами условие
+- Теоремы применять строго по программе класса
+- Обозначения точек заглавными буквами (A, B, C)
+    `.trim(),
+
+    russian: `
+ПРЕДМЕТ: Русский язык (1-11 класс)
+
+Особенности:
+- Примеры только из современного литературного языка
+- Все примеры орфографически и пунктуационно верны
+- Термины соответствуют классу
+- Никакого сленга и устаревшей лексики
+    `.trim(),
+  }
+
+  return basePrompts[subjectId] || `ПРЕДМЕТ: ${config.name}`
+}
+
+// =============================================================================
+// Block 3: Grade and Topics
+// =============================================================================
+
+function getGradeBlock(subjectId: string, grade: number): string {
+  const config = getGradeConfig(subjectId, grade as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11)
+  if (!config) return `КЛАСС: ${grade}`
+
+  const topicsList = config.topics.map((t) => `- ${t}`).join('\n')
+
+  return `
+КЛАСС: ${grade}
+
+${config.promptHint}
+
+Темы программы этого класса:
+${topicsList}
+
+Используй понятия и термины, соответствующие этому классу.
+  `.trim()
+}
+
+// =============================================================================
+// Block 4: User Topic
+// =============================================================================
+
+function getTopicBlock(topic: string): string {
+  return `
+ТЕМА ЗАДАНИЯ: ${topic}
+
+Все задания должны быть строго по этой теме.
+Если тема выходит за рамки указанного класса - всё равно создай задания, но адаптируй сложность.
+  `.trim()
+}
+
+// =============================================================================
+// Block 5: Task Types
+// =============================================================================
+
+function getTaskTypesBlock(
+  taskTypes: TaskTypeId[],
+  formatId: WorksheetFormatId,
+  variantIndex: number
+): string {
+  const variant = getFormatVariant(formatId, variantIndex)
+  if (!variant) {
+    return 'СОЗДАЙ ЗАДАНИЯ по указанным типам.'
+  }
+
+  const totalTasks = variant.testQuestions + variant.openTasks
+  let instructions = `
+═══════════════════════════════════════════════════════════════
+КРИТИЧЕСКИ ВАЖНО: КОЛИЧЕСТВО ЗАДАНИЙ
+═══════════════════════════════════════════════════════════════
+
+Ты ОБЯЗАН создать РОВНО ${totalTasks} заданий. Не ${totalTasks - 1}, не ${totalTasks + 1}, а ИМЕННО ${totalTasks}.
+
+`
+
+  // Если есть тестовые вопросы
+  if (variant.testQuestions > 0) {
+    instructions += `ТЕСТОВАЯ ЧАСТЬ: РОВНО ${variant.testQuestions} тестовых вопросов (single_choice или multiple_choice)\n`
+  }
+
+  // Если есть открытые задания
+  if (variant.openTasks > 0) {
+    instructions += `ЗАДАНИЯ С РАЗВЁРНУТЫМ ОТВЕТОМ: РОВНО ${variant.openTasks} заданий (open_question, matching или fill_blank)\n`
+  }
+
+  instructions += `
+ПРОВЕРЬ СЕБЯ: В финальном JSON массив "tasks" должен содержать РОВНО ${totalTasks} элементов.
+Если ты создашь меньше или больше - это ОШИБКА.
+
+`
+
+  // Инструкции по каждому типу
+  instructions += 'ИНСТРУКЦИИ ПО ТИПАМ:\n\n'
+
+  for (const typeId of taskTypes) {
+    const taskType = getTaskType(typeId)
+    if (taskType) {
+      instructions += `${taskType.name.toUpperCase()} (${typeId}):\n`
+      instructions += `${taskType.promptInstruction}\n\n`
+    }
+  }
+
+  return instructions.trim()
+}
+
+// =============================================================================
+// Block 6: Difficulty
+// =============================================================================
+
+function getDifficultyBlock(level: DifficultyLevel): string {
+  const config = getDifficulty(level)
+  return `
+${config.promptModifier}
+  `.trim()
+}
+
+// =============================================================================
+// Block 7: Output Format
+// =============================================================================
+
+function getFormatBlock(): string {
+  return `
+ФОРМАТ ОТВЕТА:
+
+Верни ТОЛЬКО валидный JSON без текста до или после:
+
+{
+  "tasks": [
+    {
+      "type": "single_choice",
+      "question": "...",
+      "options": ["...", "...", "...", "..."],
+      "correctIndex": 0,
+      "explanation": "..."
+    },
+    {
+      "type": "multiple_choice",
+      "question": "...",
+      "options": ["...", "...", "...", "..."],
+      "correctIndices": [0, 2],
+      "explanation": "..."
+    },
+    {
+      "type": "open_question",
+      "question": "...",
+      "correctAnswer": "...",
+      "acceptableVariants": ["...", "..."],
+      "explanation": "..."
+    },
+    {
+      "type": "matching",
+      "instruction": "Соотнеси...",
+      "leftColumn": ["...", "...", "..."],
+      "rightColumn": ["...", "...", "..."],
+      "correctPairs": [[0, 1], [1, 0], [2, 2]]
+    },
+    {
+      "type": "fill_blank",
+      "textWithBlanks": "Текст с ___(1)___ пропусками ___(2)___",
+      "blanks": [
+        {"position": 1, "correctAnswer": "...", "acceptableVariants": ["..."]},
+        {"position": 2, "correctAnswer": "..."}
+      ]
+    }
+  ]
+}
+
+ВАЖНО: Никакого markdown, никакого текста - только JSON.
+  `.trim()
+}
+
+// =============================================================================
+// Block 8: Anti-Patterns
+// =============================================================================
+
+const ANTI_PATTERNS_PROMPT = `
+ЗАПРЕЩЕНО:
+
+- Повторять одинаковые или похожие задания
+- Давать задания не по указанной теме
+- Создавать задания с неоднозначным ответом
+- Делать все правильные ответы на одной позиции (первый или последний)
+- Использовать одинаковые числа в разных заданиях
+- Писать слишком длинные формулировки
+- Добавлять пояснения вне JSON
+- Оставлять пустые или null значения
+`.trim()
+
+// =============================================================================
+// Main Functions
+// =============================================================================
+
+/**
+ * Собрать финальный промпт из всех блоков
+ */
+export function buildPrompt(params: PromptParams): string {
+  const blocks = [
+    BASE_ROLE_PROMPT,
+    getSubjectBlock(params.subject),
+    getGradeBlock(params.subject, params.grade),
+    getTopicBlock(params.topic),
+    getTaskTypesBlock(params.taskTypes, params.format, params.variantIndex),
+    getDifficultyBlock(params.difficulty),
+    getFormatBlock(),
+    ANTI_PATTERNS_PROMPT,
+  ]
+
+  return blocks.filter(Boolean).join('\n\n---\n\n')
+}
+
+/**
+ * Получить только системный промпт (роль + предмет)
+ */
+export function buildSystemPrompt(subjectId: string): string {
+  return [BASE_ROLE_PROMPT, getSubjectBlock(subjectId)].join('\n\n')
+}
+
+/**
+ * Получить user prompt (остальные блоки)
+ */
+export function buildUserPrompt(
+  params: Omit<PromptParams, 'subject'> & { subject: string }
+): string {
+  const blocks = [
+    getGradeBlock(params.subject, params.grade),
+    getTopicBlock(params.topic),
+    getTaskTypesBlock(params.taskTypes, params.format, params.variantIndex),
+    getDifficultyBlock(params.difficulty),
+    getFormatBlock(),
+    ANTI_PATTERNS_PROMPT,
+  ]
+
+  return blocks.filter(Boolean).join('\n\n---\n\n')
+}
+
+/**
+ * Получить количество заданий из варианта формата
+ */
+export function getTaskCounts(
+  formatId: WorksheetFormatId,
+  variantIndex: number
+): { openTasks: number; testQuestions: number } {
+  const variant = getFormatVariant(formatId, variantIndex)
+  if (!variant) {
+    return { openTasks: 5, testQuestions: 10 }
+  }
+  return {
+    openTasks: variant.openTasks,
+    testQuestions: variant.testQuestions,
+  }
+}
+
+/**
+ * Получить рекомендуемые типы заданий для формата
+ */
+export function getRecommendedTaskTypes(formatId: WorksheetFormatId): TaskTypeId[] {
+  switch (formatId) {
+    case 'test_only':
+      return ['single_choice', 'multiple_choice']
+    case 'open_only':
+      return ['open_question', 'matching', 'fill_blank']
+    case 'test_and_open':
+    default:
+      return ['single_choice', 'multiple_choice', 'open_question', 'matching', 'fill_blank']
+  }
+}

@@ -1,4 +1,7 @@
-import type { VercelRequest } from '@vercel/node'
+import type { Request } from 'express'
+
+// Legacy file - use Express Request type instead of VercelRequest
+type VercelRequest = Request
 
 /**
  * Simple in-memory rate limiter

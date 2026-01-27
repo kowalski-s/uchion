@@ -1,72 +1,106 @@
-import type { Worksheet, Subject, TestQuestion, Assignment, WorksheetAnswers, WorksheetJson } from '../../shared/types'
-
-// Extended worksheet type with validation metadata
-interface WorksheetWithValidation extends Worksheet {
-  json?: WorksheetJson
-  validationStatus?: 'OK' | 'FAIL'
-}
+import type { Worksheet, Subject, TestQuestion, Assignment, WorksheetAnswers } from '../../shared/types'
 import OpenAI from 'openai'
-import type { GeneratePayload } from '../../shared/types'
-import { SUBJECT_CONFIG } from './ai/prompts.js'
-import { WORKSHEET_JSON_SCHEMA } from './ai/schema.js'
-import { timedLLMCall, extractWorksheetJsonFromResponse, buildWorksheetTextFromJson, validateWorksheet, analyzeValidationIssues, regenerateProblemBlocks } from './ai/validator.js'
+import {
+  buildSystemPrompt,
+  buildUserPrompt,
+  getTaskCounts,
+  getRecommendedTaskTypes,
+  type PromptParams
+} from './generation/prompts.js'
+import {
+  type TaskTypeId,
+  type DifficultyLevel,
+  type WorksheetFormatId,
+  validateTask
+} from './generation/config/index.js'
+import { timedLLMCall } from './ai/validator.js'
 import { checkValidationScore } from './alerts/generation-alerts.js'
+
+// =============================================================================
+// Types
+// =============================================================================
 
 export type GenerateParams = {
   subject: Subject
   grade: number
   topic: string
+  // Extended generation params
+  taskTypes?: TaskTypeId[]
+  difficulty?: DifficultyLevel
+  format?: WorksheetFormatId
+  variantIndex?: number
 }
 
 export interface AIProvider {
   generateWorksheet(params: GenerateParams, onProgress?: (percent: number) => void): Promise<Worksheet>
 }
 
+// New unified task structure from AI
+interface GeneratedTask {
+  type: TaskTypeId
+  // single_choice / multiple_choice
+  question?: string
+  options?: string[]
+  correctIndex?: number
+  correctIndices?: number[]
+  explanation?: string
+  // open_question
+  correctAnswer?: string
+  acceptableVariants?: string[]
+  // matching
+  instruction?: string
+  leftColumn?: string[]
+  rightColumn?: string[]
+  correctPairs?: [number, number][]
+  // fill_blank
+  textWithBlanks?: string
+  blanks?: { position: number; correctAnswer: string; acceptableVariants?: string[] }[]
+}
+
+interface GeneratedWorksheetJson {
+  tasks: GeneratedTask[]
+}
+
+// =============================================================================
+// DummyProvider - для разработки без API
+// =============================================================================
+
 class DummyProvider implements AIProvider {
   async generateWorksheet(params: GenerateParams): Promise<Worksheet> {
     console.log('[УчиОн] DummyProvider.generateWorksheet called', params)
-    
-    const assignments: Assignment[] = [
-      { title: "Задание 1", text: "Найди значение выражения 245 + 130." },
-      { title: "Задание 2", text: "Реши задачу: У Маши было 120 тетрадей, 40 она раздала. Сколько осталось?" },
-      { title: "Задание 3", text: "Найди и исправь ошибку в вычислении: 360 : 9 = 2." },
-      { title: "Задание 4", text: "Продолжи числовой ряд: 300, 290, 280, ..." },
-      { title: "Задание 5", text: "Запиши в виде выражения: число 450 уменьшили на 70." },
-      { title: "Задание 6", text: "Найди ошибку: 600 – 250 = 450." },
-      { title: "Задание 7", text: "Текстовая задача: У Пети 3 пачки по 12 карандашей. Сколько карандашей всего?" }
-    ]
 
-    const test: TestQuestion[] = [
-      { question: 'Как называется результат деления?', options: ['Разность', 'Частное', 'Произведение'], answer: 'Частное' },
-      { question: 'Сколько будет 24 : 4?', options: ['6', '8', '4'], answer: '6' },
-      { question: 'Можно ли делить на ноль?', options: ['Да', 'Нет', 'Иногда'], answer: 'Нет' },
-      { question: 'Какой знак используется для деления?', options: ['+', '-', ':'], answer: ':' },
-      { question: 'Если 10 разделить на 2, сколько получится?', options: ['2', '5', '10'], answer: '5' },
-      { question: 'Как найти площадь прямоугольника?', options: ['a + b', 'a * b', '2 * (a + b)'], answer: 'a * b' },
-      { question: 'Сколько сантиметров в 1 метре?', options: ['10', '100', '1000'], answer: '100' },
-      { question: 'Что больше: 1 кг или 1000 г?', options: ['1 кг', '1000 г', 'Равны'], answer: 'Равны' },
-      { question: 'Найди периметр квадрата со стороной 5 см.', options: ['20 см', '25 см', '10 см'], answer: '20 см' },
-      { question: 'Сколько минут в 1 часе?', options: ['60', '100', '30'], answer: '60' }
-    ]
-    
-    const answers: WorksheetAnswers = {
-      assignments: [
-        '375',
-        '80 тетрадей',
-        '360 : 9 = 40 (ошибка: было 2)',
-        '270, 260, 250',
-        '450 - 70 = 380',
-        '600 - 250 = 350 (ошибка: было 450)',
-        '3 * 12 = 36 карандашей'
-      ],
-      test: ['Частное', '6', 'Нет', ':', '5', 'a * b', '100', 'Равны', '20 см', '60']
+    // Получаем количество заданий из формата
+    const format = params.format || 'test_and_open'
+    const variantIndex = params.variantIndex ?? 0
+    const { openTasks, testQuestions } = getTaskCounts(format, variantIndex)
+
+    // Генерируем dummy задания
+    const assignments: Assignment[] = []
+    for (let i = 0; i < openTasks; i++) {
+      assignments.push({
+        title: `Задание ${i + 1}`,
+        text: `Демо-задание ${i + 1} по теме "${params.topic}"`
+      })
     }
 
-    const gradeStr = `${params.grade} класс`
+    const test: TestQuestion[] = []
+    for (let i = 0; i < testQuestions; i++) {
+      test.push({
+        question: `Демо-вопрос ${i + 1} по теме "${params.topic}"?`,
+        options: ['Вариант А', 'Вариант Б', 'Вариант В', 'Вариант Г'],
+        answer: 'Вариант А'
+      })
+    }
+
+    const answers: WorksheetAnswers = {
+      assignments: assignments.map((_, i) => `Ответ ${i + 1}`),
+      test: test.map(() => 'Вариант А')
+    }
+
     return {
       id: 'dummy-id',
-      subject: params.subject as Subject,
-      grade: gradeStr,
+      subject: params.subject,
+      grade: `${params.grade} класс`,
       topic: params.topic,
       assignments,
       test,
@@ -76,21 +110,13 @@ class DummyProvider implements AIProvider {
   }
 }
 
-
-
-
-
-
-
-
-
-
-
-
- 
+// =============================================================================
+// OpenAIProvider - реальная генерация через AI
+// =============================================================================
 
 class OpenAIProvider implements AIProvider {
   private client: OpenAI
+
   constructor(apiKey: string, baseURL?: string) {
     this.client = new OpenAI({
       apiKey,
@@ -99,348 +125,248 @@ class OpenAIProvider implements AIProvider {
     console.log('[УчиОн] OpenAIProvider initialized', { baseURL: baseURL || 'default (api.openai.com)' })
   }
 
-  private async getTextbookContext(params: GenerateParams): Promise<string> {
-    try {
-      const VECTOR_STORE_ID = process.env.UCHION_VECTOR_STORE_ID
-      if (!VECTOR_STORE_ID) return ""
-
-      const query = `Предмет: ${params.subject}. ${params.grade} класс. Тема: ${params.topic}. Типичные задания и формулировки по ФГОС для начальной школы.`
-
-      // @ts-ignore - OpenAI SDK types might be outdated in some versions, ignoring potential type mismatch for vectorStores
-      const search = await this.client.beta.vectorStores.fileBatches.list(VECTOR_STORE_ID) ? await this.client.beta.vectorStores.files.list(VECTOR_STORE_ID) : null
-      
-      // Since standard SDK might not have search helper directly exposed or it's in beta, 
-      // we'll assume the user wants us to implement the logic as described, 
-      // but 'client.vectorStores.search' is not a standard SDK method yet (it's usually file search tool in assistants).
-      // However, the user explicitly provided the code snippet using `client.vectorStores.search`.
-      // If the SDK version installed supports it (likely a custom or very new beta feature not fully typed), we try to use it.
-      // If `client.vectorStores.search` does not exist in the installed SDK, we might need a workaround or assume it exists at runtime.
-      
-      // Vector store search is a beta feature with incomplete SDK types
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const searchResult = await (this.client as unknown as { vectorStores: { search: (id: string, params: { query: string; max_num_results: number }) => Promise<{ data?: Array<{ content?: Array<{ type: string; text?: string }> }> }> } }).vectorStores.search(VECTOR_STORE_ID, {
-        query,
-        max_num_results: 8,
-      })
-
-      const chunks: string[] = []
-
-      for (const item of searchResult.data ?? []) {
-        for (const piece of item.content ?? []) {
-          if (piece.type === "text" && piece.text) {
-            chunks.push(piece.text)
-          }
-        }
-      }
-
-      if (chunks.length === 0) return ""
-
-      return chunks.slice(0, 5).join("\n---\n")
-    } catch (e) {
-      console.error("Vector store search failed", e)
-      return ""
-    }
-  }
-
-  
-
   async generateWorksheet(params: GenerateParams, onProgress?: (percent: number) => void): Promise<Worksheet> {
     console.log('[УчиОн] OpenAIProvider.generateWorksheet called', params)
-    const totalStart = Date.now();
-    console.log("[GENERATION] Started at", new Date().toISOString());
-    onProgress?.(10) // Start
-    
-    const userPromptBase = `Сгенерируй рабочий лист.
-Предмет: ${params.subject}
-Класс: ${params.grade}
-Тема: ${params.topic}
+    const totalStart = Date.now()
+    onProgress?.(5)
 
-Включи в вывод все обязательные разделы (ASSIGNMENTS, TEST, ANSWERS_ASSIGNMENTS, ANSWERS_TEST).`
+    // Получаем параметры генерации
+    const format: WorksheetFormatId = params.format || 'test_and_open'
+    const variantIndex = params.variantIndex ?? 0
+    const difficulty: DifficultyLevel = params.difficulty || 'medium'
+    const taskTypes: TaskTypeId[] = params.taskTypes?.length
+      ? params.taskTypes
+      : getRecommendedTaskTypes(format)
 
-    const cfg = SUBJECT_CONFIG[params.subject]
-    let systemPrompt = cfg.systemPrompt
+    const { openTasks, testQuestions } = getTaskCounts(format, variantIndex)
+    const totalTasks = openTasks + testQuestions
 
-    // Try to get context (optional)
-    const context = await this.getTextbookContext(params)
-    onProgress?.(15) // Context retrieved
-    if (context) {
-      systemPrompt += `\n\nИСПОЛЬЗУЙ СЛЕДУЮЩИЕ МАТЕРИАЛЫ ИЗ УЧЕБНИКОВ:\n${context}`
+    console.log('[УчиОн] Generation params:', { format, variantIndex, difficulty, taskTypes, openTasks, testQuestions })
+
+    // Собираем промпты
+    const promptParams: PromptParams = {
+      subject: params.subject,
+      grade: params.grade,
+      topic: params.topic,
+      taskTypes,
+      difficulty,
+      format,
+      variantIndex
     }
 
-    let bestContent = ''
-    let bestScore = -1
-    let bestIssues: string[] = []
-    let lastIssues: string[] = []
-    
-    const MAX_ATTEMPTS = 1
-    let worksheetJson: WorksheetJson | null = null
+    const systemPrompt = buildSystemPrompt(params.subject)
+    const userPrompt = buildUserPrompt(promptParams)
 
-    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      console.log(`[УчиОн] Generation attempt ${attempt}/${MAX_ATTEMPTS}`)
-      onProgress?.(attempt === 1 ? 20 : 65) // Generation start
-      
-      let currentUserPrompt = userPromptBase
-      if (attempt > 1 && lastIssues.length > 0) {
-        currentUserPrompt += `\n\nВАЖНО: В предыдущей версии были найдены ошибки. ИСПРАВЬ ИХ:\n- ${lastIssues.join('\n- ')}`
+    onProgress?.(15)
+
+    // Генерируем задания
+    const generationModel = process.env.AI_MODEL_GENERATION || 'gpt-4.1-mini'
+    console.log('[УчиОн] Using model:', generationModel)
+
+    let completion
+    try {
+      completion = await timedLLMCall(
+        "new-generation",
+        () => this.client.chat.completions.create({
+          model: generationModel,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ],
+          max_tokens: 8000,
+          temperature: 0.5 // Ниже для более точного следования инструкциям
+        })
+      )
+    } catch (error) {
+      console.error('[УчиОн] OpenAI API Error:', error)
+      throw new Error('AI_ERROR')
+    }
+
+    onProgress?.(60)
+
+    // Парсим ответ
+    const content = completion.choices[0]?.message?.content || ''
+    console.log('[УчиОн] Raw AI response length:', content.length)
+
+    let generatedJson: GeneratedWorksheetJson
+    try {
+      // Извлекаем JSON из ответа (может быть обёрнут в markdown)
+      const jsonMatch = content.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) {
+        console.error('[УчиОн] No JSON found in response')
+        throw new Error('AI_ERROR')
       }
+      generatedJson = JSON.parse(jsonMatch[0])
+    } catch (e) {
+      console.error('[УчиОн] JSON parse error:', e)
+      throw new Error('AI_ERROR')
+    }
 
-      // JSON schema example to guide the model (since NeuroAPI doesn't support json_schema response_format)
-      const jsonSchemaExample = `
-Верни JSON строго по этой схеме:
-{
-  "assignments": [
-    { "index": 1, "type": "theory", "text": "Текст задания 1" },
-    { "index": 2, "type": "apply", "text": "Текст задания 2" },
-    ... (всего 7 заданий, type может быть: theory, apply, error, creative)
-  ],
-  "test": [
-    { "index": 1, "question": "Вопрос 1?", "options": { "A": "Вариант A", "B": "Вариант B", "C": "Вариант C" } },
-    ... (всего 10 вопросов)
-  ],
-  "answers": {
-    "assignments": ["Ответ 1", "Ответ 2", ... (7 ответов)],
-    "test": ["A", "B", "C", ... (10 букв A/B/C)]
-  }
-}`
+    onProgress?.(75)
 
-      const generationModel = process.env.AI_MODEL_GENERATION || 'gpt-5-mini'
-      console.log('[УчиОн] Using model for generation:', generationModel)
+    // Валидируем и преобразуем задания
+    let tasks = generatedJson.tasks || []
+    console.log('[УчиОн] Generated tasks count:', tasks.length, 'Expected:', totalTasks)
 
-      let completion
+    // Разделяем задания на тестовые и открытые
+    let testTasks: GeneratedTask[] = []
+    let openTasksList: GeneratedTask[] = []
+
+    for (const task of tasks) {
+      if (task.type === 'single_choice' || task.type === 'multiple_choice') {
+        testTasks.push(task)
+      } else {
+        openTasksList.push(task)
+      }
+    }
+
+    console.log('[УчиОн] Split: testTasks=', testTasks.length, 'openTasksList=', openTasksList.length)
+    console.log('[УчиОн] Targets: testQuestions=', testQuestions, 'openTasks=', openTasks)
+
+    // RETRY: Если не хватает заданий - догенерируем
+    const missingOpen = openTasks - openTasksList.length
+    const missingTest = testQuestions - testTasks.length
+
+    if (missingOpen > 0 || missingTest > 0) {
+      console.log(`[УчиОн] RETRY: Need ${missingOpen} more open tasks, ${missingTest} more test tasks`)
+
       try {
-        completion = await timedLLMCall(
-          "main-generation",
-          () => this.client.chat.completions.create({
-            model: generationModel,
-            messages: [
-              { role: 'system', content: systemPrompt },
-              { role: 'user', content: currentUserPrompt + '\n\n' + jsonSchemaExample }
-            ],
-            max_tokens: 6000
-          })
+        const retryTasks = await this.generateMissingTasks(
+          params,
+          missingOpen,
+          missingTest,
+          taskTypes,
+          difficulty
         )
-        console.log('[Generator Response]', JSON.stringify(completion, null, 2))
-      } catch (error) {
-        console.error('[УчиОн] OpenAI API Error:', error)
-        throw error
-      }
 
-      let worksheetText = ''
-      {
-        worksheetJson = extractWorksheetJsonFromResponse(completion)
-        console.log('[GEN] WorksheetJson assignments count:', worksheetJson.assignments?.length ?? 0)
-        worksheetText = buildWorksheetTextFromJson(worksheetJson as WorksheetJson)
-      }
-      if (!worksheetText) {
-        if (attempt === MAX_ATTEMPTS && !bestContent) throw new Error('AI_ERROR')
-        continue
-      }
-      
-      onProgress?.(attempt === 1 ? 50 : 80) // Generation done
-
-      // Step 2: Validate
-      console.log(`[УчиОн] Validating attempt ${attempt}...`)
-      const validation = await validateWorksheet(this.client, params, worksheetText)
-      console.log(`[УчиОн] Validation result: score=${validation.score}, issues=${validation.issues.length}`)
-      onProgress?.(attempt === 1 ? 60 : 90) // Validation done
-
-      if (validation.score === 10) {
-        console.log('[УчиОн] Perfect score! Returning result.')
-        console.log("[GENERATION] Total duration ms =", Date.now() - totalStart);
-        const base: WorksheetWithValidation = this.parseWorksheetText(worksheetText, params)
-        base.json = worksheetJson ?? undefined
-        base.validationStatus = 'OK'
-        return base
-      }
-
-      // CLEAN step: partial regeneration of problem blocks
-      const analysis = analyzeValidationIssues(validation.issues)
-      console.log('[CLEAN] analysis:', {
-        invalidAssignments: analysis.invalidAssignments,
-        invalidTests: analysis.invalidTests,
-        hasStructureErrors: analysis.hasStructureErrors,
-      })
-      onProgress?.(70)
-      const regenJson = await regenerateProblemBlocks({
-        subject: params.subject,
-        grade: params.grade,
-        topic: params.topic,
-        original: worksheetJson,
-        analysis,
-        openai: this.client,
-        onProgress
-      })
-      worksheetJson = regenJson
-      worksheetText = buildWorksheetTextFromJson(worksheetJson as WorksheetJson)
-
-      const validation2 = await validateWorksheet(this.client, params, worksheetText)
-      console.log(`[УчиОн] Validation after CLEAN: score=${validation2.score}, issues=${validation2.issues.length}`)
-      onProgress?.(90)
-
-      // Check for low quality alert (score < 8)
-      checkValidationScore({
-        score: validation2.score,
-        topic: params.topic,
-        subject: params.subject,
-        grade: params.grade,
-      }).catch((e) => console.error('[Alerts] Failed to check validation score:', e))
-
-      if (validation2.score === 10) {
-        console.log('[УчиОн] Clean step succeeded.')
-        console.log("[GENERATION] Total duration ms =", Date.now() - totalStart);
-        const base: WorksheetWithValidation = this.parseWorksheetText(worksheetText, params)
-        base.json = worksheetJson ?? undefined
-        base.validationStatus = 'OK'
-        return base
-      }
-
-      // If still FAIL, return the latest version without further loops
-      bestScore = validation2.score
-      bestContent = worksheetText
-      bestIssues = validation2.issues
-    }
-
-    console.warn(`[УчиОн] Failed to generate perfect worksheet after ${MAX_ATTEMPTS} attempts. Returning best score: ${bestScore}`)
-    console.warn('Issues in best content:', bestIssues)
-
-    if (!bestContent) {
-       throw new Error('AI_ERROR')
-    }
-
-    onProgress?.(95)
-    console.log("[GENERATION] Total duration ms =", Date.now() - totalStart);
-    const base: WorksheetWithValidation = this.parseWorksheetText(bestContent, params)
-    base.json = worksheetJson ?? undefined
-    base.validationStatus = 'FAIL'
-    return base
-  }
-
-  private parseWorksheetText(text: string, params: GenerateParams): Worksheet {
-    // Simple parser based on headers
-    // Expected headers: 
-    // ASSIGNMENTS:
-    // TEST:
-    // ANSWERS_ASSIGNMENTS:
-    // ANSWERS_TEST:
-
-    const extractSection = (header: string, nextHeader: string | null): string => {
-      const regex = nextHeader 
-        ? new RegExp(`${header}[\\s\\S]*?(?=${nextHeader})`, 'i')
-        : new RegExp(`${header}[\\s\\S]*`, 'i')
-      
-      const match = text.match(regex)
-      if (!match) return ''
-      
-      // Remove the header itself
-      return match[0].replace(new RegExp(`^.*?${header}\\s*`, 'i'), '').trim()
-    }
-
-    const topic = params.topic // Topic is not in the output anymore, use params
-    const assignmentsText = extractSection('ASSIGNMENTS:', 'TEST:')
-    const testText = extractSection('TEST:', 'ANSWERS_ASSIGNMENTS:')
-    const answersAssignText = extractSection('ANSWERS_ASSIGNMENTS:', 'ANSWERS_TEST:')
-    const answersTestText = extractSection('ANSWERS_TEST:', null)
-
-    // Parse Assignments
-    const assignments: Assignment[] = assignmentsText.split('\n')
-      .map(l => l.trim())
-      .filter(l => l.length > 0)
-      .slice(0, 7) // Ensure exactly 7
-      .map((text, i) => ({
-        title: `Задание ${i + 1}`,
-        text: text.replace(/^\d+\)\s*/, '').replace(/^\d+\.\s*/, '')
-      }))
-
-    // Parse Test
-    // Format: Question \n A) ... \n B) ... \n C) ...
-    const test: TestQuestion[] = []
-    const testLines = testText.split('\n').map(l => l.trim()).filter(l => l)
-    
-    let currentQuestion: Partial<TestQuestion> = {}
-    let currentOptions: string[] = []
-    
-    for (const line of testLines) {
-      if (line.match(/^[A-C]\)/)) {
-        // Option
-        currentOptions.push(line.replace(/^[A-C]\)\s*/, ''))
-      } else if (line.length > 0) {
-        // Likely a question (or number + question)
-        if (currentQuestion.question && currentOptions.length > 0) {
-          // Push previous question
-          test.push({
-            question: currentQuestion.question,
-            options: currentOptions,
-            answer: '' // Will fill later or leave empty if parsing answers fails
-          } as TestQuestion)
-          currentOptions = []
-        }
-        currentQuestion = { question: line.replace(/^\d+\)\s*/, '').replace(/^\d+\.\s*/, '') }
-      }
-    }
-    // Push last question
-    if (currentQuestion.question && currentOptions.length > 0) {
-      test.push({
-        question: currentQuestion.question,
-        options: currentOptions,
-        answer: ''
-      } as TestQuestion)
-    }
-
-    // Parse Answers
-    let answersAssignments: string[] = []
-    let answersTest: string[] = []
-
-    if (answersAssignText) {
-       answersAssignments = answersAssignText.split('\n').map(l => l.trim()).filter(l => l).map(l => l.replace(/^\d+\)\s*/, '').replace(/^\d+\.\s*/, ''))
-    }
-    
-    if (answersTestText) {
-       answersTest = answersTestText.split('\n').map(l => l.trim()).filter(l => l).map(l => l.replace(/^\d+\)\s*/, '').replace(/^\d+\.\s*/, ''))
-
-      // Try to map test answers to options if they are just letters (A, B, C)
-      test.forEach((q, i) => {
-        if (answersTest[i]) {
-          // If answer starts with "A" or "A)", try to extract letter
-          const letterMatch = answersTest[i].match(/^([A-C])\)?/i)
-          if (letterMatch) {
-            const idx = letterMatch[1].toUpperCase().charCodeAt(0) - 65
-            if (q.options[idx]) {
-               // We found the option text corresponding to the letter
-               // But usually we want to display the full answer text in the answer key
-               // The UI might expect just the text.
-               // Let's keep what the model gave us but cleaned up slightly if it was just "A"
-               // Actually, if the model gave "A — answer text", we use that.
-               // If it just gave "A", we map it.
-               if (answersTest[i].length < 5) {
-                   q.answer = q.options[idx]
-               } else {
-                   q.answer = answersTest[i]
-               }
-            } else {
-               q.answer = answersTest[i]
-            }
+        for (const task of retryTasks) {
+          if (task.type === 'single_choice' || task.type === 'multiple_choice') {
+            testTasks.push(task)
           } else {
-             q.answer = answersTest[i]
+            openTasksList.push(task)
           }
         }
-      })
+
+        console.log('[УчиОн] After retry: testTasks=', testTasks.length, 'openTasksList=', openTasksList.length)
+      } catch (retryError) {
+        console.error('[УчиОн] Retry failed:', retryError)
+        // Continue with what we have
+      }
     }
 
-    // Fallback validation/defaults
-    const safeAssignments = assignments.slice(0, 7)
-    while (safeAssignments.length < 7) {
-      safeAssignments.push({ title: `Задание ${safeAssignments.length + 1}`, text: '...' })
+    // Преобразуем в формат Worksheet
+    const worksheet = this.convertToWorksheet(params, testTasks, openTasksList, testQuestions, openTasks)
+
+    onProgress?.(90)
+
+    // Алерт о низком качестве (если мало заданий)
+    if (tasks.length < totalTasks * 0.8) {
+      checkValidationScore({
+        score: Math.round((tasks.length / totalTasks) * 10),
+        topic: params.topic,
+        subject: params.subject,
+        grade: params.grade,
+      }).catch((e) => console.error('[Alerts] Failed to check:', e))
     }
 
-    const safeTest = test.slice(0, 10)
-    
+    console.log("[GENERATION] Total duration ms =", Date.now() - totalStart)
+    onProgress?.(95)
+
+    return worksheet
+  }
+
+  /**
+   * Преобразует сгенерированные задания в формат Worksheet
+   */
+  private convertToWorksheet(
+    params: GenerateParams,
+    testTasks: GeneratedTask[],
+    openTasksList: GeneratedTask[],
+    targetTestCount: number,
+    targetOpenCount: number
+  ): Worksheet {
+    // Преобразуем тестовые задания
+    const test: TestQuestion[] = testTasks.slice(0, targetTestCount).map(task => {
+      if (task.type === 'single_choice') {
+        const options = task.options || []
+        const correctIdx = task.correctIndex ?? 0
+        return {
+          question: task.question || '',
+          options,
+          answer: options[correctIdx] || options[0] || ''
+        }
+      } else if (task.type === 'multiple_choice') {
+        const options = task.options || []
+        const correctIdxs = task.correctIndices || [0]
+        const answers = correctIdxs.map(i => options[i]).filter(Boolean)
+        return {
+          question: task.question || '',
+          options,
+          answer: answers.join(', ')
+        }
+      }
+      return { question: '', options: [], answer: '' }
+    })
+
+    // Преобразуем открытые задания
+    const assignments: Assignment[] = openTasksList.slice(0, targetOpenCount).map((task, i) => {
+      let text = ''
+
+      if (task.type === 'open_question') {
+        text = task.question || ''
+      } else if (task.type === 'matching') {
+        // Store matching as JSON for proper rendering in component
+        const matchingData = {
+          type: 'matching',
+          instruction: task.instruction || 'Соотнеси элементы',
+          leftColumn: task.leftColumn || [],
+          rightColumn: task.rightColumn || [],
+        }
+        text = `<!--MATCHING:${JSON.stringify(matchingData)}-->`
+      } else if (task.type === 'fill_blank') {
+        text = task.textWithBlanks || ''
+      }
+
+      return {
+        title: `Задание ${i + 1}`,
+        text
+      }
+    })
+
+    // Собираем ответы
+    const answersAssignments: string[] = openTasksList.slice(0, targetOpenCount).map(task => {
+      if (task.type === 'open_question') {
+        return task.correctAnswer || ''
+      } else if (task.type === 'matching') {
+        const pairs = task.correctPairs || []
+        return pairs.map(([l, r]) => `${l + 1}-${String.fromCharCode(65 + r)}`).join(', ')
+      } else if (task.type === 'fill_blank') {
+        const blanks = task.blanks || []
+        return blanks.map(b => `(${b.position}) ${b.correctAnswer}`).join('; ')
+      }
+      return ''
+    })
+
+    const answersTest: string[] = testTasks.slice(0, targetTestCount).map(task => {
+      if (task.type === 'single_choice') {
+        const options = task.options || []
+        const idx = task.correctIndex ?? 0
+        return options[idx] || ''
+      } else if (task.type === 'multiple_choice') {
+        const options = task.options || []
+        const idxs = task.correctIndices || []
+        return idxs.map(i => options[i]).filter(Boolean).join(', ')
+      }
+      return ''
+    })
+
     return {
       id: '',
-      subject: params.subject as Subject,
+      subject: params.subject,
       grade: `${params.grade} класс`,
-      topic: topic || params.topic,
-      assignments: safeAssignments,
-      test: safeTest,
+      topic: params.topic,
+      assignments,
+      test,
       answers: {
         assignments: answersAssignments,
         test: answersTest
@@ -448,7 +374,84 @@ class OpenAIProvider implements AIProvider {
       pdfBase64: ''
     }
   }
+
+  /**
+   * Догенерировать недостающие задания
+   */
+  private async generateMissingTasks(
+    params: GenerateParams,
+    missingOpen: number,
+    missingTest: number,
+    taskTypes: TaskTypeId[],
+    difficulty: DifficultyLevel
+  ): Promise<GeneratedTask[]> {
+    const openTypes = taskTypes.filter(t => !['single_choice', 'multiple_choice'].includes(t))
+    const testTypes = taskTypes.filter(t => ['single_choice', 'multiple_choice'].includes(t))
+
+    const tasksToGenerate: string[] = []
+
+    if (missingOpen > 0 && openTypes.length > 0) {
+      const typeToUse = openTypes[0] // Используем первый доступный тип
+      tasksToGenerate.push(`${missingOpen} заданий типа ${typeToUse}`)
+    }
+
+    if (missingTest > 0 && testTypes.length > 0) {
+      const typeToUse = testTypes[0]
+      tasksToGenerate.push(`${missingTest} тестовых вопросов типа ${typeToUse}`)
+    }
+
+    if (tasksToGenerate.length === 0) {
+      return []
+    }
+
+    const retryPrompt = `
+Тебе нужно создать дополнительные задания по теме "${params.topic}" для ${params.grade} класса.
+
+СОЗДАЙ РОВНО:
+${tasksToGenerate.join('\n')}
+
+Используй тот же формат JSON:
+{
+  "tasks": [
+    { "type": "тип_задания", ... }
+  ]
 }
+
+ВАЖНО: Создай ИМЕННО указанное количество заданий, не больше и не меньше!
+`
+
+    const generationModel = process.env.AI_MODEL_GENERATION || 'gpt-4.1-mini'
+
+    const completion = await this.client.chat.completions.create({
+      model: generationModel,
+      messages: [
+        { role: 'user', content: retryPrompt }
+      ],
+      max_tokens: 4000,
+      temperature: 0.5 // Ниже температура для более точного следования
+    })
+
+    const content = completion.choices[0]?.message?.content || ''
+    const jsonMatch = content.match(/\{[\s\S]*\}/)
+
+    if (!jsonMatch) {
+      console.error('[УчиОн] RETRY: No JSON found in response')
+      return []
+    }
+
+    try {
+      const parsed = JSON.parse(jsonMatch[0])
+      return parsed.tasks || []
+    } catch {
+      console.error('[УчиОн] RETRY: JSON parse error')
+      return []
+    }
+  }
+}
+
+// =============================================================================
+// Factory
+// =============================================================================
 
 export function getAIProvider(): AIProvider {
   const isProd =
@@ -459,7 +462,6 @@ export function getAIProvider(): AIProvider {
   const apiKey = process.env.OPENAI_API_KEY
   const baseURL = process.env.AI_BASE_URL
 
-  // Support 'openai' (direct OpenAI), 'polza' (polza.ai), 'neuroapi' (legacy), or any OpenAI-compatible provider
   const useAI =
     (isProd && aiProvider === 'openai' && apiKey) ||
     (aiProvider === 'polza' && apiKey) ||

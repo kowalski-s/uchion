@@ -85,9 +85,48 @@ function loadFontAsBase64(): { regular: string; bold: string } | null {
 
 // Helper to determine if answer field should be shown
 function shouldShowAnswerField(text: string): boolean {
+  // Don't show answer field for matching tasks
+  if (text.startsWith('<!--MATCHING:')) return false
   const lower = text.toLowerCase()
   const hiddenKeywords = ['подчеркни', 'обведи', 'зачеркни', 'раскрась', 'соедини']
   return !hiddenKeywords.some(k => lower.includes(k))
+}
+
+// Parse matching task data from text
+interface MatchingData {
+  type: 'matching'
+  instruction: string
+  leftColumn: string[]
+  rightColumn: string[]
+}
+
+function parseMatchingData(text: string): MatchingData | null {
+  const match = text.match(/<!--MATCHING:(.*?)-->/)
+  if (!match) return null
+  try {
+    return JSON.parse(match[1]) as MatchingData
+  } catch {
+    return null
+  }
+}
+
+// Render matching task as HTML
+function renderMatchingHtml(data: MatchingData): string {
+  const leftItems = data.leftColumn.map((item, i) =>
+    `<div class="matching-item matching-left"><span class="matching-number">${i + 1}.</span> ${escapeHtml(item)}</div>`
+  ).join('')
+
+  const rightItems = data.rightColumn.map((item, i) =>
+    `<div class="matching-item matching-right"><span class="matching-letter">${String.fromCharCode(1072 + i)})</span> ${escapeHtml(item)}</div>`
+  ).join('')
+
+  return `
+    <div class="matching-instruction">${escapeHtml(data.instruction)}</div>
+    <div class="matching-columns">
+      <div class="matching-column">${leftItems}</div>
+      <div class="matching-column">${rightItems}</div>
+    </div>
+  `
 }
 
 // Generate HTML template for the worksheet
@@ -109,15 +148,30 @@ function generateWorksheetHtml(worksheet: Worksheet): string {
     }
   ` : ''
 
-  const assignmentsHtml = worksheet.assignments.map((task, i) => `
-    <div class="task-block">
-      <div class="task-text">
-        <span class="task-number">${i + 1}.</span>
-        ${escapeHtml(task.text)}
+  const assignmentsHtml = worksheet.assignments.map((task, i) => {
+    const matchingData = parseMatchingData(task.text)
+
+    if (matchingData) {
+      return `
+        <div class="task-block">
+          <div class="task-text">
+            <span class="task-number">${i + 1}.</span>
+          </div>
+          ${renderMatchingHtml(matchingData)}
+        </div>
+      `
+    }
+
+    return `
+      <div class="task-block">
+        <div class="task-text">
+          <span class="task-number">${i + 1}.</span>
+          ${escapeHtml(task.text)}
+        </div>
+        ${shouldShowAnswerField(task.text) ? '<div class="answer-field"></div>' : ''}
       </div>
-      ${shouldShowAnswerField(task.text) ? '<div class="answer-field"></div>' : ''}
-    </div>
-  `).join('')
+    `
+  }).join('')
 
   const testHtml = worksheet.test.map((q, i) => `
     <div class="test-question">
@@ -280,6 +334,40 @@ function generateWorksheetHtml(worksheet: Worksheet): string {
       background: rgba(249, 250, 251, 0.3);
     }
 
+    /* Matching task styles */
+    .matching-instruction {
+      font-size: 13px;
+      color: #374151;
+      margin-bottom: 16px;
+      margin-left: 24px;
+    }
+
+    .matching-columns {
+      display: flex;
+      gap: 32px;
+      margin-left: 24px;
+    }
+
+    .matching-column {
+      flex: 1;
+    }
+
+    .matching-item {
+      padding: 10px 14px;
+      margin-bottom: 10px;
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      font-size: 12px;
+      color: #374151;
+    }
+
+    .matching-number, .matching-letter {
+      font-weight: bold;
+      color: #4f46e5;
+      margin-right: 8px;
+    }
+
     /* Test questions */
     .test-question {
       border: 1px solid #e5e7eb;
@@ -396,6 +484,10 @@ function generateWorksheetHtml(worksheet: Worksheet): string {
       gap: 32px;
     }
 
+    .answers-grid.single-column {
+      grid-template-columns: 1fr;
+    }
+
     .answers-column h3 {
       font-size: 16px;
       font-weight: bold;
@@ -476,6 +568,7 @@ function generateWorksheetHtml(worksheet: Worksheet): string {
     </div>
   </div>
 
+  ${worksheet.test.length > 0 ? `
   <!-- PAGE 2: Test -->
   <div class="page">
     <div class="section-title">
@@ -487,6 +580,7 @@ function generateWorksheetHtml(worksheet: Worksheet): string {
       ${testHtml}
     </div>
   </div>
+  ` : ''}
 
   <!-- PAGE 3: Evaluation & Notes -->
   <div class="page">
@@ -516,7 +610,7 @@ function generateWorksheetHtml(worksheet: Worksheet): string {
   <div class="page">
     <h2 class="answers-title">Ответы</h2>
 
-    <div class="answers-grid">
+    <div class="answers-grid${worksheet.test.length === 0 ? ' single-column' : ''}">
       <div class="answers-column">
         <h3>Задания</h3>
         <ul class="answers-list">
@@ -524,12 +618,14 @@ function generateWorksheetHtml(worksheet: Worksheet): string {
         </ul>
       </div>
 
+      ${worksheet.test.length > 0 ? `
       <div class="answers-column">
         <h3>Мини-тест</h3>
         <ul class="answers-list">
           ${testAnswersHtml}
         </ul>
       </div>
+      ` : ''}
     </div>
   </div>
 </body>

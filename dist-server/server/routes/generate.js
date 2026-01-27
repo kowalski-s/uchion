@@ -10,12 +10,34 @@ import { verifyAccessToken } from '../../api/_lib/auth/tokens.js';
 import { checkGenerateRateLimit } from '../middleware/rate-limit.js';
 import { trackGeneration } from '../../api/_lib/alerts/generation-alerts.js';
 const router = Router();
+// Task type and format enums for validation
+const TaskTypeIdSchema = z.enum([
+    'single_choice',
+    'multiple_choice',
+    'open_question',
+    'matching',
+    'fill_blank',
+]);
+const DifficultyLevelSchema = z.enum(['easy', 'medium', 'hard']);
+const WorksheetFormatIdSchema = z.enum(['open_only', 'test_only', 'test_and_open']);
 const InputSchema = z.object({
-    subject: z.enum(['math', 'russian']),
-    grade: z.number().int().min(1).max(4),
+    subject: z.enum(['math', 'algebra', 'geometry', 'russian']),
+    grade: z.number().int().min(1).max(11),
     topic: z.string().min(3).max(200),
     folderId: z.string().uuid().nullable().optional(),
+    // New fields for extended generation
+    taskTypes: z.array(TaskTypeIdSchema).min(1).max(5).optional(),
+    difficulty: DifficultyLevelSchema.optional(),
+    format: WorksheetFormatIdSchema.optional(),
+    variantIndex: z.number().int().min(0).max(2).optional(),
 });
+// Map subject to DB enum (algebra/geometry -> math until DB migration)
+function mapSubjectForDB(subject) {
+    if (subject === 'algebra' || subject === 'geometry' || subject === 'math') {
+        return 'math';
+    }
+    return 'russian';
+}
 // ==================== POST /api/generate ====================
 router.post('/', async (req, res) => {
     const parse = InputSchema.safeParse(req.body);
@@ -77,8 +99,17 @@ router.post('/', async (req, res) => {
     };
     try {
         const ai = getAIProvider();
-        // Pass progress callback
-        const worksheet = await ai.generateWorksheet(input, (percent) => {
+        // Pass progress callback with extended params
+        const generateParams = {
+            subject: input.subject,
+            grade: input.grade,
+            topic: input.topic,
+            taskTypes: input.taskTypes,
+            difficulty: input.difficulty,
+            format: input.format,
+            variantIndex: input.variantIndex,
+        };
+        const worksheet = await ai.generateWorksheet(generateParams, (percent) => {
             sendEvent({ type: 'progress', percent });
         });
         sendEvent({ type: 'progress', percent: 97 });
@@ -121,10 +152,10 @@ router.post('/', async (req, res) => {
                 const [inserted] = await db.insert(worksheets).values({
                     userId,
                     folderId: input.folderId || null,
-                    subject: input.subject,
+                    subject: mapSubjectForDB(input.subject),
                     grade: input.grade,
                     topic: input.topic,
-                    difficulty: 'medium',
+                    difficulty: input.difficulty || 'medium',
                     content: JSON.stringify(tempWorksheet),
                 }).returning({ id: worksheets.id });
                 dbId = inserted?.id || null;

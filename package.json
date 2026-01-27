@@ -9,7 +9,7 @@
     "dev:server": "tsx watch server.ts",
     "dev:vercel": "vercel dev --listen 3000",
     "build": "vite build && npm run build:server",
-    "build:server": "tsc --project tsconfig.server.json",
+    "build:server": "node node_modules/typescript/bin/tsc --project tsconfig.server.json",
     "start": "node dist-server/server.js",
     "preview:network": "vite preview --host",
     "smoke": "tsx scripts/smoke-generate.ts",
@@ -44,6 +44,7 @@
     "react-dom": "^18.2.0",
     "react-hook-form": "^7.50.0",
     "react-router-dom": "^6.23.0",
+    "tailwindcss-animate": "^1.0.7",
     "zod": "^3.23.0",
     "zustand": "^4.5.0"
   },

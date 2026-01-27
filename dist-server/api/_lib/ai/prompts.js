@@ -183,5 +183,15 @@ export const SUBJECT_CONFIG = {
         systemPrompt: MATH_SYSTEM_PROMPT,
         validatorPrompt: MATH_VALIDATOR_PROMPT,
     },
+    // Algebra and Geometry use adapted math prompts for now
+    // TODO: Create specialized prompts for 7-11 grade
+    algebra: {
+        systemPrompt: MATH_SYSTEM_PROMPT.replace('1–4', '7–11').replace('начальной школы', 'средней и старшей школы'),
+        validatorPrompt: MATH_VALIDATOR_PROMPT.replace('1–4', '7–11'),
+    },
+    geometry: {
+        systemPrompt: MATH_SYSTEM_PROMPT.replace('1–4', '7–11').replace('начальной школы', 'средней и старшей школы'),
+        validatorPrompt: MATH_VALIDATOR_PROMPT.replace('1–4', '7–11'),
+    },
 };
 //# sourceMappingURL=prompts.js.map
