@@ -213,8 +213,8 @@ export default function BuyGenerationsModal({ isOpen, onClose }: BuyGenerationsM
             disabled={purchasing}
             className={`w-full py-4 rounded-xl text-white font-semibold text-lg transition-all ${
               purchasing
-                ? 'bg-purple-300 cursor-wait'
-                : 'bg-[#8C52FF] hover:bg-purple-700 shadow-lg hover:shadow-xl'
+                ? 'bg-[#A855F7]/50 cursor-wait'
+                : 'bg-[#A855F7]/80 hover:bg-[#A855F7]/90 shadow-md shadow-purple-400/20 hover:shadow-purple-400/30'
             }`}
           >
             {purchasing ? (
