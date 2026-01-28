@@ -95,7 +95,7 @@ class OpenAIProvider {
                     { role: 'user', content: userPrompt }
                 ],
                 max_tokens: 8000,
-                temperature: 0.7
+                temperature: 0.5 // Ниже для более точного следования инструкциям
             }));
         }
         catch (error) {
@@ -122,17 +122,41 @@ class OpenAIProvider {
         }
         onProgress?.(75);
         // Валидируем и преобразуем задания
-        const tasks = generatedJson.tasks || [];
-        console.log('[УчиОн] Generated tasks count:', tasks.length);
+        let tasks = generatedJson.tasks || [];
+        console.log('[УчиОн] Generated tasks count:', tasks.length, 'Expected:', totalTasks);
         // Разделяем задания на тестовые и открытые
-        const testTasks = [];
-        const openTasksList = [];
+        let testTasks = [];
+        let openTasksList = [];
         for (const task of tasks) {
             if (task.type === 'single_choice' || task.type === 'multiple_choice') {
                 testTasks.push(task);
             }
             else {
                 openTasksList.push(task);
+            }
+        }
+        console.log('[УчиОн] Split: testTasks=', testTasks.length, 'openTasksList=', openTasksList.length);
+        console.log('[УчиОн] Targets: testQuestions=', testQuestions, 'openTasks=', openTasks);
+        // RETRY: Если не хватает заданий - догенерируем
+        const missingOpen = openTasks - openTasksList.length;
+        const missingTest = testQuestions - testTasks.length;
+        if (missingOpen > 0 || missingTest > 0) {
+            console.log(`[УчиОн] RETRY: Need ${missingOpen} more open tasks, ${missingTest} more test tasks`);
+            try {
+                const retryTasks = await this.generateMissingTasks(params, missingOpen, missingTest, taskTypes, difficulty);
+                for (const task of retryTasks) {
+                    if (task.type === 'single_choice' || task.type === 'multiple_choice') {
+                        testTasks.push(task);
+                    }
+                    else {
+                        openTasksList.push(task);
+                    }
+                }
+                console.log('[УчиОн] After retry: testTasks=', testTasks.length, 'openTasksList=', openTasksList.length);
+            }
+            catch (retryError) {
+                console.error('[УчиОн] Retry failed:', retryError);
+                // Continue with what we have
             }
         }
         // Преобразуем в формат Worksheet
@@ -185,9 +209,14 @@ class OpenAIProvider {
                 text = task.question || '';
             }
             else if (task.type === 'matching') {
-                const left = task.leftColumn || [];
-                const right = task.rightColumn || [];
-                text = `${task.instruction || 'Соотнеси элементы'}\n\nЛевый столбец:\n${left.map((l, i) => `${i + 1}. ${l}`).join('\n')}\n\nПравый столбец:\n${right.map((r, i) => `${String.fromCharCode(65 + i)}. ${r}`).join('\n')}`;
+                // Store matching as JSON for proper rendering in component
+                const matchingData = {
+                    type: 'matching',
+                    instruction: task.instruction || 'Соотнеси элементы',
+                    leftColumn: task.leftColumn || [],
+                    rightColumn: task.rightColumn || [],
+                };
+                text = `<!--MATCHING:${JSON.stringify(matchingData)}-->`;
             }
             else if (task.type === 'fill_blank') {
                 text = task.textWithBlanks || '';
@@ -238,6 +267,63 @@ class OpenAIProvider {
             },
             pdfBase64: ''
         };
+    }
+    /**
+     * Догенерировать недостающие задания
+     */
+    async generateMissingTasks(params, missingOpen, missingTest, taskTypes, difficulty) {
+        const openTypes = taskTypes.filter(t => !['single_choice', 'multiple_choice'].includes(t));
+        const testTypes = taskTypes.filter(t => ['single_choice', 'multiple_choice'].includes(t));
+        const tasksToGenerate = [];
+        if (missingOpen > 0 && openTypes.length > 0) {
+            const typeToUse = openTypes[0]; // Используем первый доступный тип
+            tasksToGenerate.push(`${missingOpen} заданий типа ${typeToUse}`);
+        }
+        if (missingTest > 0 && testTypes.length > 0) {
+            const typeToUse = testTypes[0];
+            tasksToGenerate.push(`${missingTest} тестовых вопросов типа ${typeToUse}`);
+        }
+        if (tasksToGenerate.length === 0) {
+            return [];
+        }
+        const retryPrompt = `
+Тебе нужно создать дополнительные задания по теме "${params.topic}" для ${params.grade} класса.
+
+СОЗДАЙ РОВНО:
+${tasksToGenerate.join('\n')}
+
+Используй тот же формат JSON:
+{
+  "tasks": [
+    { "type": "тип_задания", ... }
+  ]
+}
+
+ВАЖНО: Создай ИМЕННО указанное количество заданий, не больше и не меньше!
+`;
+        const generationModel = process.env.AI_MODEL_GENERATION || 'gpt-4.1-mini';
+        const completion = await this.client.chat.completions.create({
+            model: generationModel,
+            messages: [
+                { role: 'user', content: retryPrompt }
+            ],
+            max_tokens: 4000,
+            temperature: 0.5 // Ниже температура для более точного следования
+        });
+        const content = completion.choices[0]?.message?.content || '';
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+            console.error('[УчиОн] RETRY: No JSON found in response');
+            return [];
+        }
+        try {
+            const parsed = JSON.parse(jsonMatch[0]);
+            return parsed.tasks || [];
+        }
+        catch {
+            console.error('[УчиОн] RETRY: JSON parse error');
+            return [];
+        }
     }
 }
 // =============================================================================

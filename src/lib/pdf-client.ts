@@ -1,6 +1,7 @@
 import { PDFDocument, PageSizes, rgb } from 'pdf-lib'
 import fontkit from '@pdf-lib/fontkit'
 import type { Worksheet } from '../../shared/types'
+import { latexToUnicode } from '../components/MathRenderer'
 
 const fetchFont = async (url: string) => {
   try {
@@ -153,9 +154,11 @@ export async function buildWorksheetPdf(worksheet: Worksheet) {
   }
 
   const drawAssignments = () => {
+    if (worksheet.assignments.length === 0) return
+
     // Header is already drawn.
     drawSectionTitle('Задания', 'assignment')
-    
+
     const standardFieldHeight = 80
     const MIN_FIELD_HEIGHT = 40
 
@@ -163,7 +166,7 @@ export async function buildWorksheetPdf(worksheet: Worksheet) {
       // Calculate standard height
       let fieldHeight = standardFieldHeight
       let height = calculateBlockHeight('assignment', { ...a, index: i, fieldHeight }, regular)
-      
+
       // Flexible Last Assignment Logic
       // If this is the last assignment in the list, and it doesn't fit...
       if (i === worksheet.assignments.length - 1) {
@@ -173,10 +176,10 @@ export async function buildWorksheetPdf(worksheet: Worksheet) {
              const textOnlyHeight = calculateBlockHeight('assignment', { ...a, index: i, fieldHeight: 0 }, regular)
              // height = textHeight + fieldHeight + 16
              // textOnlyHeight = textHeight + 0 + 16
-             
+
              // We need: textOnlyHeight + adjustedFieldHeight <= remainingSpace
              const maxPossibleField = remainingSpace - textOnlyHeight
-             
+
              if (maxPossibleField >= MIN_FIELD_HEIGHT) {
                  // We can fit it by shrinking!
                  fieldHeight = maxPossibleField
@@ -187,9 +190,9 @@ export async function buildWorksheetPdf(worksheet: Worksheet) {
 
       checkPageBreak(height)
       drawDebugRect(height)
-      
+
       const maxWidth = contentWidth
-      const lines = wrapText(regular, `${i + 1}. ${a.text}`, 12, maxWidth)
+      const lines = wrapText(regular, `${i + 1}. ${latexToUnicode(a.text)}`, 12, maxWidth)
 
       let y = cursorY
       lines.forEach(line => {
@@ -203,31 +206,25 @@ export async function buildWorksheetPdf(worksheet: Worksheet) {
   }
 
   const drawTest = () => {
-    // Force new page for Test if requested, or just flow it?
-    // User requested "Unit height check". 
-    // Let's first check if we need a new page for the Title itself
-    
-    if (checkPageBreak(50)) {
-        // Title on new page
-    } else {
-        // Maybe force new page for test start as per previous design?
-        // User said "All 8 tasks, mini-test ... should be processed equally".
-        // But previously we had "Force new page for Test". 
-        // Let's keep "Force new page" for the *section start* to keep it clean, then flow questions.
-        page = addPage()
-        cursorY = h - margin
+    if (worksheet.test.length === 0) return
+
+    // If there are assignments, start test on a new page
+    // If no assignments, test is on the first page - header already drawn
+    if (worksheet.assignments.length > 0) {
+      page = addPage()
+      cursorY = h - margin
     }
 
     drawSectionTitle('Мини-тест', 'test')
-    
+
     worksheet.test.forEach((q, i) => {
       const height = calculateBlockHeight('test', { ...q, index: i }, regular)
       checkPageBreak(height)
       drawDebugRect(height)
 
       const maxWidth = contentWidth
-      const lines = wrapText(regular, `${i + 1}. ${q.question}`, 12, maxWidth)
-      
+      const lines = wrapText(regular, `${i + 1}. ${latexToUnicode(q.question)}`, 12, maxWidth)
+
       let y = cursorY
       lines.forEach(line => {
         page.drawText(line, { x: margin, y: y - 12, size: 12, font: regular })
@@ -238,7 +235,7 @@ export async function buildWorksheetPdf(worksheet: Worksheet) {
         const circleY = y - 10
         page.drawCircle({ x: circleX + 8, y: circleY, size: 7, borderColor: rgb(0.75, 0.75, 0.8), borderWidth: 1 })
         page.drawText(String.fromCharCode(65 + idx), { x: circleX + 5, y: circleY - 4, size: 10, font: bold, color: rgb(0.45, 0.45, 0.5) })
-        page.drawText(opt, { x: circleX + 24, y: circleY - 4, size: 12, font: regular })
+        page.drawText(latexToUnicode(opt), { x: circleX + 24, y: circleY - 4, size: 12, font: regular })
         y -= 22
       })
       cursorY = y - 12
@@ -284,34 +281,50 @@ export async function buildWorksheetPdf(worksheet: Worksheet) {
     page = addPage()
     cursorY = h - margin
     drawSectionTitle('Ответы', 'other')
+
+    const hasAssignments = worksheet.assignments.length > 0
+    const hasTest = worksheet.test.length > 0
+
+    // Use two columns if both exist, single column otherwise
+    const useTwoColumns = hasAssignments && hasTest
     const gap = 20
-    const colWidth = (contentWidth - gap) / 2
+    const colWidth = useTwoColumns ? (contentWidth - gap) / 2 : contentWidth
     const leftX = margin
     const rightX = margin + colWidth + gap
+
     let yLeft = cursorY
     let yRight = cursorY
+
     const assign = worksheet.answers.assignments
     const test = worksheet.answers.test
-    page.drawText('Задания', { x: leftX, y: yLeft - 14, size: 14, font: bold })
-    yLeft -= 22
-    page.drawText('Мини-тест', { x: rightX, y: yRight - 14, size: 14, font: bold })
-    yRight -= 22
-    assign.forEach((ans, i) => {
-      const text = `${i + 1}. ${ans}`
-      const lines = wrapText(regular, text, 12, colWidth)
-      lines.forEach(line => {
-        page.drawText(line, { x: leftX, y: yLeft - 12, size: 12, font: regular })
-        yLeft -= 16
+
+    if (hasAssignments) {
+      page.drawText('Задания', { x: leftX, y: yLeft - 14, size: 14, font: bold })
+      yLeft -= 22
+      assign.forEach((ans, i) => {
+        const text = `${i + 1}. ${latexToUnicode(ans)}`
+        const lines = wrapText(regular, text, 12, colWidth)
+        lines.forEach(line => {
+          page.drawText(line, { x: leftX, y: yLeft - 12, size: 12, font: regular })
+          yLeft -= 16
+        })
       })
-    })
-    test.forEach((ans, i) => {
-      const text = `${i + 1}. ${ans}`
-      const lines = wrapText(regular, text, 12, colWidth)
-      lines.forEach(line => {
-        page.drawText(line, { x: rightX, y: yRight - 12, size: 12, font: regular })
-        yRight -= 16
+    }
+
+    if (hasTest) {
+      const testX = useTwoColumns ? rightX : leftX
+      let yTest = useTwoColumns ? yRight : yLeft - 20
+      page.drawText('Мини-тест', { x: testX, y: yTest - 14, size: 14, font: bold })
+      yTest -= 22
+      test.forEach((ans, i) => {
+        const text = `${i + 1}. ${latexToUnicode(ans)}`
+        const lines = wrapText(regular, text, 12, colWidth)
+        lines.forEach(line => {
+          page.drawText(line, { x: testX, y: yTest - 12, size: 12, font: regular })
+          yTest -= 16
+        })
       })
-    })
+    }
   }
 
   drawHeader()

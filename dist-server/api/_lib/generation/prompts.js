@@ -103,17 +103,28 @@ function getTaskTypesBlock(taskTypes, formatId, variantIndex) {
     if (!variant) {
         return 'СОЗДАЙ ЗАДАНИЯ по указанным типам.';
     }
-    let instructions = 'СОЗДАЙ ЗАДАНИЯ:\n\n';
+    const totalTasks = variant.testQuestions + variant.openTasks;
+    let instructions = `
+═══════════════════════════════════════════════════════════════
+КРИТИЧЕСКИ ВАЖНО: КОЛИЧЕСТВО ЗАДАНИЙ
+═══════════════════════════════════════════════════════════════
+
+Ты ОБЯЗАН создать РОВНО ${totalTasks} заданий. Не ${totalTasks - 1}, не ${totalTasks + 1}, а ИМЕННО ${totalTasks}.
+
+`;
     // Если есть тестовые вопросы
     if (variant.testQuestions > 0) {
-        instructions += `ТЕСТОВАЯ ЧАСТЬ (${variant.testQuestions} вопросов):\n`;
-        instructions += `Используй типы: единственный выбор (single_choice), множественный выбор (multiple_choice)\n\n`;
+        instructions += `ТЕСТОВАЯ ЧАСТЬ: РОВНО ${variant.testQuestions} тестовых вопросов (single_choice или multiple_choice)\n`;
     }
     // Если есть открытые задания
     if (variant.openTasks > 0) {
-        instructions += `ЗАДАНИЯ С РАЗВЁРНУТЫМ ОТВЕТОМ (${variant.openTasks} заданий):\n`;
-        instructions += `Используй типы: открытый вопрос (open_question), соотнесение (matching), вставка пропусков (fill_blank)\n\n`;
+        instructions += `ЗАДАНИЯ С РАЗВЁРНУТЫМ ОТВЕТОМ: РОВНО ${variant.openTasks} заданий (open_question, matching или fill_blank)\n`;
     }
+    instructions += `
+ПРОВЕРЬ СЕБЯ: В финальном JSON массив "tasks" должен содержать РОВНО ${totalTasks} элементов.
+Если ты создашь меньше или больше - это ОШИБКА.
+
+`;
     // Инструкции по каждому типу
     instructions += 'ИНСТРУКЦИИ ПО ТИПАМ:\n\n';
     for (const typeId of taskTypes) {

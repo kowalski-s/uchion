@@ -113,15 +113,15 @@ function parseMatchingData(text: string): MatchingData | null {
 // Render matching task as HTML
 function renderMatchingHtml(data: MatchingData): string {
   const leftItems = data.leftColumn.map((item, i) =>
-    `<div class="matching-item matching-left"><span class="matching-number">${i + 1}.</span> ${escapeHtml(item)}</div>`
+    `<div class="matching-item matching-left"><span class="matching-number">${i + 1}.</span> ${processText(item)}</div>`
   ).join('')
 
   const rightItems = data.rightColumn.map((item, i) =>
-    `<div class="matching-item matching-right"><span class="matching-letter">${String.fromCharCode(1072 + i)})</span> ${escapeHtml(item)}</div>`
+    `<div class="matching-item matching-right"><span class="matching-letter">${String.fromCharCode(1072 + i)})</span> ${processText(item)}</div>`
   ).join('')
 
   return `
-    <div class="matching-instruction">${escapeHtml(data.instruction)}</div>
+    <div class="matching-instruction">${processText(data.instruction)}</div>
     <div class="matching-columns">
       <div class="matching-column">${leftItems}</div>
       <div class="matching-column">${rightItems}</div>
@@ -166,7 +166,7 @@ function generateWorksheetHtml(worksheet: Worksheet): string {
       <div class="task-block">
         <div class="task-text">
           <span class="task-number">${i + 1}.</span>
-          ${escapeHtml(task.text)}
+          ${processText(task.text)}
         </div>
         ${shouldShowAnswerField(task.text) ? '<div class="answer-field"></div>' : ''}
       </div>
@@ -177,13 +177,13 @@ function generateWorksheetHtml(worksheet: Worksheet): string {
     <div class="test-question">
       <div class="question-text">
         <span class="question-number">${i + 1}.</span>
-        ${escapeHtml(q.question)}
+        ${processText(q.question)}
       </div>
       <div class="options">
         ${q.options.map((opt, idx) => `
           <div class="option">
             <div class="option-letter">${String.fromCharCode(65 + idx)}</div>
-            <span class="option-text">${escapeHtml(opt)}</span>
+            <span class="option-text">${processText(opt)}</span>
           </div>
         `).join('')}
       </div>
@@ -193,18 +193,21 @@ function generateWorksheetHtml(worksheet: Worksheet): string {
   const assignmentAnswersHtml = worksheet.answers.assignments.map((ans, i) => `
     <li class="answer-item">
       <span class="answer-number">${i + 1}.</span>
-      ${escapeHtml(ans)}
+      ${processText(ans)}
     </li>
   `).join('')
 
   const testAnswersHtml = worksheet.answers.test.map((ans, i) => `
     <li class="answer-item-inline">
       <span class="answer-number">${i + 1}.</span>
-      ${escapeHtml(ans)}
+      ${processText(ans)}
     </li>
   `).join('')
 
   const notesLinesHtml = Array.from({ length: 14 }).map(() => '<div class="note-line"></div>').join('')
+
+  const hasAssignments = worksheet.assignments.length > 0
+  const hasTest = worksheet.test.length > 0
 
   return `<!DOCTYPE html>
 <html lang="ru">
@@ -540,6 +543,7 @@ function generateWorksheetHtml(worksheet: Worksheet): string {
   </style>
 </head>
 <body>
+  ${hasAssignments ? `
   <!-- PAGE 1: Assignments -->
   <div class="page">
     <div class="header">
@@ -567,10 +571,29 @@ function generateWorksheetHtml(worksheet: Worksheet): string {
       ${assignmentsHtml}
     </div>
   </div>
+  ` : ''}
 
-  ${worksheet.test.length > 0 ? `
+  ${hasTest ? `
   <!-- PAGE 2: Test -->
   <div class="page">
+    ${!hasAssignments ? `
+    <div class="header">
+      <div class="logo">УчиОн</div>
+      <div class="meta-fields">
+        <div class="meta-field">
+          <span>Имя и фамилия:</span>
+          <div class="meta-line"></div>
+        </div>
+        <div class="meta-field">
+          <span>Дата:</span>
+          <div class="meta-line"></div>
+        </div>
+      </div>
+    </div>
+
+    <h1 class="title">${escapeHtml(worksheet.topic)}</h1>
+    ` : ''}
+
     <div class="section-title">
       <div class="section-badge">T</div>
       Мини-тест
@@ -610,15 +633,17 @@ function generateWorksheetHtml(worksheet: Worksheet): string {
   <div class="page">
     <h2 class="answers-title">Ответы</h2>
 
-    <div class="answers-grid${worksheet.test.length === 0 ? ' single-column' : ''}">
+    <div class="answers-grid${!hasAssignments || !hasTest ? ' single-column' : ''}">
+      ${hasAssignments ? `
       <div class="answers-column">
         <h3>Задания</h3>
         <ul class="answers-list">
           ${assignmentAnswersHtml}
         </ul>
       </div>
+      ` : ''}
 
-      ${worksheet.test.length > 0 ? `
+      ${hasTest ? `
       <div class="answers-column">
         <h3>Мини-тест</h3>
         <ul class="answers-list">
@@ -639,6 +664,147 @@ function escapeHtml(text: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;')
+}
+
+/**
+ * Converts LaTeX to plain Unicode text for PDF generation.
+ * Handles both delimited \(...\) and raw LaTeX commands.
+ */
+function latexToUnicode(text: string): string {
+  if (!text) return ''
+
+  let result = text
+
+  // Process \(...\) and \[...\] blocks first
+  result = result.replace(/\\\(([^]*?)\\\)|\\\[([^]*?)\\\]/g, (match, inline, display) => {
+    const latex = (inline || display || '').trim()
+    return convertLatexToUnicode(latex)
+  })
+
+  // Then process raw LaTeX commands (without delimiters)
+  result = convertLatexToUnicode(result)
+
+  return result
+}
+
+function convertLatexToUnicode(latex: string): string {
+  let result = latex
+
+  // Vectors: \vec{a} → a⃗
+  result = result.replace(/\\vec\{([^}]+)\}/g, '$1\u20D7')
+  result = result.replace(/\\vec ([a-zA-Z])/g, '$1\u20D7')
+
+  // Overline/bar: \bar{a} → ā or \overline{AB} → A̅B̅
+  result = result.replace(/\\(?:bar|overline)\{([^}]+)\}/g, (_, content) => {
+    return content.split('').map((c: string) => c + '\u0305').join('')
+  })
+
+  // Fractions: \frac{a}{b} → a/b
+  result = result.replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '($1/$2)')
+
+  // Square root: \sqrt{x} → √x
+  result = result.replace(/\\sqrt\{([^}]+)\}/g, '√($1)')
+  result = result.replace(/\\sqrt ([a-zA-Z0-9])/g, '√$1')
+
+  // Trig functions
+  result = result.replace(/\\sin\s*/g, 'sin ')
+  result = result.replace(/\\cos\s*/g, 'cos ')
+  result = result.replace(/\\tan\s*/g, 'tan ')
+  result = result.replace(/\\cot\s*/g, 'cot ')
+  result = result.replace(/\\sec\s*/g, 'sec ')
+  result = result.replace(/\\csc\s*/g, 'csc ')
+  result = result.replace(/\\arcsin\s*/g, 'arcsin ')
+  result = result.replace(/\\arccos\s*/g, 'arccos ')
+  result = result.replace(/\\arctan\s*/g, 'arctan ')
+  result = result.replace(/\\log\s*/g, 'log ')
+  result = result.replace(/\\ln\s*/g, 'ln ')
+  result = result.replace(/\\exp\s*/g, 'exp ')
+  result = result.replace(/\\lim\s*/g, 'lim ')
+
+  // Degree: ^\circ → °
+  result = result.replace(/\^\\circ/g, '°')
+
+  // Superscripts (basic)
+  const superscripts: Record<string, string> = {
+    '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
+    '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
+    '+': '⁺', '-': '⁻', '=': '⁼', '(': '⁽', ')': '⁾',
+    'n': 'ⁿ', 'i': 'ⁱ',
+  }
+  result = result.replace(/\^{([^}]+)}/g, (_, exp) => {
+    return exp.split('').map((c: string) => superscripts[c] || `^${c}`).join('')
+  })
+  result = result.replace(/\^([0-9n])/g, (_, c) => superscripts[c] || `^${c}`)
+
+  // Subscripts (basic)
+  const subscripts: Record<string, string> = {
+    '0': '₀', '1': '₁', '2': '₂', '3': '₃', '4': '₄',
+    '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉',
+    '+': '₊', '-': '₋', '=': '₌', '(': '₍', ')': '₎',
+    'a': 'ₐ', 'e': 'ₑ', 'i': 'ᵢ', 'o': 'ₒ', 'u': 'ᵤ',
+    'x': 'ₓ', 'n': 'ₙ', 'm': 'ₘ',
+  }
+  result = result.replace(/_\{([^}]+)\}/g, (_, sub) => {
+    return sub.split('').map((c: string) => subscripts[c] || `_${c}`).join('')
+  })
+  result = result.replace(/_([0-9])/g, (_, c) => subscripts[c] || `_${c}`)
+
+  // Greek letters
+  const greekLetters: Record<string, string> = {
+    '\\alpha': 'α', '\\beta': 'β', '\\gamma': 'γ', '\\delta': 'δ',
+    '\\epsilon': 'ε', '\\zeta': 'ζ', '\\eta': 'η', '\\theta': 'θ',
+    '\\iota': 'ι', '\\kappa': 'κ', '\\lambda': 'λ', '\\mu': 'μ',
+    '\\nu': 'ν', '\\xi': 'ξ', '\\pi': 'π', '\\rho': 'ρ',
+    '\\sigma': 'σ', '\\tau': 'τ', '\\upsilon': 'υ', '\\phi': 'φ',
+    '\\chi': 'χ', '\\psi': 'ψ', '\\omega': 'ω',
+    '\\Gamma': 'Γ', '\\Delta': 'Δ', '\\Theta': 'Θ', '\\Lambda': 'Λ',
+    '\\Xi': 'Ξ', '\\Pi': 'Π', '\\Sigma': 'Σ', '\\Phi': 'Φ',
+    '\\Psi': 'Ψ', '\\Omega': 'Ω',
+  }
+  for (const [tex, unicode] of Object.entries(greekLetters)) {
+    result = result.replace(new RegExp(tex.replace(/\\/g, '\\\\'), 'g'), unicode)
+  }
+
+  // Math operators and symbols
+  const symbols: Record<string, string> = {
+    '\\cdot': '·', '\\times': '×', '\\div': '÷',
+    '\\pm': '±', '\\mp': '∓',
+    '\\leq': '≤', '\\geq': '≥', '\\neq': '≠',
+    '\\approx': '≈', '\\equiv': '≡',
+    '\\infty': '∞', '\\partial': '∂',
+    '\\sum': 'Σ', '\\prod': 'Π', '\\int': '∫',
+    '\\rightarrow': '→', '\\leftarrow': '←', '\\leftrightarrow': '↔',
+    '\\Rightarrow': '⇒', '\\Leftarrow': '⇐', '\\Leftrightarrow': '⇔',
+    '\\angle': '∠', '\\perp': '⊥', '\\parallel': '∥',
+    '\\in': '∈', '\\notin': '∉', '\\subset': '⊂', '\\supset': '⊃',
+    '\\cup': '∪', '\\cap': '∩',
+    '\\forall': '∀', '\\exists': '∃',
+    '\\nabla': '∇', '\\triangle': '△',
+    '\\circ': '°',
+    '\\degree': '°',
+    '\\,': ' ', '\\;': ' ', '\\quad': '  ', '\\qquad': '    ',
+  }
+  for (const [tex, unicode] of Object.entries(symbols)) {
+    result = result.replace(new RegExp(tex.replace(/\\/g, '\\\\'), 'g'), unicode)
+  }
+
+  // Remove remaining LaTeX commands like \text{}, \mathrm{}, etc.
+  result = result.replace(/\\(?:text|mathrm|mathbf|mathit|mathsf)\{([^}]+)\}/g, '$1')
+
+  // Remove curly braces used for grouping
+  result = result.replace(/\{([^{}]+)\}/g, '$1')
+
+  // Clean up any remaining backslashes before common letters
+  result = result.replace(/\\([a-zA-Z]+)/g, '$1')
+
+  return result.trim()
+}
+
+/**
+ * Process text: convert LaTeX to Unicode, then escape HTML
+ */
+function processText(text: string): string {
+  return escapeHtml(latexToUnicode(text))
 }
 
 export async function buildPdf(worksheet: Worksheet, meta: GeneratePayload): Promise<string> {

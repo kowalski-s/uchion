@@ -47,7 +47,8 @@ const FORMATS: { id: WorksheetFormatId; name: string; variants: FormatVariant[] 
     name: 'Тест + задания',
     variants: [
       { openTasks: 5, testQuestions: 10, generations: 1 },
-      { openTasks: 10, testQuestions: 15, generations: 2, label: '+Профи' },
+      { openTasks: 10, testQuestions: 15, generations: 2 },
+      { openTasks: 15, testQuestions: 20, generations: 3 },
     ],
   },
   {
@@ -55,7 +56,8 @@ const FORMATS: { id: WorksheetFormatId; name: string; variants: FormatVariant[] 
     name: 'Только тест',
     variants: [
       { openTasks: 0, testQuestions: 10, generations: 1 },
-      { openTasks: 0, testQuestions: 20, generations: 2, label: '+Профи' },
+      { openTasks: 0, testQuestions: 15, generations: 2 },
+      { openTasks: 0, testQuestions: 20, generations: 3 },
     ],
   },
   {
@@ -63,7 +65,8 @@ const FORMATS: { id: WorksheetFormatId; name: string; variants: FormatVariant[] 
     name: 'Только задания',
     variants: [
       { openTasks: 5, testQuestions: 0, generations: 1 },
-      { openTasks: 10, testQuestions: 0, generations: 2, label: '+Профи' },
+      { openTasks: 10, testQuestions: 0, generations: 2 },
+      { openTasks: 15, testQuestions: 0, generations: 3 },
     ],
   },
 ]
@@ -432,7 +435,6 @@ export default function GeneratePage() {
                 {currentFormat && (
                   <div className="flex gap-4 flex-wrap">
                     {currentFormat.variants.map((variant, idx) => {
-                      const isAvailable = generationsLeft >= variant.generations
                       const description = variant.openTasks > 0 && variant.testQuestions > 0
                         ? `${variant.openTasks} заданий + ${variant.testQuestions} тестов`
                         : variant.openTasks > 0
@@ -443,14 +445,11 @@ export default function GeneratePage() {
                         <button
                           key={idx}
                           type="button"
-                          disabled={!isAvailable}
                           onClick={() => form.setValue('variantIndex', idx)}
                           className={`flex items-center gap-3 px-5 py-4 rounded-xl border-2 transition-all ${
                             watchVariantIndex === idx
                               ? 'border-[#8C52FF] bg-purple-50 text-slate-800'
-                              : isAvailable
-                              ? 'border-slate-200 hover:border-slate-300 bg-white text-slate-600'
-                              : 'border-slate-100 bg-slate-50 opacity-50 cursor-not-allowed'
+                              : 'border-slate-200 hover:border-slate-300 bg-white text-slate-600'
                           }`}
                         >
                           <span className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold ${
@@ -460,9 +459,6 @@ export default function GeneratePage() {
                           </span>
                           <div className="text-left">
                             <div className="text-sm font-medium">{description}</div>
-                            {variant.label && (
-                              <span className="text-xs text-[#8C52FF] font-medium">{variant.label}</span>
-                            )}
                           </div>
                         </button>
                       )

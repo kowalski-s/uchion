@@ -1,5 +1,6 @@
 import React from 'react'
 import type { Worksheet } from '../../shared/types'
+import MathRenderer from './MathRenderer'
 
 interface EditableWorksheetContentProps {
   worksheet: Worksheet
@@ -69,7 +70,7 @@ const MatchingTask = ({
         placeholder="Инструкция для задания"
       />
     ) : (
-      <p className="mb-4 text-gray-700">{data.instruction}</p>
+      <p className="mb-4 text-gray-700"><MathRenderer text={data.instruction} /></p>
     )}
     <div className="flex gap-8 justify-between">
       {/* Left column */}
@@ -89,7 +90,7 @@ const MatchingTask = ({
                 style={{ width: 'calc(100% - 30px)', display: 'inline-block' }}
               />
             ) : (
-              item
+              <MathRenderer text={item} />
             )}
           </div>
         ))}
@@ -111,7 +112,7 @@ const MatchingTask = ({
                 style={{ width: 'calc(100% - 30px)', display: 'inline-block' }}
               />
             ) : (
-              item
+              <MathRenderer text={item} />
             )}
           </div>
         ))}
@@ -135,7 +136,7 @@ const EditableTextArea = ({
   placeholder?: string
 }) => {
   if (!isEditMode) {
-    return <span className={className}>{value}</span>
+    return <MathRenderer text={value} className={className} />
   }
 
   return (
@@ -164,7 +165,7 @@ const EditableInput = ({
   placeholder?: string
 }) => {
   if (!isEditMode) {
-    return <span className={className}>{value}</span>
+    return <MathRenderer text={value} className={className} />
   }
 
   return (
@@ -199,81 +200,106 @@ export default function EditableWorksheetContent({
 }: EditableWorksheetContentProps) {
   return (
     <div id="worksheet-pdf-root" className="worksheet-pdf-root">
-      {/* PAGE 1: Assignments */}
-      <PageContainer id="page1">
-        {/* Header */}
-        <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between border-b-2 border-gray-100 pb-4 gap-4">
-          <div className="flex items-center gap-2 text-indigo-600">
-            <span className="text-2xl font-bold tracking-tight">УчиОн</span>
-          </div>
-          <div className="text-sm text-gray-500 w-full sm:w-auto sm:min-w-[320px]">
-            <div className="flex flex-col gap-2 w-full max-w-full">
-              <div className="flex items-center gap-2 w-full">
-                <span className="whitespace-nowrap">Имя и фамилия:</span>
-                <div className="border-b border-gray-300 flex-1 min-w-0"></div>
-              </div>
-              <div className="flex items-center gap-2 w-full">
-                <span className="whitespace-nowrap">Дата:</span>
-                <div className="border-b border-gray-300 flex-1 min-w-0"></div>
+      {/* PAGE 1: Assignments - only show if there are assignments */}
+      {worksheet.assignments.length > 0 && (
+        <PageContainer id="page1">
+          {/* Header */}
+          <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between border-b-2 border-gray-100 pb-4 gap-4">
+            <div className="flex items-center gap-2 text-indigo-600">
+              <span className="text-2xl font-bold tracking-tight">УчиОн</span>
+            </div>
+            <div className="text-sm text-gray-500 w-full sm:w-auto sm:min-w-[320px]">
+              <div className="flex flex-col gap-2 w-full max-w-full">
+                <div className="flex items-center gap-2 w-full">
+                  <span className="whitespace-nowrap">Имя и фамилия:</span>
+                  <div className="border-b border-gray-300 flex-1 min-w-0"></div>
+                </div>
+                <div className="flex items-center gap-2 w-full">
+                  <span className="whitespace-nowrap">Дата:</span>
+                  <div className="border-b border-gray-300 flex-1 min-w-0"></div>
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        <h1 className="mb-6 text-center text-3xl font-bold text-gray-900">{worksheet.topic}</h1>
+          <h1 className="mb-6 text-center text-3xl font-bold text-gray-900">{worksheet.topic}</h1>
 
-        {/* Assignments Section */}
-        <section className="flex flex-col">
-          <h2 className="mb-6 flex items-center gap-3 text-xl font-bold text-gray-900 print:hidden">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-white">E</span>
-            Задания
-            {isEditMode && <span className="text-sm font-normal text-indigo-500 ml-2">(режим редактирования)</span>}
-          </h2>
-          <h2 className="hidden print:flex mb-4 text-lg font-bold text-gray-900 border-b pb-2 items-center gap-2">
-            <span className="flex h-6 w-6 items-center justify-center rounded bg-indigo-600 text-white text-xs">E</span>
-            Задания
-          </h2>
+          {/* Assignments Section */}
+          <section className="flex flex-col">
+            <h2 className="mb-6 flex items-center gap-3 text-xl font-bold text-gray-900 print:hidden">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-white">E</span>
+              Задания
+              {isEditMode && <span className="text-sm font-normal text-indigo-500 ml-2">(режим редактирования)</span>}
+            </h2>
+            <h2 className="hidden print:flex mb-4 text-lg font-bold text-gray-900 border-b pb-2 items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded bg-indigo-600 text-white text-xs">E</span>
+              Задания
+            </h2>
 
-          <div className="flex flex-col gap-6">
-            {worksheet.assignments.map((task, i) => {
-              const matchingData = parseMatchingData(task.text)
+            <div className="flex flex-col gap-6">
+              {worksheet.assignments.map((task, i) => {
+                const matchingData = parseMatchingData(task.text)
 
-              return (
-                <div key={i} className={`task-block break-inside-avoid ${i === 0 ? 'mt-2' : ''} ${isEditMode ? 'bg-indigo-50/20 p-4 rounded-xl border border-indigo-100' : ''}`}>
-                  <div className="mb-3 text-lg font-medium text-gray-900 leading-tight">
-                    <span className="mr-2 text-indigo-600 print:text-black">{i + 1}.</span>
-                    {matchingData ? (
-                      <MatchingTask
-                        data={matchingData}
-                        isEditMode={isEditMode}
-                        assignmentIndex={i}
-                        onUpdateInstruction={onUpdateMatchingInstruction}
-                        onUpdateLeftItem={onUpdateMatchingLeftItem}
-                        onUpdateRightItem={onUpdateMatchingRightItem}
-                      />
-                    ) : (
-                      <EditableTextArea
-                        value={task.text}
-                        onChange={(value) => onUpdateAssignment(i, 'text', value)}
-                        isEditMode={isEditMode}
-                      />
+                return (
+                  <div key={i} className={`task-block break-inside-avoid ${i === 0 ? 'mt-2' : ''} ${isEditMode ? 'bg-indigo-50/20 p-4 rounded-xl border border-indigo-100' : ''}`}>
+                    <div className="mb-3 text-lg font-medium text-gray-900 leading-tight">
+                      <span className="mr-2 text-indigo-600 print:text-black">{i + 1}.</span>
+                      {matchingData ? (
+                        <MatchingTask
+                          data={matchingData}
+                          isEditMode={isEditMode}
+                          assignmentIndex={i}
+                          onUpdateInstruction={onUpdateMatchingInstruction}
+                          onUpdateLeftItem={onUpdateMatchingLeftItem}
+                          onUpdateRightItem={onUpdateMatchingRightItem}
+                        />
+                      ) : (
+                        <EditableTextArea
+                          value={task.text}
+                          onChange={(value) => onUpdateAssignment(i, 'text', value)}
+                          isEditMode={isEditMode}
+                        />
+                      )}
+                    </div>
+                    {shouldShowAnswerField(task.text) && (
+                      <div className="mt-3 h-48 w-full rounded-lg border-2 border-dashed border-gray-200 bg-gray-50/30 print:border-gray-300 print:h-32"></div>
                     )}
                   </div>
-                  {shouldShowAnswerField(task.text) && (
-                    <div className="mt-3 h-48 w-full rounded-lg border-2 border-dashed border-gray-200 bg-gray-50/30 print:border-gray-300 print:h-32"></div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </section>
-      </PageContainer>
+                )
+              })}
+            </div>
+          </section>
+        </PageContainer>
+      )}
 
       {/* PAGE 2: Test - only show if there are test questions */}
       {worksheet.test.length > 0 && (
         <>
-          <div className="page-break"></div>
+          {worksheet.assignments.length > 0 && <div className="page-break"></div>}
           <PageContainer id="page2">
+            {/* Show header on test page if no assignments (test is first page) */}
+            {worksheet.assignments.length === 0 && (
+              <>
+                <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between border-b-2 border-gray-100 pb-4 gap-4">
+                  <div className="flex items-center gap-2 text-indigo-600">
+                    <span className="text-2xl font-bold tracking-tight">УчиОн</span>
+                  </div>
+                  <div className="text-sm text-gray-500 w-full sm:w-auto sm:min-w-[320px]">
+                    <div className="flex flex-col gap-2 w-full max-w-full">
+                      <div className="flex items-center gap-2 w-full">
+                        <span className="whitespace-nowrap">Имя и фамилия:</span>
+                        <div className="border-b border-gray-300 flex-1 min-w-0"></div>
+                      </div>
+                      <div className="flex items-center gap-2 w-full">
+                        <span className="whitespace-nowrap">Дата:</span>
+                        <div className="border-b border-gray-300 flex-1 min-w-0"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <h1 className="mb-6 text-center text-3xl font-bold text-gray-900">{worksheet.topic}</h1>
+              </>
+            )}
             <section className="h-full flex flex-col">
               <h2 className="mb-6 flex items-center gap-3 text-xl font-bold text-gray-900 print:hidden">
                 <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-white">T</span>
@@ -364,23 +390,25 @@ export default function EditableWorksheetContent({
           Ответы
           {isEditMode && <span className="text-sm font-normal text-indigo-500 ml-2">(режим редактирования)</span>}
         </h2>
-        <div className={`grid gap-8 ${worksheet.test.length > 0 ? 'md:grid-cols-2' : ''} answers-grid`}>
-          <div className="break-inside-avoid">
-            <h3 className="mb-4 text-lg font-bold text-indigo-600">Задания</h3>
-            <ul className="space-y-4">
-              {worksheet.answers.assignments.map((ans, i) => (
-                <li key={i} className={`rounded-lg p-3 text-sm text-gray-800 border ${isEditMode ? 'bg-indigo-50/30 border-indigo-200' : 'bg-gray-50 border-gray-100'} print:border-gray-200`}>
-                  <span className="font-bold text-indigo-500 mr-2">{i + 1}.</span>
-                  <EditableTextArea
-                    value={ans}
-                    onChange={(value) => onUpdateAssignmentAnswer(i, value)}
-                    isEditMode={isEditMode}
-                    className="text-sm"
-                  />
-                </li>
-              ))}
-            </ul>
-          </div>
+        <div className={`grid gap-8 ${worksheet.assignments.length > 0 && worksheet.test.length > 0 ? 'md:grid-cols-2' : ''} answers-grid`}>
+          {worksheet.assignments.length > 0 && (
+            <div className="break-inside-avoid">
+              <h3 className="mb-4 text-lg font-bold text-indigo-600">Задания</h3>
+              <ul className="space-y-4">
+                {worksheet.answers.assignments.map((ans, i) => (
+                  <li key={i} className={`rounded-lg p-3 text-sm text-gray-800 border ${isEditMode ? 'bg-indigo-50/30 border-indigo-200' : 'bg-gray-50 border-gray-100'} print:border-gray-200`}>
+                    <span className="font-bold text-indigo-500 mr-2">{i + 1}.</span>
+                    <EditableTextArea
+                      value={ans}
+                      onChange={(value) => onUpdateAssignmentAnswer(i, value)}
+                      isEditMode={isEditMode}
+                      className="text-sm"
+                    />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           {worksheet.test.length > 0 && (
             <div className="break-inside-avoid">
               <h3 className="mb-4 text-lg font-bold text-indigo-600">Мини-тест</h3>
