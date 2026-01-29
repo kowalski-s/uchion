@@ -1,246 +1,175 @@
 # API Design
 
-## 1. General Principles
+## 1. General
 
 - **Protocol**: HTTPS
 - **Format**: JSON (requests), SSE (streaming responses)
-- **Schemas**: Defined in `shared/worksheet.ts` (Zod)
-- **Authentication**: JWT tokens in httpOnly cookies
+- **Schemas**: Zod (`shared/worksheet.ts`)
+- **Auth**: JWT tokens в httpOnly cookies
 
 ---
 
 ## 2. Authentication Endpoints
 
 ### `GET /api/auth/yandex/redirect`
-Start Yandex OAuth flow.
-
-**Response**: Redirect to Yandex OAuth
+Начать Yandex OAuth flow. Redirect на Yandex.
 
 ### `GET /api/auth/yandex/callback`
-Handle Yandex OAuth callback.
-
-**Response**: Redirect to frontend with auth cookies set
+Callback после Yandex OAuth. Устанавливает cookies и redirect на frontend.
 
 ### `GET /api/auth/telegram/callback`
-Handle Telegram login.
-
-**Query Parameters**:
-```typescript
-{
-  id: string
-  first_name: string
-  last_name?: string
-  username?: string
-  photo_url?: string
-  auth_date: string
-  hash: string
-}
-```
-
-**Response**: Redirect to frontend with auth cookies set
+Callback от Telegram Login Widget. Проверяет HMAC-SHA256 подпись.
 
 ### `GET /api/auth/me`
-Get current user info.
-
-**Headers**: Requires `access_token` cookie
+Текущий пользователь. Требует `access_token` cookie.
 
 **Response (200)**:
 ```json
-{
-  "id": "uuid",
-  "email": "user@example.com",
-  "name": "User Name",
-  "role": "user"
-}
+{ "id": "uuid", "email": "user@example.com", "name": "Name", "role": "user" }
 ```
-
-**Response (401)**: Not authenticated
 
 ### `POST /api/auth/logout`
-Logout and revoke tokens.
-
-**Response (200)**:
-```json
-{ "success": true }
-```
+Logout, revoke tokens.
 
 ### `POST /api/auth/refresh`
-Refresh access token using refresh token.
-
-**Headers**: Requires `refresh_token` cookie
-
-**Response (200)**: New tokens set in cookies
+Обновить access token через refresh token cookie.
 
 ---
 
 ## 3. Generation Endpoint
 
 ### `POST /api/generate`
-Generate a worksheet with AI.
 
-#### Request (JSON)
-Schema `GenerateSchema`:
+**Request (JSON)**:
 ```typescript
 {
-  subject: "math" | "russian",
-  grade: number (1-4),
+  subject: "math" | "algebra" | "geometry" | "russian",
+  grade: number (1-11),
   topic: string (3-200 chars),
-  folderId?: string (UUID, optional)
+  folderId?: string (UUID),
+  taskTypes?: TaskTypeId[] (1-5 типов),
+  difficulty?: "easy" | "medium" | "hard",
+  format?: "open_only" | "test_only" | "test_and_open",
+  variantIndex?: number (0-2)
 }
 ```
 
-#### Response (Server-Sent Events)
+**Response (SSE)**:
 
-Progress streaming for real-time feedback.
+Progress:
+```json
+data: { "type": "progress", "percent": 10 }
+```
 
-**Events:**
+Result:
+```json
+data: {
+  "type": "result",
+  "data": {
+    "worksheet": {
+      "id": "uuid",
+      "subject": "math",
+      "grade": "3 класс",
+      "topic": "Сложение",
+      "assignments": [...],
+      "test": [...],
+      "answers": {...},
+      "pdfBase64": "JVBERi..."
+    }
+  }
+}
+```
 
-1. **Progress**:
-   ```json
-   data: { "type": "progress", "percent": 10 }
-   ```
-
-2. **Result (Success)**:
-   ```json
-   data: {
-     "type": "result",
-     "data": {
-       "worksheet": {
-         "id": "uuid",
-         "subject": "math",
-         "grade": "3 класс",
-         "topic": "Сложение",
-         "assignments": [...],
-         "test": [...],
-         "answers": {...},
-         "pdfBase64": "JVBERi..."
-       }
-     }
-   }
-   ```
-
-3. **Error**:
-   ```json
-   data: {
-     "type": "error",
-     "code": "AI_ERROR" | "VALIDATION_ERROR" | "SERVER_ERROR",
-     "message": "Error description"
-   }
-   ```
+Error:
+```json
+data: { "type": "error", "code": "AI_ERROR", "message": "..." }
+```
 
 ---
 
 ## 4. Worksheet Endpoints
 
 ### `GET /api/worksheets`
-List user's worksheets.
+Список листов пользователя. Auth required.
 
-**Auth**: Required
-
-**Query Parameters**:
-- `limit` (number, default 50, max 100)
-- `offset` (number, default 0)
-- `folderId` (UUID, optional)
-
-**Response (200)**:
-```json
-{
-  "worksheets": [
-    {
-      "id": "uuid",
-      "title": "Worksheet Title",
-      "subject": "math",
-      "grade": 3,
-      "topic": "Сложение",
-      "folderId": "uuid" | null,
-      "createdAt": "2024-01-01T00:00:00Z",
-      "updatedAt": "2024-01-01T00:00:00Z"
-    }
-  ],
-  "total": 100
-}
-```
+**Query**: `limit`, `offset`, `folderId`
 
 ### `GET /api/worksheets/:id`
-Get single worksheet with content.
-
-**Auth**: Required (owner only)
-
-**Response (200)**:
-```json
-{
-  "id": "uuid",
-  "title": "Worksheet Title",
-  "subject": "math",
-  "grade": 3,
-  "topic": "Сложение",
-  "content": {...},
-  "folderId": "uuid" | null,
-  "createdAt": "2024-01-01T00:00:00Z",
-  "updatedAt": "2024-01-01T00:00:00Z"
-}
-```
+Один лист с контентом. Auth required (owner only).
 
 ### `PATCH /api/worksheets/:id`
-Update worksheet.
-
-**Auth**: Required (owner only)
-
-**Request**:
-```json
-{
-  "title": "New Title",
-  "folderId": "uuid" | null,
-  "content": {...}
-}
-```
+Обновить лист (title, folderId, content). Auth required (owner only).
 
 ### `DELETE /api/worksheets/:id`
-Delete worksheet.
-
-**Auth**: Required (owner only)
+Удалить лист. Auth required (owner only).
 
 ---
 
 ## 5. Folder Endpoints
 
 ### `GET /api/folders`
-List user's folders.
-
-**Auth**: Required
+Список папок пользователя.
 
 ### `POST /api/folders`
-Create folder.
-
-**Request**:
-```json
-{
-  "name": "Folder Name",
-  "parentId": "uuid" | null
-}
-```
+Создать папку. `{ name, parentId? }`
 
 ### `PATCH /api/folders/:id`
-Update folder.
+Обновить папку.
 
 ### `DELETE /api/folders/:id`
-Delete folder (moves worksheets to root).
+Удалить папку (листы перемещаются в корень).
 
 ---
 
-## 6. Data Models
+## 6. Admin Endpoints
 
-All types synchronized between client and server via `shared/worksheet.ts`.
+Все требуют `withAdminAuth`.
+
+### `GET /api/admin/stats`
+Общая статистика (пользователи, генерации, платежи).
+
+### `GET /api/admin/users`
+Список пользователей с фильтрами.
+
+### `GET /api/admin/generations`
+Лог генераций.
+
+### `GET /api/admin/payments`
+Список платежей.
+
+---
+
+## 7. Billing Endpoints
+
+### `POST /api/billing/create-link`
+Создать платежную ссылку Prodamus. Auth required.
+
+### `POST /api/billing/webhook`
+Webhook от Prodamus. Подпись проверяется через HMAC-SHA256. Idempotent через webhook_events table.
+
+---
+
+## 8. Data Models
+
+### Subject
+```typescript
+type Subject = "math" | "algebra" | "geometry" | "russian"
+```
+
+### TaskTypeId
+```typescript
+type TaskTypeId = "single_choice" | "multiple_choice" | "open_question" | "matching" | "fill_blank"
+```
 
 ### Worksheet
 ```typescript
 interface Worksheet {
   id: string
-  subject: "math" | "russian"
-  grade: string
+  subject: Subject
+  grade: string          // "3 класс"
   topic: string
-  assignments: Assignment[]
-  test: TestQuestion[]
+  assignments: Assignment[]   // Открытые задания
+  test: TestQuestion[]        // Тестовые вопросы
   answers: WorksheetAnswers
   pdfBase64: string
 }
@@ -250,7 +179,7 @@ interface Worksheet {
 ```typescript
 interface Assignment {
   title: string  // "Задание 1"
-  text: string   // Task text
+  text: string   // Текст задания (или JSON для matching)
 }
 ```
 
@@ -258,37 +187,31 @@ interface Assignment {
 ```typescript
 interface TestQuestion {
   question: string
-  options: string[]  // ["Option 1", "Option 2", "Option 3"]
-  answer: string     // Correct answer
+  options: string[]
+  answer: string
 }
 ```
 
 ---
 
-## 7. Error Handling
+## 9. Error Handling
 
-Error codes (`ApiErrorCode`):
-- `VALIDATION_ERROR`: Invalid input data (Zod)
-- `AI_ERROR`: Model failed to generate valid content
-- `PDF_ERROR`: PDF assembly error
-- `SERVER_ERROR`: Internal server error
-- `RATE_LIMIT`: Rate limit exceeded
-- `UNAUTHORIZED`: Authentication required
-- `FORBIDDEN`: Insufficient permissions
+Error codes:
+- `VALIDATION_ERROR` -- невалидный input
+- `AI_ERROR` -- модель не смогла сгенерировать
+- `PDF_ERROR` -- ошибка сборки PDF
+- `SERVER_ERROR` -- внутренняя ошибка
+- `RATE_LIMIT` -- превышен лимит
+- `UNAUTHORIZED` -- нужна авторизация
+- `FORBIDDEN` -- нет прав
 
-**Error Response Format**:
 ```json
-{
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Human-readable message"
-  }
-}
+{ "error": { "code": "VALIDATION_ERROR", "message": "..." } }
 ```
 
 ---
 
-## 8. Rate Limits
+## 10. Rate Limits
 
 | Endpoint | Limit | Window |
 |----------|-------|--------|
@@ -296,13 +219,6 @@ Error codes (`ApiErrorCode`):
 | `/api/generate` (user) | 20 | 1 hour |
 | `/api/auth/*` | 10-60 | varies |
 | `/api/worksheets` | 100 | 1 min |
-
----
-
-## 9. Security
-
-- **Validation**: Strict Zod schemas for all inputs
-- **Sanitization**: AI output parsed and typed before client delivery
-- **Authorization**: Owner checks on all protected resources
-- **Rate Limiting**: Per-endpoint limits prevent abuse
-- **Token Limits**: `max_output_tokens` for AI prevents cost overruns
+| `/api/admin/*` | 30 | 1 min |
+| `/api/billing/create-link` | rate limited | per user |
+| `/api/billing/webhook` | rate limited | per IP |

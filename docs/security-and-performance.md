@@ -1,67 +1,69 @@
 # Security & Performance
 
-## 1. Threat Model and Protection
+## 1. Threat Model
 
 ### 1.1 API Keys & Secrets
-- **Principle**: Zero Trust to client
-- **Implementation**:
-  - `OPENAI_API_KEY` stored exclusively in server environment variables (Dokploy)
-  - Client code contains no secrets
-  - `AUTH_SECRET` different for dev and production environments
-  - In `.env.local` developers use `DummyProvider` by default (safe mode)
+- `OPENAI_API_KEY` только в серверных env variables (Dokploy)
+- Клиент не содержит секретов
+- `AUTH_SECRET` разный для dev/prod
+- `PRODAMUS_SECRET` только на сервере
+- Dev: `DummyProvider` по умолчанию (без API ключей)
 
 ### 1.2 Input Validation
-- **Tool**: Zod (`shared/worksheet.ts`)
-- **Measures**:
-  - Strict typing of all fields (enum for subjects, range for grades)
-  - Topic length limit (up to 200 chars) to prevent Prompt Injection and DoS attacks on LLM context
-  - Input sanitization before sending to LLM
+- **Zod** на всех входах (`shared/worksheet.ts`)
+- Strict typing: enum для subjects, range для grades (1-11)
+- Topic: max 200 символов (защита от Prompt Injection)
+- Sanitization перед отправкой в LLM
 
 ### 1.3 Content Safety
-- **LLM Output**: We don't trust model output
-  - All JSON validated by Zod schema
-  - PDF generated on server, excluding XSS vectors (only text inserted into PDF)
-  - HTML escaped in PDF generation (`escapeHtml()`)
+- JSON ответ LLM валидируется
+- PDF генерируется на сервере (нет XSS-векторов)
+- HTML escaping в PDF (`escapeHtml()`)
 
-### 1.4 Authentication Security
-- **JWT**: HMAC-SHA256 signing with timing-safe comparison
-- **OAuth**: PKCE implementation, state validation with timestamps
-- **Cookies**: httpOnly, Secure (in production), SameSite=Lax
-- **Tokens**: Refresh token rotation with database revocation tracking
-- **Rate Limiting**: Per-endpoint limits (auth: 10/5min, generate: 5-20/hour)
+### 1.4 Authentication
+- JWT: HMAC-SHA256 с timing-safe comparison
+- OAuth: PKCE (Yandex), HMAC-SHA256 signature (Telegram)
+- Cookies: httpOnly, Secure (prod), SameSite=Lax
+- Refresh token rotation с revocation в БД
+- Rate limiting по endpoint (auth: 10/5min, generate: 5-20/hour)
+
+### 1.5 Payments (Prodamus)
+- Webhook signature verification (HMAC-SHA256)
+- Idempotency через `webhook_events` table (eventKey + rawPayloadHash)
+- Payment intents с expiration
+- Rate limiting на webhook endpoint
 
 ---
 
 ## 2. Performance
 
-### 2.1 Frontend (Vite + React)
-- **Code Splitting**: Vite automatic chunk splitting
-- **Assets**: Fonts (Inter) served from `public/fonts`
-- **State Management**: Zustand for minimal re-renders
-- **React Query**: Caching and background refetching
+### 2.1 Frontend
+- Vite code splitting
+- Zustand для минимальных re-renders
+- React Query с caching и background refetch
+- KaTeX для client-side рендеринга формул
 
-### 2.2 Backend (Express)
-- **Streaming**: Server-Sent Events (SSE) allow users to see progress (0% -> 10% -> ... -> 100%) instead of long "white screen" wait
-- **PDF Generation**:
-  - Server generation (`pdfkit`) optimized for speed
-  - Client generation (`pdf-lib`) used as fallback
+### 2.2 Backend
+- SSE streaming (пользователь видит прогресс 0-100%)
+- PDF через `pdfkit` (быстрее puppeteer)
+- Retry для недостающих заданий (не полная регенерация)
 
 ### 2.3 AI Optimization
-- **Model**: `gpt-5-mini` chosen as speed/quality balance
-- **Caching**: (Planned) Cache popular topics in Redis for instant delivery
-- **Token Limits**: `max_output_tokens: 6000` prevents cost overruns
+- Модель `gpt-4.1-mini`: баланс скорости и качества
+- `max_tokens: 8000` -- предотвращает перерасход
+- `temperature: 0.5` -- более точное следование инструкциям
+- Config-driven промпты -- минимум лишнего текста в промптах
 
 ---
 
-## 3. Infrastructure and Deployment
+## 3. Infrastructure
 
 ### 3.1 Hosting (Dokploy)
-- **Server**: VPS with Docker containers
-- **SSL**: Automatic HTTPS via Dokploy/Traefik
-- **Process Manager**: Docker with auto-restart
+- VPS с Docker
+- Auto HTTPS (Traefik)
+- Auto-restart
 
 ### 3.2 Security Headers
-Applied via Express middleware:
 ```
 X-Frame-Options: DENY
 X-Content-Type-Options: nosniff
@@ -71,41 +73,45 @@ Permissions-Policy: camera=(), microphone=(), geolocation=()
 Content-Security-Policy: default-src 'self'; ...
 ```
 
-### 3.3 Local Development
-- **Proxy**: Vite proxies `/api` requests, simulating production environment
-- **Dummy AI**: Allows developing interface and logic without internet connection and API quota spending
-
 ---
 
-## 4. Monitoring and QA
+## 4. Monitoring & QA
 
-- **Smoke Tests**: `npm run smoke` checks entire generation pipeline before each release
-- **Unit Tests**: Vitest for component and function testing
-- **E2E Tests**: Playwright for full user flow testing
-- **Health Check**: `GET /api/health` for monitoring
-- **Logs**: Express logging for error tracking
+- **Smoke Tests**: `npm run smoke`
+- **Unit Tests**: Vitest
+- **E2E Tests**: Playwright
+- **Health Check**: `GET /api/health`
+- **Alerts**: Telegram Bot для админов (генерация, ошибки)
+- **Audit Logs**: события авторизации в console (auth.login, security.*)
 
 ---
 
 ## 5. Security Checklist
 
 ### Authentication
-- [x] JWT with timing-safe signature verification
-- [x] AUTH_SECRET minimum 32 characters
-- [x] Refresh token rotation with DB revocation
+- [x] JWT с timing-safe verification
+- [x] AUTH_SECRET min 32 символа
+- [x] Refresh token rotation + DB revocation
 - [x] httpOnly, Secure, SameSite cookies
-- [x] PKCE for OAuth
-- [x] Rate limiting on auth endpoints
+- [x] PKCE для OAuth
+- [x] Rate limiting на auth endpoints
+- [x] Audit logging (console)
 
 ### Data Protection
 - [x] Input validation (Zod)
 - [x] SQL injection prevention (Drizzle ORM)
 - [x] XSS prevention (HTML escaping)
 - [x] CSRF protection (SameSite cookies)
-- [ ] Encryption at rest for sensitive data (prepared, not applied)
+- [ ] Encryption at rest (подготовлено, не применено)
+
+### Payments
+- [x] Webhook signature verification
+- [x] Idempotency (webhook_events table)
+- [x] Payment intent tracking
+- [x] Rate limiting
 
 ### Infrastructure
 - [x] Security headers
-- [x] HTTPS only in production
-- [x] Environment variable separation (dev/prod)
+- [x] HTTPS в production
+- [x] Env separation (dev/prod)
 - [ ] Distributed rate limiting (Redis planned)

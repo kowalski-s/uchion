@@ -1,140 +1,98 @@
 # Scaling Plan
 
-## 1. Current State (MVP)
+## 1. Current State
 
 ### Architecture
 - **Frontend**: SPA (React/Vite)
-- **Backend**: Express.js server
-- **AI**: Direct OpenAI calls (gpt-5-mini)
+- **Backend**: Express.js 5
+- **AI**: OpenAI через polza.ai (`gpt-4.1-mini`)
 - **Database**: PostgreSQL (Supabase)
 - **Hosting**: VPS via Dokploy
+- **Payments**: Prodamus
 
 ### Implemented
-- User authentication (Yandex, Telegram OAuth)
-- Worksheet generation with AI
+- Auth (Yandex, Telegram OAuth)
+- Worksheet generation (4 предмета, 1-11 классы)
+- 5 типов заданий, 3 формата листов
 - PDF generation
 - Personal cabinet (worksheets, folders)
 - Rate limiting (in-memory)
+- Admin panel (stats, users, generations, payments)
+- Prodamus payment integration
+- Telegram alerts for admins
 
 ---
 
-## 2. Phase 1: Performance & Caching (Next)
+## 2. Phase 1: Performance & Caching
 
 ### Goal
-Reduce AI costs and speed up delivery.
+Снизить расходы на AI и ускорить доставку.
 
 ### Changes
-1. **Semantic Caching**:
-   - Before generation, search for similar topics in Vector Store
-   - If match > 95%, return cached JSON without LLM call
-2. **Distributed Rate Limiting**:
-   - Redis (Upstash) for request limiting by IP/User ID
-   - Replace in-memory store
-3. **Response Caching**:
-   - Cache popular worksheet templates
-   - CDN for static assets
+1. **Semantic Caching**: поиск похожих тем, если совпадение >95% -- кеш
+2. **Distributed Rate Limiting**: Redis (Upstash) вместо in-memory
+3. **Response Caching**: кеш популярных шаблонов, CDN для статики
 
 ---
 
-## 3. Phase 2: Advanced AI (Later)
+## 3. Phase 2: Advanced AI
 
 ### Goal
-Improve content quality.
+Повысить качество контента.
 
 ### Changes
-1. **Custom Fine-tuning**:
-   - Train model on best generated worksheets (teacher-rated)
-2. **Multi-agent System**:
-   - Split into agents: Methodologist (structure), Author (text), Corrector (validation)
-3. **Multiple AI Providers**:
-   - Fallback to alternative models (YandexGPT)
-   - Cost optimization routing
+1. **Fine-tuning** на лучших генерациях (teacher-rated)
+2. **Multi-agent**: Методист (структура), Автор (текст), Корректор (проверка)
+3. **Multiple AI Providers**: fallback на альтернативные модели, cost routing
 
 ---
 
-## 4. Phase 3: Horizontal Scaling (If Needed)
+## 4. Phase 3: Horizontal Scaling
 
 ### When
 - >1000 concurrent users
-- Response times degrading
-- Single server at capacity
+- Деградация response times
 
 ### Changes
-1. **Load Balancing**:
-   - Multiple Express instances behind nginx/Traefik
-   - Sticky sessions for SSE connections
-2. **Queue System**:
-   - Background job processing for AI generation
-   - BullMQ or similar
-3. **Database Scaling**:
-   - Connection pooling (pgBouncer)
-   - Read replicas if needed
+1. **Load Balancing**: несколько Express instances за nginx/Traefik
+2. **Queue System**: BullMQ для фоновой генерации
+3. **DB Scaling**: connection pooling (pgBouncer), read replicas
 
 ---
 
 ## 5. Infrastructure Options
 
-### Current: Dokploy on VPS
-- Simple, cost-effective
-- Good for <500 users
-- Easy deployment via Git
+### Current: Dokploy на VPS
+- Просто, дешево, <500 users
 
-### Future Options
-1. **Kubernetes (K8s)**:
-   - Auto-scaling
-   - Complex but powerful
-2. **Managed Services**:
-   - Render, Railway, Fly.io
-   - Simpler than K8s, more expensive
+### Future
+- **Kubernetes**: auto-scaling
+- **Managed Services**: Render, Railway, Fly.io
 
 ---
 
-## 6. Monitoring & Observability
+## 6. Monitoring
 
 ### Current
 - Health check endpoint
 - Console logging
-- Dokploy dashboard
+- Telegram alerts (admins)
 
 ### Planned
-1. **Metrics**:
-   - Prometheus + Grafana
-   - Request latency, error rates
-2. **Alerting**:
-   - PagerDuty or similar
-   - Alerts for: high error rate, slow responses, AI failures
-3. **Logging**:
-   - Structured logs (JSON)
-   - Log aggregation (Loki, Elasticsearch)
+1. **Metrics**: Prometheus + Grafana
+2. **Alerting**: PagerDuty
+3. **Logging**: Structured JSON logs, log aggregation
 
 ---
 
 ## 7. Cost Optimization
 
-### AI Costs
-- Monitor token usage per generation
-- Set `max_output_tokens` limits
-- Cache common topics
-- Consider cheaper models for validation
+### AI
+- Token limits (generation: 8000, retry: 4000, validation: 600)
+- Модель `gpt-4.1-mini` (~0.15 rub/лист)
+- Кеширование популярных тем
 
-### Infrastructure Costs
-- Right-size VPS based on usage
-- Use CDN for static assets
-- Optimize Docker images
-
----
-
-## 8. Migration Checklist
-
-### Before Scaling
-- [ ] Add Redis for rate limiting
-- [ ] Implement semantic caching
-- [ ] Add proper monitoring
-- [ ] Load test current setup
-- [ ] Document runbooks
-
-### During Scaling
-- [ ] Zero-downtime deployment
-- [ ] Database migration plan
-- [ ] Rollback procedures
-- [ ] User communication plan
+### Infrastructure
+- Right-size VPS
+- CDN для статики
+- Оптимизация Docker images

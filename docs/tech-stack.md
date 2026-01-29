@@ -1,4 +1,4 @@
-# Tech Stack Overview
+# Tech Stack
 
 ## 1. Frontend
 
@@ -6,81 +6,88 @@
 - **Language**: TypeScript 5
 - **Build Tool**: Vite 7
 - **Routing**: React Router 6
-- **State Management**: Zustand (global store), React Query (async state)
-- **Styling**: Tailwind CSS + Headless UI
+- **State**: Zustand (global), React Query (async)
+- **Styling**: Tailwind CSS 3 + Headless UI
 - **Forms**: React Hook Form + Zod
-- **PDF Generation (Client)**: `pdf-lib` (fallback/preview)
+- **Math**: KaTeX (рендеринг формул)
+- **PDF (client)**: `pdf-lib` (fallback/preview)
 
 ## 2. Backend
 
 - **Runtime**: Node.js 20+
 - **Framework**: Express.js 5
 - **Language**: TypeScript
-- **API Style**: REST (JSON) + Server-Sent Events (SSE)
+- **API**: REST (JSON) + Server-Sent Events (SSE)
 - **Validation**: Zod (shared schemas)
-- **PDF Generation (Server)**: `pdfkit`
+- **PDF**: `pdfkit` (server-side)
 - **Database**: PostgreSQL + Drizzle ORM
+- **Payments**: Prodamus (webhook-based)
 
 ## 3. Authentication
 
 - **Strategy**: Custom OAuth 2.0
 - **Providers**: Yandex OAuth, Telegram Login Widget
-- **Tokens**: JWT (access 1h + refresh 7d with rotation)
+- **Tokens**: JWT (access 1h + refresh 7d, rotation)
 - **Security**: PKCE, timing-safe comparisons, httpOnly cookies
 
-## 4. AI & ML
+## 4. AI & Generation
 
-- **Generation Model**: `gpt-5-mini`
-- **Validation Model**: `gpt-4.1-mini`
+- **Generation Model**: `gpt-4.1-mini` (default, configurable через `AI_MODEL_GENERATION`)
+- **Validation Model**: `gpt-4.1-nano` (default, configurable через `AI_MODEL_VALIDATION`)
+- **Provider**: polza.ai (OpenAI SDK-compatible агрегатор)
 - **Integration**: OpenAI Node.js SDK
-- **Structured Output**: Zod schemas
-- **Validator**: Custom LLM-based validation module
+- **Architecture**: Config-driven generation (`api/_lib/generation/config/`)
+- **Task Types**: single_choice, multiple_choice, open_question, matching, fill_blank
+- **Formats**: open_only, test_only, test_and_open (с вариантами количества)
+- **Development**: `DummyProvider` (бесплатно, без API)
 
 ## 5. Shared Layer
 
 - **Path**: `shared/`
-- **Content**: Zod schemas, TypeScript interfaces
-- **Goal**: Guarantee client-server compatibility
+- **Content**: Zod schemas, TypeScript типы
+- **Цель**: единый контракт frontend-backend
 
 ## 6. Database
 
 - **Database**: PostgreSQL
 - **ORM**: Drizzle ORM
-- **Hosting**: Supabase (current) or self-hosted
 - **Migrations**: `drizzle-kit`
+- **Tables**: users, folders, worksheets, generations, subscriptions, payments, payment_intents, webhook_events, refresh_tokens
 
 ## 7. Infrastructure & QA
 
-- **Hosting**: Self-hosted VPS via Dokploy
+- **Hosting**: VPS via Dokploy
 - **Local Dev**:
   - `npm run dev` (Vite + Express concurrent)
-  - Proxy: Vite proxies `/api` → `localhost:3000`
+  - Proxy: Vite proxies `/api` -> `localhost:3000`
 - **Testing**:
   - Unit: Vitest
   - E2E: Playwright
   - Smoke: `tsx scripts/smoke-generate.ts`
-- **Linting**: ESLint + Prettier
 
 ## 8. Key Dependencies
 
 ### Production
 ```
-express           # Web framework
+express           # Web framework (v5)
 drizzle-orm       # Database ORM
 openai            # AI integration
-pdf-lib           # Client PDF
-pdfkit (planned)  # Server PDF (via puppeteer-core)
+pdfkit            # Server PDF (NOT in package.json -- via api/_lib/pdf.ts)
+pdf-lib           # Client PDF (fallback)
+katex             # Math formula rendering
 zod               # Validation
 react             # UI framework
 zustand           # State management
 @tanstack/react-query  # Async state
 react-hook-form   # Form handling
+cookie-parser     # Cookie parsing
+puppeteer-core    # Browser automation (PDF?)
 ```
 
 ### Development
 ```
-vite              # Frontend build
-typescript        # Type checking
+vite              # Frontend build (v7)
+typescript        # Type checking (v5)
 vitest            # Unit tests
 playwright        # E2E tests
 drizzle-kit       # DB migrations
