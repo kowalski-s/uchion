@@ -628,7 +628,8 @@ function escapeHtml(text) {
 function latexToUnicode(text) {
     if (!text)
         return '';
-    let result = text;
+    // Normalize double-escaped backslashes from JSON parsing
+    let result = text.replace(/\\\\/g, '\\');
     // Process \(...\) and \[...\] blocks first
     result = result.replace(/\\\(([^]*?)\\\)|\\\[([^]*?)\\\]/g, (match, inline, display) => {
         const latex = (inline || display || '').trim();
@@ -647,12 +648,20 @@ function convertLatexToUnicode(latex) {
     result = result.replace(/\\(?:bar|overline)\{([^}]+)\}/g, (_, content) => {
         return content.split('').map((c) => c + '\u0305').join('');
     });
-    // Fractions: \frac{a}{b} → a/b
-    result = result.replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '($1/$2)');
-    // Square root: \sqrt{x} → √x
-    result = result.replace(/\\sqrt\{([^}]+)\}/g, '√($1)');
+    // Fractions: \frac{a}{b} → a/b (handle nested braces with loop)
+    let prevResult = '';
+    while (prevResult !== result) {
+        prevResult = result;
+        result = result.replace(/\\frac\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}/g, '($1/$2)');
+    }
+    // Square root: \sqrt{x} → √x (handle nested braces with loop)
+    prevResult = '';
+    while (prevResult !== result) {
+        prevResult = result;
+        result = result.replace(/\\sqrt\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}/g, '√($1)');
+    }
     result = result.replace(/\\sqrt ([a-zA-Z0-9])/g, '√$1');
-    // Trig functions
+    // Trig functions (standard)
     result = result.replace(/\\sin\s*/g, 'sin ');
     result = result.replace(/\\cos\s*/g, 'cos ');
     result = result.replace(/\\tan\s*/g, 'tan ');
@@ -662,10 +671,35 @@ function convertLatexToUnicode(latex) {
     result = result.replace(/\\arcsin\s*/g, 'arcsin ');
     result = result.replace(/\\arccos\s*/g, 'arccos ');
     result = result.replace(/\\arctan\s*/g, 'arctan ');
+    result = result.replace(/\\arccot\s*/g, 'arccot ');
+    result = result.replace(/\\arcsec\s*/g, 'arcsec ');
+    result = result.replace(/\\arccsc\s*/g, 'arccsc ');
+    // Russian/European trig notation
+    result = result.replace(/\\tg\s*/g, 'tg ');
+    result = result.replace(/\\ctg\s*/g, 'ctg ');
+    result = result.replace(/\\cosec\s*/g, 'cosec ');
+    result = result.replace(/\\arctg\s*/g, 'arctg ');
+    result = result.replace(/\\arcctg\s*/g, 'arcctg ');
+    // Hyperbolic functions
+    result = result.replace(/\\sinh\s*/g, 'sinh ');
+    result = result.replace(/\\cosh\s*/g, 'cosh ');
+    result = result.replace(/\\tanh\s*/g, 'tanh ');
+    result = result.replace(/\\coth\s*/g, 'coth ');
+    result = result.replace(/\\sech\s*/g, 'sech ');
+    result = result.replace(/\\csch\s*/g, 'csch ');
+    // Russian hyperbolic notation
+    result = result.replace(/\\sh\s*/g, 'sh ');
+    result = result.replace(/\\ch\s*/g, 'ch ');
+    result = result.replace(/\\th\s*/g, 'th ');
+    result = result.replace(/\\cth\s*/g, 'cth ');
+    // Logarithms and other functions
     result = result.replace(/\\log\s*/g, 'log ');
     result = result.replace(/\\ln\s*/g, 'ln ');
+    result = result.replace(/\\lg\s*/g, 'lg ');
     result = result.replace(/\\exp\s*/g, 'exp ');
     result = result.replace(/\\lim\s*/g, 'lim ');
+    // Handle \operatorname{...}
+    result = result.replace(/\\operatorname\{([^}]+)\}/g, '$1 ');
     // Degree: ^\circ → °
     result = result.replace(/\^\\circ/g, '°');
     // Superscripts (basic)
