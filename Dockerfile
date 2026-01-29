@@ -27,6 +27,10 @@ WORKDIR /app
 # Set production environment
 ENV NODE_ENV=production
 
+# Install Chromium for PDF generation
+RUN apk add --no-cache chromium
+ENV CHROME_PATH=/usr/bin/chromium-browser
+
 # Copy package files
 COPY package*.json ./
 
