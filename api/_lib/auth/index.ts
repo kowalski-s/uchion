@@ -36,5 +36,5 @@ export {
 } from './cookies.js'
 
 // Middleware
-export { withAuth, withAdminAuth, withOptionalAuth } from './middleware.js'
-export type { AuthUser, AuthenticatedHandler, OptionalAuthHandler } from './middleware.js'
+export { withAuth, withAdminAuth } from './middleware.js'
+export type { AuthUser, AuthenticatedHandler } from './middleware.js'

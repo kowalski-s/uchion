@@ -83,11 +83,11 @@ router.get('/me', async (req: Request, res: Response) => {
         createdAt: users.createdAt,
       })
       .from(users)
-      .where(eq(users.id, payload.sub))
+      .where(and(eq(users.id, payload.sub), isNull(users.deletedAt)))
       .limit(1)
 
     if (!user) {
-      return res.status(404).json({ error: 'User not found' })
+      return res.status(401).json({ error: 'User not found or deactivated' })
     }
 
     const [subscription] = await db

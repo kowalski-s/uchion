@@ -1,6 +1,7 @@
-import type { Request } from 'express'
+import type { Request, Response } from 'express'
 import { RateLimiterRedis, RateLimiterMemory, RateLimiterAbstract } from 'rate-limiter-flexible'
 import { getRedisClient, secondsUntilMidnightMSK } from '../lib/redis.js'
+import type { AuthenticatedRequest } from '../types.js'
 
 // ==================== RATE LIMITER SETUP ====================
 
@@ -154,6 +155,56 @@ export async function checkBillingCreateLinkRateLimit(
 export async function checkBillingWebhookRateLimit(req: Request): Promise<RateLimitResult> {
   const limiter = createLimiter('rl:bill:wh', 100, 60)
   return consumeLimit(limiter, getClientIp(req))
+}
+
+// ==================== RATE LIMIT MIDDLEWARE WRAPPER ====================
+
+interface WithRateLimitOptions {
+  /** Prefix for the rate limit key (e.g., 'worksheets:list') */
+  prefix: string
+  /** Maximum requests allowed in the window */
+  maxRequests: number
+  /** Window duration in seconds */
+  windowSeconds: number
+  /** Key mode: 'user' uses authenticated user ID, 'ip' uses client IP */
+  keyMode?: 'user' | 'ip'
+}
+
+/**
+ * Middleware wrapper that applies rate limiting before the handler runs.
+ * Eliminates boilerplate rate limit checks inside every handler.
+ *
+ * Usage with authenticated routes:
+ *   router.get('/', withAuth(withRateLimit({ prefix: 'worksheets:list', maxRequests: 30, windowSeconds: 60 },
+ *     async (req, res) => { ... }
+ *   )))
+ */
+export function withRateLimit<T extends Request = AuthenticatedRequest>(
+  options: WithRateLimitOptions,
+  handler: (req: T, res: Response) => Promise<void | Response> | void | Response
+) {
+  return async (req: T, res: Response) => {
+    const keyMode = options.keyMode ?? 'user'
+    const identifier = keyMode === 'user' && 'user' in req && (req as unknown as AuthenticatedRequest).user
+      ? `${options.prefix}:${(req as unknown as AuthenticatedRequest).user.id}`
+      : `${options.prefix}:${getClientIp(req)}`
+
+    const result = await checkRateLimit(req, {
+      maxRequests: options.maxRequests,
+      windowSeconds: options.windowSeconds,
+      identifier,
+    })
+
+    if (!result.success) {
+      const retryAfter = Math.ceil((result.reset - Date.now()) / 1000)
+      return res
+        .status(429)
+        .setHeader('Retry-After', retryAfter.toString())
+        .json({ error: 'Too many requests' })
+    }
+
+    return handler(req, res)
+  }
 }
 
 // ==================== DAILY GENERATION LIMIT ====================

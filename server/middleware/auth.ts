@@ -1,4 +1,4 @@
-import type { Request, Response, NextFunction } from 'express'
+import type { Request, Response } from 'express'
 import { eq, and, isNull } from 'drizzle-orm'
 import { db } from '../../db/index.js'
 import { users } from '../../db/schema.js'
@@ -74,48 +74,3 @@ export function withAdminAuth(
   })
 }
 
-/**
- * Middleware that optionally authenticates
- * Provides user if authenticated, null otherwise
- */
-export function withOptionalAuth(
-  handler: (req: Request & { user?: AuthUser | null }, res: Response) => Promise<void | Response> | void | Response
-) {
-  return async (req: Request, res: Response) => {
-    try {
-      const token = getTokenFromCookie(req, ACCESS_TOKEN_COOKIE)
-
-      if (!token) {
-        return await handler(req as Request & { user: null }, res)
-      }
-
-      const payload = verifyAccessToken(token)
-
-      if (!payload) {
-        return await handler(req as Request & { user: null }, res)
-      }
-
-      // Verify user still exists in database and is not deleted
-      const [user] = await db
-        .select({
-          id: users.id,
-          email: users.email,
-          name: users.name,
-          role: users.role,
-        })
-        .from(users)
-        .where(and(
-          eq(users.id, payload.sub),
-          isNull(users.deletedAt)
-        ))
-        .limit(1)
-
-      ;(req as Request & { user: AuthUser | null }).user = (user as AuthUser) || null
-
-      return await handler(req as Request & { user: AuthUser | null }, res)
-    } catch (error) {
-      console.error('[Auth Middleware] Error:', error)
-      return await handler(req as Request & { user: null }, res)
-    }
-  }
-}

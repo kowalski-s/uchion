@@ -1,15 +1,15 @@
 import { Router } from 'express'
-import type { Request, Response } from 'express'
+import type { Response } from 'express'
 import { z } from 'zod'
 import { db } from '../../db/index.js'
 import { users, worksheets, subscriptions } from '../../db/schema.js'
-import { eq, sql, and } from 'drizzle-orm'
+import { eq, sql, and, gt } from 'drizzle-orm'
 import { getAIProvider } from '../../api/_lib/ai-provider.js'
 import { buildPdf } from '../../api/_lib/pdf.js'
-import { getTokenFromCookie, ACCESS_TOKEN_COOKIE } from '../middleware/cookies.js'
-import { verifyAccessToken } from '../../api/_lib/auth/tokens.js'
+import { withAuth } from '../middleware/auth.js'
 import { checkGenerateRateLimit, checkDailyGenerationLimit } from '../middleware/rate-limit.js'
 import { trackGeneration } from '../../api/_lib/alerts/generation-alerts.js'
+import type { AuthenticatedRequest } from '../types.js'
 import type { GeneratePayload, Worksheet } from '../../shared/types.js'
 
 const router = Router()
@@ -55,7 +55,7 @@ function mapSubjectForDB(subject: string): 'math' | 'russian' {
 }
 
 // ==================== POST /api/generate ====================
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', withAuth(async (req: AuthenticatedRequest, res: Response) => {
   const parse = InputSchema.safeParse(req.body)
   if (!parse.success) {
     return res.status(400).json({
@@ -66,58 +66,23 @@ router.post('/', async (req: Request, res: Response) => {
   }
 
   const input: Input = parse.data
+  const userId = req.user.id
 
-  // ---- AUTHENTICATION REQUIRED ----
-  const token = getTokenFromCookie(req, ACCESS_TOKEN_COOKIE)
-
-  if (!token) {
-    return res.status(401).json({
-      status: 'error',
-      code: 'UNAUTHORIZED',
-      message: 'Для генерации необходимо войти в аккаунт.',
+  // Atomically decrement generationsLeft -- prevents race condition.
+  // If generationsLeft <= 0, no rows are updated and the user is rejected.
+  const [decremented] = await db
+    .update(users)
+    .set({
+      generationsLeft: sql`${users.generationsLeft} - 1`,
+      updatedAt: new Date(),
     })
-  }
+    .where(and(
+      eq(users.id, userId),
+      gt(users.generationsLeft, 0)
+    ))
+    .returning({ generationsLeft: users.generationsLeft })
 
-  const payload = verifyAccessToken(token)
-  if (!payload) {
-    return res.status(401).json({
-      status: 'error',
-      code: 'UNAUTHORIZED',
-      message: 'Сессия истекла. Войдите заново.',
-    })
-  }
-
-  const userId = payload.sub
-
-  // Check user exists and is not deleted
-  const [user] = await db
-    .select({
-      generationsLeft: users.generationsLeft,
-      deletedAt: users.deletedAt,
-    })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1)
-
-  if (!user) {
-    return res.status(401).json({
-      status: 'error',
-      code: 'UNAUTHORIZED',
-      message: 'Пользователь не найден.',
-    })
-  }
-
-  // Blocked/deleted user -- explicit rejection, no fallback
-  if (user.deletedAt) {
-    return res.status(403).json({
-      status: 'error',
-      code: 'USER_BLOCKED',
-      message: 'Аккаунт заблокирован.',
-    })
-  }
-
-  // Check generation limit (free users: 5 total, never resets)
-  if (user.generationsLeft <= 0) {
+  if (!decremented) {
     return res.status(403).json({
       status: 'error',
       code: 'LIMIT_EXCEEDED',
@@ -137,6 +102,15 @@ router.post('/', async (req: Request, res: Response) => {
   if (isPaidUser) {
     const dailyCheck = await checkDailyGenerationLimit(userId, 20)
     if (!dailyCheck.allowed) {
+      // Rollback the atomic decrement since we're rejecting the request
+      await db
+        .update(users)
+        .set({
+          generationsLeft: sql`${users.generationsLeft} + 1`,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, userId))
+
       return res.status(429).json({
         status: 'error',
         code: 'DAILY_LIMIT_EXCEEDED',
@@ -148,6 +122,15 @@ router.post('/', async (req: Request, res: Response) => {
   // Rate limiting (per-hour burst protection)
   const rateLimitResult = await checkGenerateRateLimit(req, userId)
   if (!rateLimitResult.success) {
+    // Rollback the atomic decrement since we're rejecting the request
+    await db
+      .update(users)
+      .set({
+        generationsLeft: sql`${users.generationsLeft} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId))
+
     const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000)
     return res.status(429).json({
       status: 'error',
@@ -201,15 +184,6 @@ router.post('/', async (req: Request, res: Response) => {
     const id = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : String(Date.now())
     let dbId: string | null = null
 
-    // Decrement limit and save worksheet
-    await db
-      .update(users)
-      .set({
-        generationsLeft: sql`${users.generationsLeft} - 1`,
-        updatedAt: new Date(),
-      })
-      .where(eq(users.id, userId))
-
     try {
       const tempWorksheet = {
         ...worksheet,
@@ -249,6 +223,16 @@ router.post('/', async (req: Request, res: Response) => {
   } catch (err: unknown) {
     console.error('[API] Generate error:', err)
 
+    // Rollback: generation failed, restore the decremented limit
+    await db
+      .update(users)
+      .set({
+        generationsLeft: sql`${users.generationsLeft} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId))
+      .catch((rollbackErr) => console.error('[API] Failed to rollback generationsLeft:', rollbackErr))
+
     // Track failed generation for alerts
     trackGeneration(false).catch((e) => console.error('[Alerts] Failed to track generation:', e))
 
@@ -262,6 +246,6 @@ router.post('/', async (req: Request, res: Response) => {
     sendEvent({ type: 'error', code, message: 'Не удалось сгенерировать лист. Попробуйте ещё раз.' })
     res.end()
   }
-})
+}))
 
 export default router

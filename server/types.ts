@@ -29,7 +29,3 @@ export type AuthenticatedHandler = (
   res: Response
 ) => Promise<void | Response> | void | Response
 
-export type OptionalAuthHandler = (
-  req: Request & { user?: AuthUser | null },
-  res: Response
-) => Promise<void | Response> | void | Response

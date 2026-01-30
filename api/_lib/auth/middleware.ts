@@ -23,12 +23,6 @@ export type AuthenticatedHandler = (
   user: AuthUser
 ) => Promise<void | VercelResponse> | void | VercelResponse
 
-export type OptionalAuthHandler = (
-  req: VercelRequest,
-  res: VercelResponse,
-  user: AuthUser | null
-) => Promise<void | VercelResponse> | void | VercelResponse
-
 // ==================== MIDDLEWARE ====================
 
 /**
@@ -89,45 +83,3 @@ export function withAdminAuth(handler: AuthenticatedHandler) {
   })
 }
 
-/**
- * Middleware that optionally authenticates
- * Provides user if authenticated, null otherwise
- * Does not return 401 for unauthenticated requests
- */
-export function withOptionalAuth(handler: OptionalAuthHandler) {
-  return async (req: VercelRequest, res: VercelResponse) => {
-    try {
-      const token = getTokenFromCookie(req, ACCESS_TOKEN_COOKIE)
-
-      if (!token) {
-        return await handler(req, res, null)
-      }
-
-      const payload = verifyAccessToken(token)
-
-      if (!payload) {
-        return await handler(req, res, null)
-      }
-
-      // Verify user still exists in database and is not deleted
-      const [user] = await db
-        .select({
-          id: users.id,
-          email: users.email,
-          role: users.role,
-        })
-        .from(users)
-        .where(and(
-          eq(users.id, payload.sub),
-          isNull(users.deletedAt)  // Exclude soft-deleted users
-        ))
-        .limit(1)
-
-      return await handler(req, res, user || null)
-    } catch (error) {
-      console.error('[Auth Middleware] Error:', error)
-      // For optional auth, continue without user on error
-      return await handler(req, res, null)
-    }
-  }
-}
