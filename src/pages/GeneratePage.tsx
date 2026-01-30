@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query'
 import { useForm, Controller } from 'react-hook-form'
@@ -8,7 +8,7 @@ import { generateWorksheet } from '../lib/api'
 import { useSessionStore } from '../store/session'
 import CustomSelect from '../components/ui/CustomSelect'
 import { useAuth } from '../lib/auth'
-import { getGenerationsLeft, incrementGuestUsage, canGenerate, GUEST_LIMIT } from '../lib/limits'
+import { getGenerationsLeft, canGenerate } from '../lib/limits'
 import Header from '../components/Header'
 import { fetchFolders } from '../lib/dashboard-api'
 
@@ -227,11 +227,45 @@ export default function GeneratePage() {
     }
   })
 
+  // After login redirect: restore saved form and auto-generate
+  const autoGenerateTriggered = useRef(false)
+  useEffect(() => {
+    if (!user || autoGenerateTriggered.current) return
+    const pending = sessionStorage.getItem('uchion_pending_generate')
+    if (!pending) return
+
+    autoGenerateTriggered.current = true
+    sessionStorage.removeItem('uchion_pending_generate')
+
+    try {
+      const savedValues = JSON.parse(pending) as GenerateFormValues
+      // Restore form values
+      form.reset(savedValues)
+      // Trigger generation after a short delay to let form settle
+      setTimeout(() => {
+        form.handleSubmit((values) => {
+          setErrorText(null)
+          setProgress(0)
+          localStorage.removeItem('uchion_cached_worksheet')
+          mutation.mutate(values)
+        })()
+      }, 100)
+    } catch {
+      // Invalid saved data, ignore
+    }
+  }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const onSubmit = (values: GenerateFormValues) => {
+    // Require authentication -- save form and redirect to login
+    if (!user) {
+      sessionStorage.setItem('uchion_pending_generate', JSON.stringify(values))
+      navigate('/login')
+      return
+    }
+
     // Check limits
     if (!canGenerate(user)) {
-      setErrorText('Лимит бесплатных генераций исчерпан. Войдите, чтобы продолжить.')
-      setTimeout(() => navigate('/login'), 2000)
+      setErrorText('Лимит генераций исчерпан. Приобретите дополнительные генерации.')
       return
     }
 
@@ -244,13 +278,6 @@ export default function GeneratePage() {
     setErrorText(null)
     setProgress(0)
     localStorage.removeItem('uchion_cached_worksheet')
-
-    // If guest - increment counter
-    if (!user) {
-      incrementGuestUsage()
-      setGenerationsLeft(prev => prev - generationCost)
-    }
-
     mutation.mutate(values)
   }
 
@@ -277,9 +304,9 @@ export default function GeneratePage() {
               <path d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" />
             </svg>
             <span className="font-semibold text-slate-700">
-              {user ? generationsLeft : `${generationsLeft}/${GUEST_LIMIT}`}
+              {user ? generationsLeft : 0}
             </span>
-            {!user && generationsLeft === 0 && (
+            {!user && (
               <Link to="/login" className="text-[#8C52FF] text-sm underline ml-2">Войти</Link>
             )}
           </div>

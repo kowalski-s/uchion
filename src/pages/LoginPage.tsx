@@ -9,6 +9,7 @@ export default function LoginPage() {
   const { signInWithYandex, status } = useAuth()
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [consentAccepted, setConsentAccepted] = useState(false)
 
   // Check for OAuth errors in URL
   useEffect(() => {
@@ -36,6 +37,7 @@ export default function LoginPage() {
   }, [status, navigate])
 
   const handleYandexSignIn = () => {
+    if (!consentAccepted) return
     setError(null)
     setIsLoading(true)
     signInWithYandex()
@@ -74,13 +76,37 @@ export default function LoginPage() {
             </div>
           )}
 
+          {/* Legal consent checkbox */}
+          <label className="flex items-start gap-3 mb-6 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={consentAccepted}
+              onChange={(e) => setConsentAccepted(e.target.checked)}
+              className="mt-1 h-4 w-4 rounded border-slate-300 text-[#8C52FF] focus:ring-[#8C52FF] accent-[#8C52FF] cursor-pointer shrink-0"
+            />
+            <span className="text-sm text-slate-600 leading-relaxed">
+              Я принимаю{' '}
+              <span className="text-[#8C52FF] underline underline-offset-2">
+                пользовательское соглашение
+              </span>
+              ,{' '}
+              <span className="text-[#8C52FF] underline underline-offset-2">
+                политику конфиденциальности
+              </span>{' '}
+              и{' '}
+              <span className="text-[#8C52FF] underline underline-offset-2">
+                согласие на обработку персональных данных
+              </span>
+            </span>
+          </label>
+
           {/* OAuth buttons */}
           <div className="flex flex-col gap-4">
             <button
               type="button"
               onClick={handleYandexSignIn}
-              disabled={isLoading || status === 'loading'}
-              className="flex h-14 w-full items-center justify-center gap-3 rounded-xl border-2 border-slate-200 bg-white text-base font-semibold text-slate-700 transition-all hover:border-slate-300 hover:bg-slate-50 disabled:opacity-70"
+              disabled={!consentAccepted || isLoading || status === 'loading'}
+              className="flex h-14 w-full items-center justify-center gap-3 rounded-xl border-2 border-slate-200 bg-white text-base font-semibold text-slate-700 transition-all hover:border-slate-300 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none">
                 <path d="M11.948 0C5.346 0 0 5.346 0 11.948s5.346 11.948 11.948 11.948 11.948-5.346 11.948-11.948S18.55 0 11.948 0z" fill="#FC3F1D"/>
@@ -91,7 +117,7 @@ export default function LoginPage() {
 
             {/* Telegram Login Widget */}
             {import.meta.env.VITE_TELEGRAM_BOT_USERNAME && (
-              <div className="relative">
+              <div className={`relative ${!consentAccepted ? 'opacity-50 pointer-events-none' : ''}`}>
                 <TelegramLoginButton
                   botUsername={import.meta.env.VITE_TELEGRAM_BOT_USERNAME}
                   authCallbackUrl={`${window.location.origin}/api/auth/telegram/callback`}
@@ -111,11 +137,13 @@ export default function LoginPage() {
               </svg>
             </div>
           )}
-        </div>
 
-        <p className="mt-6 text-center text-sm text-slate-400">
-          Продолжая, вы соглашаетесь с условиями использования сервиса
-        </p>
+          {!consentAccepted && (
+            <p className="mt-4 text-center text-xs text-slate-400">
+              Для входа необходимо принять условия
+            </p>
+          )}
+        </div>
       </main>
     </div>
   )

@@ -26,7 +26,7 @@ const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
 // ==================== GET /api/folders ====================
 router.get('/', withAuth(async (req, res) => {
     const user = req.user;
-    const rateLimitResult = checkRateLimit(req, {
+    const rateLimitResult = await checkRateLimit(req, {
         maxRequests: 60,
         windowSeconds: 60,
         identifier: `folders:list:${user.id}`,
@@ -78,7 +78,7 @@ router.get('/', withAuth(async (req, res) => {
 // ==================== POST /api/folders ====================
 router.post('/', withAuth(async (req, res) => {
     const user = req.user;
-    const rateLimitResult = checkRateLimit(req, {
+    const rateLimitResult = await checkRateLimit(req, {
         maxRequests: 20,
         windowSeconds: 60,
         identifier: `folders:create:${user.id}`,
@@ -176,7 +176,7 @@ router.get('/:id', withAuth(async (req, res) => {
     if (!id || !uuidRegex.test(id)) {
         return res.status(400).json({ error: 'Invalid folder ID format' });
     }
-    const rateLimitResult = checkRateLimit(req, {
+    const rateLimitResult = await checkRateLimit(req, {
         maxRequests: 60,
         windowSeconds: 60,
         identifier: `folders:get:${user.id}`,
@@ -244,7 +244,7 @@ router.patch('/:id', withAuth(async (req, res) => {
     if (!id || !uuidRegex.test(id)) {
         return res.status(400).json({ error: 'Invalid folder ID format' });
     }
-    const rateLimitResult = checkRateLimit(req, {
+    const rateLimitResult = await checkRateLimit(req, {
         maxRequests: 30,
         windowSeconds: 60,
         identifier: `folders:update:${user.id}`,
@@ -321,7 +321,7 @@ router.delete('/:id', withAuth(async (req, res) => {
     if (!id || !uuidRegex.test(id)) {
         return res.status(400).json({ error: 'Invalid folder ID format' });
     }
-    const rateLimitResult = checkRateLimit(req, {
+    const rateLimitResult = await checkRateLimit(req, {
         maxRequests: 10,
         windowSeconds: 60,
         identifier: `folders:delete:${user.id}`,

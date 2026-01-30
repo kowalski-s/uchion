@@ -11,7 +11,7 @@ import { logOAuthCallbackSuccess, logOAuthCallbackFailed, logRateLimitExceeded, 
 const router = Router();
 // ==================== GET /api/auth/me ====================
 router.get('/me', async (req, res) => {
-    const rateLimitResult = checkMeRateLimit(req);
+    const rateLimitResult = await checkMeRateLimit(req);
     if (!rateLimitResult.success) {
         const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000);
         return res
@@ -85,7 +85,7 @@ router.post('/logout', async (req, res) => {
 });
 // ==================== POST /api/auth/refresh ====================
 router.post('/refresh', async (req, res) => {
-    const rateLimitResult = checkRefreshRateLimit(req);
+    const rateLimitResult = await checkRefreshRateLimit(req);
     if (!rateLimitResult.success) {
         const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000);
         return res
@@ -137,7 +137,7 @@ router.post('/refresh', async (req, res) => {
 });
 // ==================== GET /api/auth/yandex/redirect ====================
 router.get('/yandex/redirect', async (req, res) => {
-    const rateLimitResult = checkOAuthRedirectRateLimit(req);
+    const rateLimitResult = await checkOAuthRedirectRateLimit(req);
     if (!rateLimitResult.success) {
         const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000);
         console.warn('[Yandex OAuth] Rate limit exceeded on redirect');
@@ -178,7 +178,7 @@ router.get('/yandex/redirect', async (req, res) => {
 // ==================== GET /api/auth/yandex/callback ====================
 router.get('/yandex/callback', async (req, res) => {
     const appUrl = process.env.APP_URL || '';
-    const rateLimitResult = checkAuthRateLimit(req);
+    const rateLimitResult = await checkAuthRateLimit(req);
     if (!rateLimitResult.success) {
         const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000);
         logRateLimitExceeded(req, '/api/auth/yandex/callback');
@@ -257,7 +257,7 @@ router.get('/yandex/callback', async (req, res) => {
                 provider: 'yandex',
                 providerId: oauthUser.providerId,
                 role: 'user',
-                generationsLeft: 3,
+                generationsLeft: 5,
             })
                 .returning();
             user = newUser;
@@ -295,7 +295,7 @@ router.get('/yandex/callback', async (req, res) => {
 // ==================== GET /api/auth/telegram/callback ====================
 router.get('/telegram/callback', async (req, res) => {
     const appUrl = process.env.APP_URL || '';
-    const rateLimitResult = checkAuthRateLimit(req);
+    const rateLimitResult = await checkAuthRateLimit(req);
     if (!rateLimitResult.success) {
         const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000);
         logRateLimitExceeded(req, '/api/auth/telegram/callback');
@@ -380,7 +380,7 @@ router.get('/telegram/callback', async (req, res) => {
                 provider: 'telegram',
                 providerId: telegramId,
                 role: 'user',
-                generationsLeft: 3,
+                generationsLeft: 5,
             })
                 .returning();
             user = newUser;

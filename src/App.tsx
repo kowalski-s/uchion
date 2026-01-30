@@ -1,4 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
+import CookieConsent from './components/CookieConsent'
 import GeneratePage from './pages/GeneratePage'
 import WorksheetPage from './pages/WorksheetPage'
 import LoginPage from './pages/LoginPage'
@@ -18,6 +19,7 @@ import AdminPaymentsPage from './pages/admin/AdminPaymentsPage'
 export default function App() {
   return (
     <div className="min-h-screen">
+      <CookieConsent />
       <Routes>
         <Route path="/" element={<GeneratePage />} />
         <Route path="/login" element={<LoginPage />} />

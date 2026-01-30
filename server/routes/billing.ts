@@ -246,7 +246,7 @@ router.post('/prodamus/create-link', withAuth(async (req, res) => {
   const userName = req.user.name
 
   // Rate limiting
-  const rateLimitResult = checkBillingCreateLinkRateLimit(req, userId)
+  const rateLimitResult = await checkBillingCreateLinkRateLimit(req, userId)
   if (!rateLimitResult.success) {
     const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000)
     console.warn(`[Billing] Rate limit exceeded for user ${userId}`)
@@ -423,7 +423,7 @@ router.post('/prodamus/webhook', async (req: Request, res: Response) => {
   const ip = getClientIp(req)
 
   // Rate limiting
-  const rateLimitResult = checkBillingWebhookRateLimit(req)
+  const rateLimitResult = await checkBillingWebhookRateLimit(req)
   if (!rateLimitResult.success) {
     console.warn(`[Prodamus Webhook] Rate limit exceeded for IP ${ip}`)
     return res.status(429).json({ error: 'Too many requests' })
@@ -445,11 +445,8 @@ router.post('/prodamus/webhook', async (req: Request, res: Response) => {
 
     // Verify configuration
     if (!PRODAMUS_SECRET) {
-      if (IS_PRODUCTION) {
-        console.error('[Prodamus Webhook] PRODAMUS_SECRET not configured')
-        return res.status(200).json({ status: 'configuration_error' })
-      }
-      console.warn('[Prodamus Webhook] PRODAMUS_SECRET not configured - allowing in dev mode')
+      console.error('[Prodamus Webhook] PRODAMUS_SECRET not configured - rejecting webhook')
+      return res.status(500).json({ status: 'configuration_error' })
     } else {
       // Verify signature
       // eslint-disable-next-line @typescript-eslint/no-unused-vars

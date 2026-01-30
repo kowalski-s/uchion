@@ -1,13 +1,13 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { db } from '../../db/index.js';
-import { users, worksheets } from '../../db/schema.js';
-import { eq, sql, and, isNull } from 'drizzle-orm';
+import { users, worksheets, subscriptions } from '../../db/schema.js';
+import { eq, sql } from 'drizzle-orm';
 import { getAIProvider } from '../../api/_lib/ai-provider.js';
 import { buildPdf } from '../../api/_lib/pdf.js';
 import { getTokenFromCookie, ACCESS_TOKEN_COOKIE } from '../middleware/cookies.js';
 import { verifyAccessToken } from '../../api/_lib/auth/tokens.js';
-import { checkGenerateRateLimit } from '../middleware/rate-limit.js';
+import { checkGenerateRateLimit, checkDailyGenerationLimit } from '../middleware/rate-limit.js';
 import { trackGeneration } from '../../api/_lib/alerts/generation-alerts.js';
 const router = Router();
 // Task type and format enums for validation
@@ -49,37 +49,75 @@ router.post('/', async (req, res) => {
         });
     }
     const input = parse.data;
-    // Check authentication (optional - guests can also generate)
-    let userId = null;
+    // ---- AUTHENTICATION REQUIRED ----
     const token = getTokenFromCookie(req, ACCESS_TOKEN_COOKIE);
-    if (token) {
-        const payload = verifyAccessToken(token);
-        if (payload) {
-            userId = payload.sub;
-            // Check user exists and is not deleted, also check limit
-            const [user] = await db
-                .select({ generationsLeft: users.generationsLeft })
-                .from(users)
-                .where(and(eq(users.id, userId), isNull(users.deletedAt)))
-                .limit(1);
-            if (!user) {
-                return res.status(401).json({
-                    status: 'error',
-                    code: 'UNAUTHORIZED',
-                    message: 'Пользователь не найден.',
-                });
-            }
-            if (user.generationsLeft <= 0) {
-                return res.status(403).json({
-                    status: 'error',
-                    code: 'LIMIT_EXCEEDED',
-                    message: 'Лимит генераций исчерпан.',
-                });
-            }
+    if (!token) {
+        return res.status(401).json({
+            status: 'error',
+            code: 'UNAUTHORIZED',
+            message: 'Для генерации необходимо войти в аккаунт.',
+        });
+    }
+    const payload = verifyAccessToken(token);
+    if (!payload) {
+        return res.status(401).json({
+            status: 'error',
+            code: 'UNAUTHORIZED',
+            message: 'Сессия истекла. Войдите заново.',
+        });
+    }
+    const userId = payload.sub;
+    // Check user exists and is not deleted
+    const [user] = await db
+        .select({
+        generationsLeft: users.generationsLeft,
+        deletedAt: users.deletedAt,
+    })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+    if (!user) {
+        return res.status(401).json({
+            status: 'error',
+            code: 'UNAUTHORIZED',
+            message: 'Пользователь не найден.',
+        });
+    }
+    // Blocked/deleted user -- explicit rejection, no fallback
+    if (user.deletedAt) {
+        return res.status(403).json({
+            status: 'error',
+            code: 'USER_BLOCKED',
+            message: 'Аккаунт заблокирован.',
+        });
+    }
+    // Check generation limit (free users: 5 total, never resets)
+    if (user.generationsLeft <= 0) {
+        return res.status(403).json({
+            status: 'error',
+            code: 'LIMIT_EXCEEDED',
+            message: 'Лимит генераций исчерпан. Приобретите дополнительные генерации.',
+        });
+    }
+    // Check daily limit for paid users (20 per day, resets at midnight MSK)
+    const [subscription] = await db
+        .select({ plan: subscriptions.plan, status: subscriptions.status })
+        .from(subscriptions)
+        .where(eq(subscriptions.userId, userId))
+        .limit(1);
+    const isPaidUser = subscription && subscription.plan !== 'free' && subscription.status === 'active';
+    if (isPaidUser) {
+        const dailyCheck = await checkDailyGenerationLimit(userId, 20);
+        if (!dailyCheck.allowed) {
+            return res.status(429).json({
+                status: 'error',
+                code: 'DAILY_LIMIT_EXCEEDED',
+                message: `Суточный лимит генераций исчерпан (${dailyCheck.limit}/день). Лимит обновится после полуночи по МСК.`,
+            });
         }
     }
-    // Rate limiting
-    const rateLimitResult = checkGenerateRateLimit(req, userId);
+    // Rate limiting (per-hour burst protection)
+    const rateLimitResult = await checkGenerateRateLimit(req, userId);
     if (!rateLimitResult.success) {
         const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000);
         return res.status(429).json({
@@ -115,16 +153,10 @@ router.post('/', async (req, res) => {
         sendEvent({ type: 'progress', percent: 97 });
         let pdfBase64 = null;
         try {
-            console.log('[API] About to call buildPdf...');
-            console.log('[API] Worksheet topic:', worksheet.topic);
-            console.log('[API] Worksheet assignments count:', worksheet.assignments?.length);
             pdfBase64 = await buildPdf(worksheet, input);
-            console.log('[API] buildPdf completed, base64 length:', pdfBase64?.length);
         }
         catch (e) {
             console.error('[API] PDF generation error:', e);
-            console.error('[API] Error details:', e instanceof Error ? e.message : String(e));
-            console.error('[API] Error stack:', e instanceof Error ? e.stack : 'no stack');
             // Track failed generation for alerts
             trackGeneration(false).catch((err) => console.error('[Alerts] Failed to track generation:', err));
             sendEvent({ type: 'error', code: 'PDF_ERROR', message: 'Ошибка генерации PDF.' });
@@ -133,36 +165,34 @@ router.post('/', async (req, res) => {
         }
         const id = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : String(Date.now());
         let dbId = null;
-        // Decrement limit and save worksheet for authenticated users
-        if (userId) {
-            await db
-                .update(users)
-                .set({
-                generationsLeft: sql `${users.generationsLeft} - 1`,
-                updatedAt: new Date(),
-            })
-                .where(eq(users.id, userId));
-            try {
-                const tempWorksheet = {
-                    ...worksheet,
-                    id,
-                    grade: `${input.grade} класс`,
-                    pdfBase64: pdfBase64 ?? ''
-                };
-                const [inserted] = await db.insert(worksheets).values({
-                    userId,
-                    folderId: input.folderId || null,
-                    subject: mapSubjectForDB(input.subject),
-                    grade: input.grade,
-                    topic: input.topic,
-                    difficulty: input.difficulty || 'medium',
-                    content: JSON.stringify(tempWorksheet),
-                }).returning({ id: worksheets.id });
-                dbId = inserted?.id || null;
-            }
-            catch (dbError) {
-                console.error('[API] Failed to save worksheet to database:', dbError);
-            }
+        // Decrement limit and save worksheet
+        await db
+            .update(users)
+            .set({
+            generationsLeft: sql `${users.generationsLeft} - 1`,
+            updatedAt: new Date(),
+        })
+            .where(eq(users.id, userId));
+        try {
+            const tempWorksheet = {
+                ...worksheet,
+                id,
+                grade: `${input.grade} класс`,
+                pdfBase64: pdfBase64 ?? ''
+            };
+            const [inserted] = await db.insert(worksheets).values({
+                userId,
+                folderId: input.folderId || null,
+                subject: mapSubjectForDB(input.subject),
+                grade: input.grade,
+                topic: input.topic,
+                difficulty: input.difficulty || 'medium',
+                content: JSON.stringify(tempWorksheet),
+            }).returning({ id: worksheets.id });
+            dbId = inserted?.id || null;
+        }
+        catch (dbError) {
+            console.error('[API] Failed to save worksheet to database:', dbError);
         }
         const finalWorksheet = {
             ...worksheet,

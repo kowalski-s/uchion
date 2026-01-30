@@ -31,13 +31,13 @@ function validateProdamusConfig() {
     if (isProduction) {
         if (!secret) {
             console.error('[Startup] FATAL: PRODAMUS_SECRET is required in production!');
+            process.exit(1);
         }
         if (!payformUrl) {
             console.error('[Startup] FATAL: PRODAMUS_PAYFORM_URL is required in production!');
+            process.exit(1);
         }
-        if (secret && payformUrl) {
-            console.log('[Startup] Prodamus config: OK');
-        }
+        console.log('[Startup] Prodamus config: OK');
     }
     else {
         console.log('[Startup] Development mode - Prodamus config optional');
@@ -47,6 +47,8 @@ function validateProdamusConfig() {
 validateProdamusConfig();
 const app = express();
 const PORT = process.env.PORT || 3000;
+// Trust first proxy (nginx/reverse proxy) for correct IP in rate limiting
+app.set('trust proxy', 1);
 // ==================== MIDDLEWARE ====================
 // Parse JSON bodies with raw body preservation for webhooks
 app.use(express.json({

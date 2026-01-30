@@ -16,7 +16,7 @@ const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
 // ==================== GET /api/admin/stats ====================
 // Получение общей статистики для главной страницы админки
 router.get('/stats', withAdminAuth(async (req: AuthenticatedRequest, res: Response) => {
-  const rateLimitResult = checkRateLimit(req, {
+  const rateLimitResult = await checkRateLimit(req, {
     maxRequests: 30,
     windowSeconds: 60,
     identifier: `admin:stats:${req.user.id}`,
@@ -103,7 +103,7 @@ const UsersQuerySchema = z.object({
 })
 
 router.get('/users', withAdminAuth(async (req: AuthenticatedRequest, res: Response) => {
-  const rateLimitResult = checkRateLimit(req, {
+  const rateLimitResult = await checkRateLimit(req, {
     maxRequests: 30,
     windowSeconds: 60,
     identifier: `admin:users:${req.user.id}`,
@@ -266,7 +266,7 @@ router.get('/users/:id', withAdminAuth(async (req: AuthenticatedRequest, res: Re
     return res.status(400).json({ error: 'Invalid user ID format' })
   }
 
-  const rateLimitResult = checkRateLimit(req, {
+  const rateLimitResult = await checkRateLimit(req, {
     maxRequests: 60,
     windowSeconds: 60,
     identifier: `admin:user-detail:${req.user.id}`,
@@ -402,7 +402,7 @@ router.post('/users/:id/block', withAdminAuth(async (req: AuthenticatedRequest, 
     return res.status(400).json({ error: 'Cannot block yourself' })
   }
 
-  const rateLimitResult = checkRateLimit(req, {
+  const rateLimitResult = await checkRateLimit(req, {
     maxRequests: 10,
     windowSeconds: 60,
     identifier: `admin:block-user:${req.user.id}`,
@@ -453,7 +453,7 @@ router.post('/users/:id/unblock', withAdminAuth(async (req: AuthenticatedRequest
     return res.status(400).json({ error: 'Invalid user ID format' })
   }
 
-  const rateLimitResult = checkRateLimit(req, {
+  const rateLimitResult = await checkRateLimit(req, {
     maxRequests: 10,
     windowSeconds: 60,
     identifier: `admin:unblock-user:${req.user.id}`,
@@ -514,7 +514,7 @@ const GenerationLogsQuerySchema = z.object({
 })
 
 router.get('/generation-logs', withAdminAuth(async (req: AuthenticatedRequest, res: Response) => {
-  const rateLimitResult = checkRateLimit(req, {
+  const rateLimitResult = await checkRateLimit(req, {
     maxRequests: 30,
     windowSeconds: 60,
     identifier: `admin:generation-logs:${req.user.id}`,
@@ -611,7 +611,7 @@ router.get('/generation-logs', withAdminAuth(async (req: AuthenticatedRequest, r
 }))
 
 router.get('/generations', withAdminAuth(async (req: AuthenticatedRequest, res: Response) => {
-  const rateLimitResult = checkRateLimit(req, {
+  const rateLimitResult = await checkRateLimit(req, {
     maxRequests: 30,
     windowSeconds: 60,
     identifier: `admin:generations:${req.user.id}`,
@@ -725,7 +725,7 @@ const PaymentsQuerySchema = z.object({
 })
 
 router.get('/payments', withAdminAuth(async (req: AuthenticatedRequest, res: Response) => {
-  const rateLimitResult = checkRateLimit(req, {
+  const rateLimitResult = await checkRateLimit(req, {
     maxRequests: 30,
     windowSeconds: 60,
     identifier: `admin:payments:${req.user.id}`,
@@ -827,7 +827,7 @@ const TestAlertSchema = z.object({
 })
 
 router.post('/test-alert', withAdminAuth(async (req: AuthenticatedRequest, res: Response) => {
-  const rateLimitResult = checkRateLimit(req, {
+  const rateLimitResult = await checkRateLimit(req, {
     maxRequests: 5,
     windowSeconds: 60,
     identifier: `admin:test-alert:${req.user.id}`,

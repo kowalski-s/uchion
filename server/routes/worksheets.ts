@@ -22,7 +22,7 @@ const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
 router.get('/', withAuth(async (req: AuthenticatedRequest, res: Response) => {
   const user = req.user
 
-  const rateLimitResult = checkRateLimit(req, {
+  const rateLimitResult = await checkRateLimit(req, {
     maxRequests: 30,
     windowSeconds: 60,
     identifier: `worksheets:list:${user.id}`,
@@ -85,7 +85,7 @@ router.get('/:id', withAuth(async (req: AuthenticatedRequest, res: Response) => 
     return res.status(400).json({ error: 'Invalid worksheet ID format' })
   }
 
-  const rateLimitResult = checkRateLimit(req, {
+  const rateLimitResult = await checkRateLimit(req, {
     maxRequests: 60,
     windowSeconds: 60,
     identifier: `worksheet:get:${user.id}`,
@@ -165,7 +165,7 @@ router.patch('/:id', withAuth(async (req: AuthenticatedRequest, res: Response) =
     return res.status(400).json({ error: 'Invalid worksheet ID format' })
   }
 
-  const rateLimitResult = checkRateLimit(req, {
+  const rateLimitResult = await checkRateLimit(req, {
     maxRequests: 30,
     windowSeconds: 60,
     identifier: `worksheet:update:${user.id}`,
@@ -262,7 +262,7 @@ router.delete('/:id', withAuth(async (req: AuthenticatedRequest, res: Response) 
     return res.status(400).json({ error: 'Invalid worksheet ID format' })
   }
 
-  const rateLimitResult = checkRateLimit(req, {
+  const rateLimitResult = await checkRateLimit(req, {
     maxRequests: 10,
     windowSeconds: 60,
     identifier: `worksheet:delete:${user.id}`,

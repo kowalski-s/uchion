@@ -17,7 +17,7 @@ export const users = pgTable('users', {
     name: varchar('name', { length: 255 }),
     image: text('image'),
     role: userRoleEnum('role').notNull().default('user'),
-    generationsLeft: integer('generations_left').notNull().default(3),
+    generationsLeft: integer('generations_left').notNull().default(5),
     // OAuth provider info
     provider: varchar('provider', { length: 50 }), // 'yandex' | 'telegram'
     providerId: varchar('provider_id', { length: 255 }),
