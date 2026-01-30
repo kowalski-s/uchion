@@ -188,10 +188,20 @@ function getTaskTypesBlock(
     }
   }
 
+  // Shuffle instruction
+  if (testDist.length > 1) {
+    instructions += `\nПОРЯДОК ТЕСТОВЫХ ЗАДАНИЙ: Перемешай задания разных типов в случайном порядке внутри тестовой части. НЕ группируй по типу — чередуй single_choice и multiple_choice произвольно.\n`
+  }
+  if (openDist.length > 1) {
+    instructions += `\nПОРЯДОК ОТКРЫТЫХ ЗАДАНИЙ: Перемешай задания разных типов в случайном порядке внутри открытой части. НЕ группируй по типу — чередуй open_question, matching и fill_blank произвольно.\n`
+  }
+
   instructions += `
-ПРОВЕРЬ СЕБЯ: В финальном JSON массив "tasks" должен содержать РОВНО ${totalTasks} элементов.
-${allDist.map((d) => `- ${d.type}: РОВНО ${d.count} шт.`).join('\n')}
-Если количество любого типа отличается - это ОШИБКА.
+КОНТРОЛЬНАЯ ПРОВЕРКА (сверься перед ответом):
+В финальном JSON массив "tasks" должен содержать РОВНО ${totalTasks} элементов.
+Подсчитай количество каждого типа — оно ОБЯЗАНО совпадать:
+${allDist.map((d) => `  ✓ ${d.type}: РОВНО ${d.count} шт.`).join('\n')}
+Если хотя бы один тип имеет неверное количество — ИСПРАВЬ перед выдачей ответа.
 
 `
 
@@ -201,12 +211,12 @@ ${allDist.map((d) => `- ${d.type}: РОВНО ${d.count} шт.`).join('\n')}
   for (const d of allDist) {
     const taskType = getTaskType(d.type)
     if (taskType) {
-      instructions += `${taskType.name.toUpperCase()} (${d.type}) — ${d.count} шт.:\n`
+      instructions += `${taskType.name.toUpperCase()} (${d.type}) — РОВНО ${d.count} шт.:\n`
       instructions += `${taskType.promptInstruction}\n\n`
     }
   }
 
-  instructions += `ВАЖНО: Соблюдай ТОЧНОЕ количество заданий каждого типа. Не пропускай ни один тип.`
+  instructions += `ВАЖНО: Соблюдай ТОЧНОЕ количество заданий каждого типа. Не пропускай ни один тип. Перемешай порядок заданий внутри каждого блока.`
 
   return instructions.trim()
 }
