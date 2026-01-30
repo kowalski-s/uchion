@@ -11,6 +11,9 @@ export type ApiErrorCode =
   | 'AI_ERROR'
   | 'PDF_ERROR'
   | 'RATE_LIMIT'
+  | 'RATE_LIMIT_EXCEEDED'
+  | 'LIMIT_EXCEEDED'
+  | 'DAILY_LIMIT_EXCEEDED'
   | 'SERVER_ERROR'
 
 export type GenerateResponseOk = {
