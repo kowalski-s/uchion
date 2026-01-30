@@ -6,6 +6,10 @@ import { users, worksheets, generations, subscriptions, payments } from '../../d
 import { withAdminAuth } from '../middleware/auth.js';
 import { checkRateLimit } from '../middleware/rate-limit.js';
 import { sendAdminAlert } from '../../api/_lib/telegram/index.js';
+/** Escape LIKE special characters to prevent wildcard injection */
+function escapeLike(input) {
+    return input.replace(/[%_\\]/g, '\\$&');
+}
 const router = Router();
 const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // ==================== GET /api/admin/stats ====================
@@ -116,7 +120,7 @@ router.get('/users', withAdminAuth(async (req, res) => {
         // status === 'all' - не добавляем условие на deletedAt
         // Поиск по email, name или providerId
         if (search && search.trim()) {
-            const searchPattern = `%${search.trim()}%`;
+            const searchPattern = `%${escapeLike(search.trim())}%`;
             conditions.push(or(like(users.email, searchPattern), like(users.name, searchPattern), like(users.providerId, searchPattern)));
         }
         // Общее количество для пагинации
@@ -455,7 +459,7 @@ router.get('/generation-logs', withAdminAuth(async (req, res) => {
         }
         // Поиск по email пользователя
         if (search && search.trim()) {
-            const searchPattern = `%${search.trim()}%`;
+            const searchPattern = `%${escapeLike(search.trim())}%`;
             const matchedUsers = await db
                 .select({ id: users.id })
                 .from(users)
@@ -544,7 +548,7 @@ router.get('/generations', withAdminAuth(async (req, res) => {
         }
         // Если есть поиск - ищем по email пользователя или теме листа
         if (search && search.trim()) {
-            const searchPattern = `%${search.trim()}%`;
+            const searchPattern = `%${escapeLike(search.trim())}%`;
             // Ищем пользователей по email
             const matchedUsers = await db
                 .select({ id: users.id })
@@ -641,7 +645,7 @@ router.get('/payments', withAdminAuth(async (req, res) => {
         // Если есть поиск - ищем по email пользователя
         let userIdsToFilter = null;
         if (search && search.trim()) {
-            const searchPattern = `%${search.trim()}%`;
+            const searchPattern = `%${escapeLike(search.trim())}%`;
             const matchedUsers = await db
                 .select({ id: users.id })
                 .from(users)
