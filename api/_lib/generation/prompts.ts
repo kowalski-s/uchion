@@ -9,6 +9,7 @@ import {
   getWorksheetFormat,
   getFormatVariant,
 } from './config/index.js'
+import { distributeOpenTasks, distributeTestTasks, type TaskDistribution } from './config/task-distribution.js'
 
 // =============================================================================
 // Types
@@ -138,6 +139,12 @@ function getTopicBlock(topic: string): string {
 // Block 5: Task Types
 // =============================================================================
 
+function formatDistributionLine(d: TaskDistribution): string {
+  const taskType = getTaskType(d.type)
+  const name = taskType?.name ?? d.type
+  return `- Создай РОВНО ${d.count} ${d.count === 1 ? 'задание' : d.count < 5 ? 'задания' : 'заданий'} типа ${d.type} (${name})`
+}
+
 function getTaskTypesBlock(
   taskTypes: TaskTypeId[],
   formatId: WorksheetFormatId,
@@ -149,41 +156,57 @@ function getTaskTypesBlock(
   }
 
   const totalTasks = variant.testQuestions + variant.openTasks
+
+  // Calculate exact distribution per type
+  const testDist = distributeTestTasks(variant.testQuestions, taskTypes)
+  const openDist = distributeOpenTasks(variant.openTasks, taskTypes)
+  const allDist = [...testDist, ...openDist]
+
   let instructions = `
 ═══════════════════════════════════════════════════════════════
-КРИТИЧЕСКИ ВАЖНО: КОЛИЧЕСТВО ЗАДАНИЙ
+КРИТИЧЕСКИ ВАЖНО: ТОЧНОЕ КОЛИЧЕСТВО ЗАДАНИЙ КАЖДОГО ТИПА
 ═══════════════════════════════════════════════════════════════
 
 Ты ОБЯЗАН создать РОВНО ${totalTasks} заданий. Не ${totalTasks - 1}, не ${totalTasks + 1}, а ИМЕННО ${totalTasks}.
 
+ТОЧНОЕ РАСПРЕДЕЛЕНИЕ ПО ТИПАМ:
 `
 
-  // Если есть тестовые вопросы
-  if (variant.testQuestions > 0) {
-    instructions += `ТЕСТОВАЯ ЧАСТЬ: РОВНО ${variant.testQuestions} тестовых вопросов (single_choice или multiple_choice)\n`
+  // Test part
+  if (testDist.length > 0) {
+    instructions += `\nТЕСТОВАЯ ЧАСТЬ (${variant.testQuestions} шт.):\n`
+    for (const d of testDist) {
+      instructions += `${formatDistributionLine(d)}\n`
+    }
   }
 
-  // Если есть открытые задания
-  if (variant.openTasks > 0) {
-    instructions += `ЗАДАНИЯ С РАЗВЁРНУТЫМ ОТВЕТОМ: РОВНО ${variant.openTasks} заданий (open_question, matching или fill_blank)\n`
+  // Open part
+  if (openDist.length > 0) {
+    instructions += `\nЗАДАНИЯ С РАЗВЁРНУТЫМ ОТВЕТОМ (${variant.openTasks} шт.):\n`
+    for (const d of openDist) {
+      instructions += `${formatDistributionLine(d)}\n`
+    }
   }
 
   instructions += `
 ПРОВЕРЬ СЕБЯ: В финальном JSON массив "tasks" должен содержать РОВНО ${totalTasks} элементов.
-Если ты создашь меньше или больше - это ОШИБКА.
+${allDist.map((d) => `- ${d.type}: РОВНО ${d.count} шт.`).join('\n')}
+Если количество любого типа отличается - это ОШИБКА.
 
 `
 
-  // Инструкции по каждому типу
+  // Per-type instructions (only for types that have count > 0)
   instructions += 'ИНСТРУКЦИИ ПО ТИПАМ:\n\n'
 
-  for (const typeId of taskTypes) {
-    const taskType = getTaskType(typeId)
+  for (const d of allDist) {
+    const taskType = getTaskType(d.type)
     if (taskType) {
-      instructions += `${taskType.name.toUpperCase()} (${typeId}):\n`
+      instructions += `${taskType.name.toUpperCase()} (${d.type}) — ${d.count} шт.:\n`
       instructions += `${taskType.promptInstruction}\n\n`
     }
   }
+
+  instructions += `ВАЖНО: Соблюдай ТОЧНОЕ количество заданий каждого типа. Не пропускай ни один тип.`
 
   return instructions.trim()
 }
