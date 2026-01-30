@@ -15,6 +15,7 @@ import {
 } from './generation/config/index.js'
 import { timedLLMCall } from './ai/validator.js'
 import { checkValidationScore } from './alerts/generation-alerts.js'
+import { validateWorksheet as validateTasksDeterministic } from './generation/validation/deterministic.js'
 
 // =============================================================================
 // Types
@@ -252,6 +253,34 @@ class OpenAIProvider implements AIProvider {
         console.error('[УчиОн] Retry failed:', retryError)
         // Continue with what we have
       }
+    }
+
+    // Детерминированная валидация заданий (без LLM)
+    const allTasks = [...testTasks, ...openTasksList]
+    const validationResult = validateTasksDeterministic(allTasks, params.subject, params.grade)
+
+    if (!validationResult.valid) {
+      console.warn(`[УчиОн] Validation errors (${validationResult.errors.length}):`,
+        validationResult.errors.map(e => `  [${e.taskIndex}] ${e.code}: ${e.message}`).join('\n')
+      )
+
+      // Filter out tasks with critical errors
+      const badTaskIndices = new Set(validationResult.errors.map(e => e.taskIndex))
+      const cleanTest = testTasks.filter((_, idx) => !badTaskIndices.has(idx))
+      const testOffset = testTasks.length
+      const cleanOpen = openTasksList.filter((_, idx) => !badTaskIndices.has(idx + testOffset))
+
+      if (cleanTest.length < testTasks.length || cleanOpen.length < openTasksList.length) {
+        console.log(`[УчиОн] Removed ${testTasks.length - cleanTest.length} test + ${openTasksList.length - cleanOpen.length} open invalid tasks`)
+        testTasks = cleanTest
+        openTasksList = cleanOpen
+      }
+    }
+
+    if (validationResult.warnings.length > 0) {
+      console.log(`[УчиОн] Validation warnings (${validationResult.warnings.length}):`,
+        validationResult.warnings.map(w => `  [${w.taskIndex}] ${w.code}: ${w.message}`).join('\n')
+      )
     }
 
     // Преобразуем в формат Worksheet
