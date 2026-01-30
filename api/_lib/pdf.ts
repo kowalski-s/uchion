@@ -148,7 +148,8 @@ function generateWorksheetHtml(worksheet: Worksheet): string {
     }
   ` : ''
 
-  const assignmentsHtml = worksheet.assignments.map((task, i) => {
+  // Build individual task HTML items
+  const assignmentItems = worksheet.assignments.map((task, i) => {
     const matchingData = parseMatchingData(task.text)
 
     if (matchingData) {
@@ -171,9 +172,9 @@ function generateWorksheetHtml(worksheet: Worksheet): string {
         ${shouldShowAnswerField(task.text) ? '<div class="answer-field"></div>' : ''}
       </div>
     `
-  }).join('')
+  })
 
-  const testHtml = worksheet.test.map((q, i) => `
+  const testItems = worksheet.test.map((q, i) => `
     <div class="test-question">
       <div class="question-text">
         <span class="question-number">${i + 1}.</span>
@@ -188,7 +189,7 @@ function generateWorksheetHtml(worksheet: Worksheet): string {
         `).join('')}
       </div>
     </div>
-  `).join('')
+  `)
 
   const assignmentAnswersHtml = worksheet.answers.assignments.map((ans, i) => `
     <li class="answer-item">
@@ -206,8 +207,21 @@ function generateWorksheetHtml(worksheet: Worksheet): string {
 
   const notesLinesHtml = Array.from({ length: 14 }).map(() => '<div class="note-line"></div>').join('')
 
-  const hasAssignments = worksheet.assignments.length > 0
-  const hasTest = worksheet.test.length > 0
+  const hasAssignments = assignmentItems.length > 0
+  const hasTest = testItems.length > 0
+
+  // Chunk items into pages of TASKS_PER_PAGE
+  const TASKS_PER_PAGE = 5
+  function chunkArray<T>(arr: T[], size: number): T[][] {
+    const chunks: T[][] = []
+    for (let i = 0; i < arr.length; i += size) {
+      chunks.push(arr.slice(i, i + size))
+    }
+    return chunks
+  }
+
+  const assignmentPages = chunkArray(assignmentItems, TASKS_PER_PAGE)
+  const testPages = chunkArray(testItems, TASKS_PER_PAGE)
 
   return `<!DOCTYPE html>
 <html lang="ru">
@@ -235,7 +249,7 @@ function generateWorksheetHtml(worksheet: Worksheet): string {
     .page {
       width: 210mm;
       min-height: 297mm;
-      padding: 15mm;
+      padding: 20mm 18mm;
       background: white;
       page-break-after: always;
     }
@@ -536,16 +550,17 @@ function generateWorksheetHtml(worksheet: Worksheet): string {
     @media print {
       .page {
         margin: 0;
-        padding: 10mm;
+        padding: 20mm 18mm;
         box-shadow: none;
       }
     }
   </style>
 </head>
 <body>
-  ${hasAssignments ? `
-  <!-- PAGE 1: Assignments -->
+  ${hasAssignments ? assignmentPages.map((pageItems, pageIdx) => `
+  <!-- Assignments page ${pageIdx + 1} -->
   <div class="page">
+    ${pageIdx === 0 ? `
     <div class="header">
       <div class="logo">УчиОн</div>
       <div class="meta-fields">
@@ -566,16 +581,23 @@ function generateWorksheetHtml(worksheet: Worksheet): string {
       <div class="section-badge">E</div>
       Задания
     </div>
+    ` : `
+    <div class="section-title" style="margin-top: 0;">
+      <div class="section-badge">E</div>
+      Задания (продолжение)
+    </div>
+    `}
 
     <div class="assignments">
-      ${assignmentsHtml}
+      ${pageItems.join('')}
     </div>
   </div>
-  ` : ''}
+  `).join('') : ''}
 
-  ${hasTest ? `
-  <!-- PAGE 2: Test -->
+  ${hasTest ? testPages.map((pageItems, pageIdx) => `
+  <!-- Test page ${pageIdx + 1} -->
   <div class="page">
+    ${pageIdx === 0 ? `
     ${!hasAssignments ? `
     <div class="header">
       <div class="logo">УчиОн</div>
@@ -598,12 +620,18 @@ function generateWorksheetHtml(worksheet: Worksheet): string {
       <div class="section-badge">T</div>
       Мини-тест
     </div>
+    ` : `
+    <div class="section-title" style="margin-top: 0;">
+      <div class="section-badge">T</div>
+      Мини-тест (продолжение)
+    </div>
+    `}
 
     <div class="test-questions">
-      ${testHtml}
+      ${pageItems.join('')}
     </div>
   </div>
-  ` : ''}
+  `).join('') : ''}
 
   <!-- PAGE 3: Evaluation & Notes -->
   <div class="page">
