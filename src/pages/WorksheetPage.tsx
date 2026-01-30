@@ -95,7 +95,7 @@ export default function WorksheetPage() {
             setLoading(false)
             return
           } catch (e) {
-            console.error('Failed to parse cached worksheet', e)
+            void e
             localStorage.removeItem('uchion_cached_worksheet')
           }
         }
@@ -106,7 +106,7 @@ export default function WorksheetPage() {
           setInitialWorksheet(data)
         }
       } catch (e) {
-        console.error('Failed to load worksheet', e)
+        void e
       } finally {
         setLoading(false)
       }
@@ -149,7 +149,6 @@ export default function WorksheetPage() {
 
       // If we have server-generated PDF, use it directly
       if (currentWorksheet.pdfBase64 && currentWorksheet.pdfBase64.length > 0) {
-        console.log('[PDF] Using server-generated PDF, base64 length:', currentWorksheet.pdfBase64.length)
         const binaryString = atob(currentWorksheet.pdfBase64)
         const bytes = new Uint8Array(binaryString.length)
         for (let i = 0; i < binaryString.length; i++) {
@@ -158,7 +157,6 @@ export default function WorksheetPage() {
         blob = new Blob([bytes], { type: 'application/pdf' })
       } else {
         // Fallback to client-side generation (for edited worksheets or if server PDF missing)
-        console.log('[PDF] Falling back to client-side PDF generation')
         blob = await buildWorksheetPdf(currentWorksheet)
       }
 
@@ -171,7 +169,7 @@ export default function WorksheetPage() {
       a.remove()
       URL.revokeObjectURL(url)
     } catch (err) {
-      console.error('PDF download error:', err)
+      void err
       alert('Не удалось создать PDF. Попробуйте еще раз.')
     }
   }

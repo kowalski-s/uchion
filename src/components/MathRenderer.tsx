@@ -20,7 +20,7 @@ export default function MathRenderer({ text, className = '' }: MathRendererProps
     try {
       return renderMathInText(text)
     } catch (e) {
-      console.error('MathRenderer error:', e)
+      void e
       return escapeHtml(text)
     }
   }, [text])

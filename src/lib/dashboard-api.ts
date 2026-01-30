@@ -21,7 +21,6 @@ export async function fetchWorksheets(options?: FetchWorksheetsOptions): Promise
       credentials: 'include',
     })    if (!res.ok) {
       const errorText = await res.text()
-      console.error('[Frontend API] Error response body:', errorText)
       if (res.status === 401) {
         throw new Error('Unauthorized')
       }
@@ -30,8 +29,6 @@ export async function fetchWorksheets(options?: FetchWorksheetsOptions): Promise
 
     const data = await res.json()    return data.worksheets
   } catch (error) {
-    console.error('[Frontend API] ==== fetchWorksheets FAILED ====')
-    console.error('[Frontend API] Error:', error)
     throw error
   }
 }
@@ -45,7 +42,6 @@ export async function fetchWorksheet(id: string): Promise<WorksheetListItem & { 
     credentials: 'include',
   })  if (!res.ok) {
     const errorBody = await res.text().catch(() => 'Unable to read error body')
-    console.error('[Dashboard API] fetchWorksheet error:', res.status, errorBody)
 
     if (res.status === 401) throw new Error('Требуется авторизация')
     if (res.status === 403) throw new Error('Нет доступа к этому листу')
@@ -55,7 +51,6 @@ export async function fetchWorksheet(id: string): Promise<WorksheetListItem & { 
   }
 
   const data = await res.json()  if (!data.worksheet) {
-    console.error('[Dashboard API] fetchWorksheet - worksheet is undefined in response')
     throw new Error('Сервер вернул пустой ответ')
   }  return data.worksheet
 }
@@ -73,7 +68,6 @@ export async function updateWorksheet(id: string, data: UpdateWorksheetData): Pr
     body: JSON.stringify(data),
   })  if (!res.ok) {
     const errorBody = await res.text().catch(() => 'Unable to read error body')
-    console.error('[Dashboard API] updateWorksheet error:', res.status, errorBody)
 
     if (res.status === 401) throw new Error('Требуется авторизация')
     if (res.status === 403) throw new Error('Нет доступа')

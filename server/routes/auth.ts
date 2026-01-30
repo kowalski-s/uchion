@@ -23,6 +23,7 @@ import {
   createRefreshToken,
   revokeRefreshToken,
   decodeRefreshToken,
+  getTokenFamilyId,
 } from '../../api/_lib/auth/tokens.js'
 import {
   generateState,
@@ -173,14 +174,15 @@ router.post('/refresh', async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'User not found' })
     }
 
+    // Get family ID before revoking, so the new token inherits it
+    const familyId = await getTokenFamilyId(payload.jti)
     await revokeRefreshToken(payload.jti)
 
     const newAccessToken = createAccessToken({
       userId: user.id,
-      email: user.email,
       role: user.role,
     })
-    const newRefreshToken = await createRefreshToken(user.id)
+    const newRefreshToken = await createRefreshToken(user.id, familyId || undefined)
 
     setAuthCookies(res, {
       accessToken: newAccessToken,
@@ -358,7 +360,6 @@ router.get('/yandex/callback', async (req: Request, res: Response) => {
 
     const accessToken = createAccessToken({
       userId: user.id,
-      email: user.email,
       role: user.role,
     })
     const refreshToken = await createRefreshToken(user.id)
@@ -507,7 +508,6 @@ router.get('/telegram/callback', async (req: Request, res: Response) => {
 
     const accessToken = createAccessToken({
       userId: user.id,
-      email: user.email,
       role: user.role,
     })
     const refreshToken = await createRefreshToken(user.id)

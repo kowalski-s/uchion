@@ -172,12 +172,14 @@ export const refreshTokens = pgTable('refresh_tokens', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   jti: varchar('jti', { length: 255 }).notNull().unique(),  // JWT ID for token tracking
+  familyId: varchar('family_id', { length: 255 }).notNull(), // Token family for theft detection
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   revokedAt: timestamp('revoked_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
   userIdIdx: index('refresh_tokens_user_id_idx').on(table.userId),
   jtiIdx: index('refresh_tokens_jti_idx').on(table.jti),
+  familyIdIdx: index('refresh_tokens_family_id_idx').on(table.familyId),
 }))
 
 // ==================== RELATIONS ====================

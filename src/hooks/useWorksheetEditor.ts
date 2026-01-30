@@ -204,7 +204,7 @@ export function useWorksheetEditor(options: UseWorksheetEditorOptions): UseWorks
         try {
           localStorage.setItem('uchion_cached_worksheet', JSON.stringify(editedWorksheet))
         } catch (e) {
-          console.error('Failed to update localStorage:', e)
+          void e
         }
 
         // Also save to DB if worksheet has a valid UUID (authenticated user)
@@ -216,7 +216,7 @@ export function useWorksheetEditor(options: UseWorksheetEditorOptions): UseWorks
             })
           } catch (e) {
             // Don't fail if DB update fails - localStorage is updated
-            console.error('Failed to update worksheet in DB:', e)
+            void e
           }
         }
       }

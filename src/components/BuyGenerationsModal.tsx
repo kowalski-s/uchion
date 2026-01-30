@@ -72,7 +72,7 @@ export default function BuyGenerationsModal({ isOpen, onClose }: BuyGenerationsM
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ошибка при создании платежа')
-      console.error(err)
+      void err
     } finally {
       setPurchasing(false)
     }

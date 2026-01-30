@@ -10,7 +10,7 @@ const fetchFont = async (url: string) => {
     const buf = await res.arrayBuffer()
     return new Uint8Array(buf)
   } catch (e) {
-    console.error(`Error loading font ${url}:`, e)
+    void e
     throw e
   }
 }

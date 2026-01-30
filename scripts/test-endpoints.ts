@@ -37,7 +37,6 @@ async function main() {
   console.log('\n🔐 Creating JWT token...')
   const token = createAccessToken({
     userId: user.id,
-    email: user.email || '',
     role: 'user'
   })
   console.log('  ✅ Token created')

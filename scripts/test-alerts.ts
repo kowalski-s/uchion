@@ -28,7 +28,6 @@ async function getAdminToken(): Promise<string> {
   // Create access token
   const token = createAccessToken({
     userId: admin.id,
-    email: admin.email,
     role: admin.role,
   })
 

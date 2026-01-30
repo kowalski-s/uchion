@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import CookieConsent from './components/CookieConsent'
 import GeneratePage from './pages/GeneratePage'
@@ -9,12 +10,23 @@ import SavedWorksheetPage from './pages/SavedWorksheetPage'
 import PaymentSuccessPage from './pages/PaymentSuccessPage'
 import PaymentCancelPage from './pages/PaymentCancelPage'
 
-// Admin pages
-import AdminPage, { AdminOverview } from './pages/admin/AdminPage'
-import AdminUsersPage from './pages/admin/AdminUsersPage'
-import AdminUserDetailPage from './pages/admin/AdminUserDetailPage'
-import AdminGenerationsPage from './pages/admin/AdminGenerationsPage'
-import AdminPaymentsPage from './pages/admin/AdminPaymentsPage'
+// Admin pages -- lazy-loaded into a separate chunk.
+// The AdminPage layout itself checks the user role before rendering,
+// so even if someone loads the chunk they won't see data without admin rights.
+const AdminPage = lazy(() => import('./pages/admin/AdminPage'))
+const AdminOverview = lazy(() => import('./pages/admin/AdminPage').then(m => ({ default: m.AdminOverview })))
+const AdminUsersPage = lazy(() => import('./pages/admin/AdminUsersPage'))
+const AdminUserDetailPage = lazy(() => import('./pages/admin/AdminUserDetailPage'))
+const AdminGenerationsPage = lazy(() => import('./pages/admin/AdminGenerationsPage'))
+const AdminPaymentsPage = lazy(() => import('./pages/admin/AdminPaymentsPage'))
+
+function AdminFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="animate-spin rounded-full h-8 w-8 border-2 border-purple-200 border-t-[#8C52FF]"></div>
+    </div>
+  )
+}
 
 export default function App() {
   return (
@@ -32,13 +44,13 @@ export default function App() {
         <Route path="/payment/success" element={<PaymentSuccessPage />} />
         <Route path="/payment/cancel" element={<PaymentCancelPage />} />
 
-        {/* Admin routes */}
-        <Route path="/admin" element={<AdminPage />}>
-          <Route index element={<AdminOverview />} />
-          <Route path="users" element={<AdminUsersPage />} />
-          <Route path="users/:id" element={<AdminUserDetailPage />} />
-          <Route path="generations" element={<AdminGenerationsPage />} />
-          <Route path="payments" element={<AdminPaymentsPage />} />
+        {/* Admin routes -- lazy loaded */}
+        <Route path="/admin" element={<Suspense fallback={<AdminFallback />}><AdminPage /></Suspense>}>
+          <Route index element={<Suspense fallback={<AdminFallback />}><AdminOverview /></Suspense>} />
+          <Route path="users" element={<Suspense fallback={<AdminFallback />}><AdminUsersPage /></Suspense>} />
+          <Route path="users/:id" element={<Suspense fallback={<AdminFallback />}><AdminUserDetailPage /></Suspense>} />
+          <Route path="generations" element={<Suspense fallback={<AdminFallback />}><AdminGenerationsPage /></Suspense>} />
+          <Route path="payments" element={<Suspense fallback={<AdminFallback />}><AdminPaymentsPage /></Suspense>} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

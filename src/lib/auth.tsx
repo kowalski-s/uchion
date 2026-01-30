@@ -77,7 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setStatus('unauthenticated')
       }
     } catch (error) {
-      console.error('[Auth] Check failed:', error)
+      void error
       setUser(null)
       setStatus('unauthenticated')
     }

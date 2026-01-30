@@ -45,7 +45,6 @@ export default function TelegramLoginButton({
 
     // Handle script load errors
     script.onerror = () => {
-      console.error('[Telegram Login] Failed to load widget script')
       if (onAuthError) {
         onAuthError('Failed to load Telegram widget')
       }

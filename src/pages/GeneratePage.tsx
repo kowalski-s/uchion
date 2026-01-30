@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -204,7 +204,7 @@ export default function GeneratePage() {
       try {
         localStorage.setItem('uchion_cached_worksheet', JSON.stringify(worksheet))
       } catch (e) {
-        console.error('Failed to save to localStorage', e)
+        void e
       }
 
       // Update limit after successful generation
@@ -297,20 +297,19 @@ export default function GeneratePage() {
           <p className="text-lg text-slate-500">Какой материал хотите сгенерировать?</p>
         </div>
 
-        {/* Generations counter */}
-        <div className="w-full flex justify-end mb-4">
-          <div className="flex items-center gap-2 bg-white rounded-full px-5 py-2.5 shadow-sm border border-purple-100">
-            <svg className="w-5 h-5 text-[#8C52FF]" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" />
-            </svg>
-            <span className="font-semibold text-slate-700">
-              {user ? generationsLeft : 0}
-            </span>
-            {!user && (
-              <Link to="/login" className="text-[#8C52FF] text-sm underline ml-2">Войти</Link>
-            )}
+        {/* Generations counter -- only for authenticated users */}
+        {user && (
+          <div className="w-full flex justify-end mb-4">
+            <div className="flex items-center gap-2 bg-white rounded-full px-5 py-2.5 shadow-sm border border-purple-100">
+              <svg className="w-5 h-5 text-[#8C52FF]" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" />
+              </svg>
+              <span className="font-semibold text-slate-700">
+                {generationsLeft}
+              </span>
+            </div>
           </div>
-        </div>
+        )}
 
         <form onSubmit={form.handleSubmit(onSubmit)} className="w-full space-y-6">
           {/* Main compact card */}
@@ -404,7 +403,7 @@ export default function GeneratePage() {
 
               <button
                 type="submit"
-                disabled={mutation.isPending || generationsLeft < generationCost}
+                disabled={mutation.isPending || (!!user && generationsLeft < generationCost)}
                 className="group relative inline-flex h-12 px-8 items-center justify-center overflow-hidden rounded-xl bg-[#A855F7]/80 hover:bg-[#A855F7]/90 text-base font-semibold text-white shadow-md shadow-purple-400/20 transition-all hover:shadow-purple-400/30 disabled:opacity-60 disabled:hover:bg-[#A855F7]/80"
               >
                 {mutation.isPending ? (

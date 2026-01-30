@@ -39,7 +39,7 @@ export default function PaymentSuccessPage() {
         setPaymentStatus(data)
       }
     } catch (err) {
-      console.error('Failed to check payment status:', err)
+      void err
       setError('Не удалось проверить статус платежа')
     } finally {
       setLoading(false)
