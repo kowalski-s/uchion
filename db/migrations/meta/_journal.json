@@ -15,6 +15,13 @@
       "when": 1769794404413,
       "tag": "0001_lying_marvel_apes",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1769880000000,
+      "tag": "0002_check_generations_left",
+      "breakpoints": true
     }
   ]
 }
