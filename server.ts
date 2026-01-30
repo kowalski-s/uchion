@@ -62,6 +62,7 @@ app.set('trust proxy', 1)
 
 // Parse JSON bodies with raw body preservation for webhooks
 app.use(express.json({
+  limit: '1mb',
   verify: (req, _res, buf) => {
     // Store raw body for webhook signature verification
     if (req.url?.includes('/api/billing/') && req.url?.includes('/webhook')) {
@@ -72,6 +73,7 @@ app.use(express.json({
 
 // Parse URL-encoded bodies (for Prodamus webhooks)
 app.use(express.urlencoded({
+  limit: '1mb',
   extended: true,
   verify: (req, _res, buf) => {
     if (req.url?.includes('/api/billing/') && req.url?.includes('/webhook')) {

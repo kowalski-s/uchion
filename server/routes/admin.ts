@@ -3,7 +3,7 @@ import type { Response } from 'express'
 import { eq, and, isNull, isNotNull, desc, sql, count, like, or, gte, inArray, asc } from 'drizzle-orm'
 import { z } from 'zod'
 import { db } from '../../db/index.js'
-import { users, worksheets, generations, subscriptions, payments } from '../../db/schema.js'
+import { users, worksheets, generations, subscriptions, payments, folders, paymentIntents, refreshTokens } from '../../db/schema.js'
 import { withAdminAuth } from '../middleware/auth.js'
 import { checkRateLimit } from '../middleware/rate-limit.js'
 import type { AuthenticatedRequest } from '../types.js'
@@ -1029,6 +1029,66 @@ router.post('/alerts/test/low-quality', withAdminAuth(async (req: AuthenticatedR
   } catch (error) {
     console.error('[Admin Alerts Test] Error:', error)
     return res.status(500).json({ error: 'Failed to test low quality alert' })
+  }
+}))
+
+// ==================== DELETE /api/admin/users/:id/purge ====================
+// Полное удаление пользователя и всех связанных данных (ФЗ-152 compliance)
+router.delete('/users/:id/purge', withAdminAuth(async (req: AuthenticatedRequest, res: Response) => {
+  const rateLimitResult = await checkRateLimit(req, {
+    maxRequests: 5,
+    windowSeconds: 60,
+    identifier: `admin:purge:${req.user.id}`,
+  })
+  if (!rateLimitResult.success) {
+    const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000)
+    return res
+      .status(429)
+      .setHeader('Retry-After', retryAfter.toString())
+      .json({ error: 'Too many requests' })
+  }
+
+  const userId = req.params.id
+  if (!uuidRegex.test(userId)) {
+    return res.status(400).json({ error: 'Invalid user ID format' })
+  }
+
+  // Prevent admin from purging themselves
+  if (userId === req.user.id) {
+    return res.status(400).json({ error: 'Cannot purge your own account' })
+  }
+
+  try {
+    // Verify user exists
+    const [user] = await db
+      .select({ id: users.id, email: users.email })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1)
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+
+    // Delete all related data in correct order (foreign key dependencies)
+    await db.delete(paymentIntents).where(eq(paymentIntents.userId, userId))
+    await db.delete(payments).where(eq(payments.userId, userId))
+    await db.delete(subscriptions).where(eq(subscriptions.userId, userId))
+    await db.delete(generations).where(eq(generations.userId, userId))
+    await db.delete(worksheets).where(eq(worksheets.userId, userId))
+    await db.delete(folders).where(eq(folders.userId, userId))
+    await db.delete(refreshTokens).where(eq(refreshTokens.userId, userId))
+    await db.delete(users).where(eq(users.id, userId))
+
+    console.log(`[Admin] User ${userId} permanently purged by admin ${req.user.id}`)
+
+    return res.status(200).json({
+      success: true,
+      message: 'User and all associated data permanently deleted',
+    })
+  } catch (error) {
+    console.error('[Admin] Purge user error:', error)
+    return res.status(500).json({ error: 'Failed to purge user' })
   }
 }))
 

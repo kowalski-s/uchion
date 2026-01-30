@@ -298,18 +298,7 @@ router.post('/prodamus/create-link', withAuth(async (req, res) => {
         }
         // Generate signed payment URL
         const paymentUrl = generatePaymentLink(PRODAMUS_PAYFORM_URL, paymentData, PRODAMUS_SECRET);
-        // Debug logging for payment link
-        const DEBUG = process.env.PRODAMUS_DEBUG === 'true';
-        if (DEBUG) {
-            console.log('[Billing] === PAYMENT LINK DEBUG ===');
-            console.log('[Billing] PRODAMUS_PAYFORM_URL:', PRODAMUS_PAYFORM_URL);
-            console.log('[Billing] PRODAMUS_SECRET:', PRODAMUS_SECRET ? 'configured' : 'NOT SET');
-            console.log('[Billing] Payment data:', JSON.stringify(paymentData, null, 2));
-            console.log('[Billing] Generated URL:', paymentUrl);
-            console.log('[Billing] URL length:', paymentUrl.length);
-            console.log('[Billing] === END DEBUG ===');
-        }
-        console.log(`[Billing] Created payment link for order ${orderId}, user ${userId}, product ${effectiveProductCode}`);
+        console.log(`[Billing] Created payment link for order ${orderId}`);
         return res.status(201).json({
             success: true,
             paymentIntentId: paymentIntent.id,
