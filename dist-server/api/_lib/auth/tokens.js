@@ -99,7 +99,6 @@ function decodeJWTWithoutVerification(token) {
 export function createAccessToken(params) {
     const payload = {
         sub: params.userId,
-        email: params.email,
         role: params.role,
         type: 'access',
     };
@@ -118,10 +117,13 @@ export function verifyAccessToken(token) {
 // ==================== REFRESH TOKEN ====================
 /**
  * Create a new refresh token (7 days expiry)
- * Also stores the token ID (jti) in the database for revocation tracking
+ * Also stores the token ID (jti) in the database for revocation tracking.
+ * If familyId is provided (token rotation), the new token inherits the family.
+ * Otherwise a new family is created (initial login).
  */
-export async function createRefreshToken(userId) {
+export async function createRefreshToken(userId, familyId) {
     const jti = crypto.randomUUID();
+    const family = familyId || crypto.randomUUID();
     const expiresAt = new Date(Date.now() + REFRESH_TOKEN_EXPIRY * 1000);
     const payload = {
         sub: userId,
@@ -132,26 +134,43 @@ export async function createRefreshToken(userId) {
     await db.insert(refreshTokens).values({
         userId,
         jti,
+        familyId: family,
         expiresAt,
     });
     return createJWT(payload, REFRESH_TOKEN_EXPIRY);
 }
 /**
- * Verify and decode a refresh token
- * Also checks if the token has been revoked in the database
+ * Verify and decode a refresh token.
+ * Also checks if the token has been revoked in the database.
+ *
+ * Token family theft detection:
+ * If a token that has already been revoked is presented (replay attack),
+ * ALL tokens in that family are revoked to protect the user.
  */
 export async function verifyRefreshToken(token) {
     const payload = verifyJWT(token);
     if (!payload || payload.type !== 'refresh') {
         return null;
     }
-    // Check if token is revoked in database
+    // Look up token in database (regardless of revocation status)
     const [dbToken] = await db
-        .select()
+        .select({
+        jti: refreshTokens.jti,
+        familyId: refreshTokens.familyId,
+        userId: refreshTokens.userId,
+        revokedAt: refreshTokens.revokedAt,
+    })
         .from(refreshTokens)
-        .where(and(eq(refreshTokens.jti, payload.jti), isNull(refreshTokens.revokedAt)))
+        .where(eq(refreshTokens.jti, payload.jti))
         .limit(1);
     if (!dbToken) {
+        return null;
+    }
+    // Token was already revoked -- possible theft!
+    // Revoke the entire token family as a precaution.
+    if (dbToken.revokedAt) {
+        console.warn(`[Auth] Reuse of revoked refresh token detected! jti=${dbToken.jti}, family=${dbToken.familyId}, user=${dbToken.userId}. Revoking entire family.`);
+        await revokeTokenFamily(dbToken.familyId);
         return null;
     }
     return payload;
@@ -171,6 +190,27 @@ export async function revokeRefreshToken(jti) {
         .update(refreshTokens)
         .set({ revokedAt: new Date() })
         .where(eq(refreshTokens.jti, jti));
+}
+/**
+ * Revoke all tokens in a family (theft detection response).
+ */
+export async function revokeTokenFamily(familyId) {
+    await db
+        .update(refreshTokens)
+        .set({ revokedAt: new Date() })
+        .where(and(eq(refreshTokens.familyId, familyId), isNull(refreshTokens.revokedAt)));
+}
+/**
+ * Get the familyId of a refresh token by its jti.
+ * Used during token rotation to pass the family forward.
+ */
+export async function getTokenFamilyId(jti) {
+    const [row] = await db
+        .select({ familyId: refreshTokens.familyId })
+        .from(refreshTokens)
+        .where(eq(refreshTokens.jti, jti))
+        .limit(1);
+    return row?.familyId ?? null;
 }
 /**
  * Revoke all refresh tokens for a user (e.g., on password change or security event)

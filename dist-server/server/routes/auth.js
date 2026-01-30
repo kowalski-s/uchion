@@ -4,7 +4,7 @@ import { eq, and, isNull, or } from 'drizzle-orm';
 import { db } from '../../db/index.js';
 import { users, subscriptions } from '../../db/schema.js';
 import { getTokenFromCookie, setAuthCookies, clearAuthCookies, clearOAuthCookies, setOAuthStateCookie, setPKCECookie, getStateCookie, getPKCECookie, ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE, } from '../middleware/cookies.js';
-import { verifyAccessToken, verifyRefreshToken, createAccessToken, createRefreshToken, revokeRefreshToken, decodeRefreshToken, } from '../../api/_lib/auth/tokens.js';
+import { verifyAccessToken, verifyRefreshToken, createAccessToken, createRefreshToken, revokeRefreshToken, decodeRefreshToken, getTokenFamilyId, } from '../../api/_lib/auth/tokens.js';
 import { generateState, generatePKCE, buildYandexAuthUrl, exchangeYandexCode, validateState, } from '../../api/_lib/auth/oauth.js';
 import { checkAuthRateLimit, checkMeRateLimit, checkRefreshRateLimit, checkOAuthRedirectRateLimit, } from '../middleware/rate-limit.js';
 import { logOAuthCallbackSuccess, logOAuthCallbackFailed, logRateLimitExceeded, logCsrfDetected, logInvalidSignature, logExpiredAuth, } from '../middleware/audit-log.js';
@@ -116,13 +116,14 @@ router.post('/refresh', async (req, res) => {
             clearAuthCookies(res);
             return res.status(401).json({ error: 'User not found' });
         }
+        // Get family ID before revoking, so the new token inherits it
+        const familyId = await getTokenFamilyId(payload.jti);
         await revokeRefreshToken(payload.jti);
         const newAccessToken = createAccessToken({
             userId: user.id,
-            email: user.email,
             role: user.role,
         });
-        const newRefreshToken = await createRefreshToken(user.id);
+        const newRefreshToken = await createRefreshToken(user.id, familyId || undefined);
         setAuthCookies(res, {
             accessToken: newAccessToken,
             refreshToken: newRefreshToken,
@@ -275,7 +276,6 @@ router.get('/yandex/callback', async (req, res) => {
         }
         const accessToken = createAccessToken({
             userId: user.id,
-            email: user.email,
             role: user.role,
         });
         const refreshToken = await createRefreshToken(user.id);
@@ -399,7 +399,6 @@ router.get('/telegram/callback', async (req, res) => {
         }
         const accessToken = createAccessToken({
             userId: user.id,
-            email: user.email,
             role: user.role,
         });
         const refreshToken = await createRefreshToken(user.id);

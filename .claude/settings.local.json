@@ -45,7 +45,8 @@
       "Bash(node node_modules/typescript/bin/tsc:*)",
       "Bash(npm run build:server:*)",
       "Bash(timeout /t 5 /nobreak)",
-      "Bash(findstr:*)"
+      "Bash(findstr:*)",
+      "Bash(npm run db:migrate:*)"
     ]
   }
 }
