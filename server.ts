@@ -83,16 +83,89 @@ app.use(express.urlencoded({
 // Parse cookies
 app.use(cookieParser())
 
-// Security headers (moved from vercel.json)
+// ---- CORS: reject cross-origin requests explicitly ----
+const APP_ORIGIN = process.env.APP_URL || `http://localhost:${PORT}`
+app.use((req, res, next) => {
+  const origin = req.headers.origin
+  // Allow same-origin and requests with no Origin (same-origin navigations, curl, etc.)
+  if (origin && origin !== APP_ORIGIN) {
+    return res.status(403).json({ error: 'Forbidden: cross-origin request' })
+  }
+  // Explicitly set CORS headers to deny everything except our origin
+  res.setHeader('Access-Control-Allow-Origin', APP_ORIGIN)
+  res.setHeader('Access-Control-Allow-Credentials', 'true')
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end()
+  }
+  next()
+})
+
+// ---- CSRF: verify Origin on state-changing requests ----
+app.use((req, res, next) => {
+  // Only check mutating methods
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next()
+  // Skip webhook endpoints (external providers call these)
+  if (req.path.includes('/webhook')) return next()
+  // Skip OAuth callbacks (redirects from providers)
+  if (req.path.includes('/callback')) return next()
+
+  const origin = req.headers.origin
+  const referer = req.headers.referer
+
+  // At least one must be present and match our app origin
+  if (origin) {
+    if (origin !== APP_ORIGIN) {
+      return res.status(403).json({ error: 'Forbidden: origin mismatch' })
+    }
+    return next()
+  }
+  if (referer) {
+    try {
+      const refererOrigin = new URL(referer).origin
+      if (refererOrigin !== APP_ORIGIN) {
+        return res.status(403).json({ error: 'Forbidden: referer mismatch' })
+      }
+      return next()
+    } catch {
+      return res.status(403).json({ error: 'Forbidden: invalid referer' })
+    }
+  }
+  // No Origin or Referer -- allow only in development (curl, Postman, etc.)
+  if (process.env.NODE_ENV !== 'production') return next()
+  return res.status(403).json({ error: 'Forbidden: missing origin' })
+})
+
+// ---- Security headers ----
 app.use((_req, res, next) => {
   res.setHeader('X-Frame-Options', 'DENY')
   res.setHeader('X-Content-Type-Options', 'nosniff')
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
-  res.setHeader('X-XSS-Protection', '1; mode=block')
+  res.setHeader('X-XSS-Protection', '0') // Disabled; modern browsers use CSP instead
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
+
+  // HSTS: enforce HTTPS for 1 year, include subdomains
+  if (process.env.NODE_ENV === 'production') {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+  }
+
+  // CSP: 'unsafe-inline' for scripts removed -- Telegram widget uses external script,
+  // but not inline scripts. style-src keeps 'unsafe-inline' because Tailwind/KaTeX require it.
   res.setHeader(
     'Content-Security-Policy',
-    "default-src 'self'; script-src 'self' 'unsafe-inline' https://telegram.org https://oauth.telegram.org; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://api.openai.com; frame-src https://oauth.telegram.org; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+    [
+      "default-src 'self'",
+      "script-src 'self' https://telegram.org https://oauth.telegram.org",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: https:",
+      "font-src 'self' data:",
+      "connect-src 'self'",
+      "frame-src https://oauth.telegram.org",
+      "frame-ancestors 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+    ].join('; ')
   )
   next()
 })

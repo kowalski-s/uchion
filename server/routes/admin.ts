@@ -9,6 +9,11 @@ import { checkRateLimit } from '../middleware/rate-limit.js'
 import type { AuthenticatedRequest } from '../types.js'
 import { sendAdminAlert, type AlertLevel } from '../../api/_lib/telegram/index.js'
 
+/** Escape LIKE special characters to prevent wildcard injection */
+function escapeLike(input: string): string {
+  return input.replace(/[%_\\]/g, '\\$&')
+}
+
 const router = Router()
 
 const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -141,7 +146,7 @@ router.get('/users', withAdminAuth(async (req: AuthenticatedRequest, res: Respon
 
     // Поиск по email, name или providerId
     if (search && search.trim()) {
-      const searchPattern = `%${search.trim()}%`
+      const searchPattern = `%${escapeLike(search.trim())}%`
       conditions.push(
         or(
           like(users.email, searchPattern),
@@ -547,7 +552,7 @@ router.get('/generation-logs', withAdminAuth(async (req: AuthenticatedRequest, r
 
     // Поиск по email пользователя
     if (search && search.trim()) {
-      const searchPattern = `%${search.trim()}%`
+      const searchPattern = `%${escapeLike(search.trim())}%`
       const matchedUsers = await db
         .select({ id: users.id })
         .from(users)
@@ -646,7 +651,7 @@ router.get('/generations', withAdminAuth(async (req: AuthenticatedRequest, res: 
 
     // Если есть поиск - ищем по email пользователя или теме листа
     if (search && search.trim()) {
-      const searchPattern = `%${search.trim()}%`
+      const searchPattern = `%${escapeLike(search.trim())}%`
 
       // Ищем пользователей по email
       const matchedUsers = await db
@@ -760,7 +765,7 @@ router.get('/payments', withAdminAuth(async (req: AuthenticatedRequest, res: Res
     // Если есть поиск - ищем по email пользователя
     let userIdsToFilter: string[] | null = null
     if (search && search.trim()) {
-      const searchPattern = `%${search.trim()}%`
+      const searchPattern = `%${escapeLike(search.trim())}%`
       const matchedUsers = await db
         .select({ id: users.id })
         .from(users)
