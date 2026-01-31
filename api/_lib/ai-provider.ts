@@ -274,8 +274,8 @@ class OpenAIProvider implements AIProvider {
     console.log('[УчиОн] Split: testTasks=', testTasks.length, 'openTasksList=', openTasksList.length)
     console.log('[УчиОн] Targets: testQuestions=', testQuestions, 'openTasks=', openTasks)
 
-    // RETRY: Если не хватает заданий - догенерируем (до 2 попыток)
-    const MAX_RETRIES = 2
+    // RETRY: Если не хватает заданий - догенерируем (до 3 попыток)
+    const MAX_RETRIES = 3
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       const missingOpen = openTasks - openTasksList.length
       const missingTest = testQuestions - testTasks.length
@@ -662,36 +662,53 @@ ${taskTypeConfig.promptInstruction}
     const testTypes = taskTypes.filter(t => ['single_choice', 'multiple_choice'].includes(t))
 
     const tasksToGenerate: string[] = []
-
-    if (missingOpen > 0 && openTypes.length > 0) {
-      const typeToUse = openTypes[0] // Используем первый доступный тип
-      tasksToGenerate.push(`${missingOpen} заданий типа ${typeToUse}`)
-    }
+    const jsonExamples: string[] = []
 
     if (missingTest > 0 && testTypes.length > 0) {
-      const typeToUse = testTypes[0]
-      tasksToGenerate.push(`${missingTest} тестовых вопросов типа ${typeToUse}`)
+      const typeToUse = testTypes[Math.floor(Math.random() * testTypes.length)]
+      tasksToGenerate.push(`- ${missingTest} тестовых вопросов типа "${typeToUse}"`)
+      if (typeToUse === 'single_choice') {
+        jsonExamples.push(`    {"type":"single_choice","question":"...","options":["A","B","C","D"],"correctIndex":0,"explanation":"..."}`)
+      } else {
+        jsonExamples.push(`    {"type":"multiple_choice","question":"...","options":["A","B","C","D"],"correctIndices":[0,2],"explanation":"..."}`)
+      }
+    }
+
+    if (missingOpen > 0 && openTypes.length > 0) {
+      const typeToUse = openTypes[Math.floor(Math.random() * openTypes.length)]
+      tasksToGenerate.push(`- ${missingOpen} открытых заданий типа "${typeToUse}"`)
+      if (typeToUse === 'open_question') {
+        jsonExamples.push(`    {"type":"open_question","question":"...","correctAnswer":"..."}`)
+      } else if (typeToUse === 'matching') {
+        jsonExamples.push(`    {"type":"matching","instruction":"...","leftColumn":["..."],"rightColumn":["..."],"correctPairs":[[0,1],[1,0]]}`)
+      } else if (typeToUse === 'fill_blank') {
+        jsonExamples.push(`    {"type":"fill_blank","textWithBlanks":"Текст ___(1)___ ...","blanks":[{"position":1,"correctAnswer":"..."}]}`)
+      }
     }
 
     if (tasksToGenerate.length === 0) {
       return []
     }
 
-    const retryPrompt = `
-Тебе нужно создать дополнительные задания по теме "${params.topic}" для ${params.grade} класса.
+    const totalNeeded = missingOpen + missingTest
+    const difficultyPrompt = getDifficultyPrompt(difficulty, params.subject, params.grade)
+    const systemPrompt = buildSystemPrompt(params.subject)
 
-СОЗДАЙ РОВНО:
+    const retryPrompt = `Создай дополнительные задания по теме "${params.topic}" для ${params.grade} класса.
+Сложность: ${difficultyPrompt}
+
+СОЗДАЙ РОВНО ${totalNeeded} заданий:
 ${tasksToGenerate.join('\n')}
 
-Используй тот же формат JSON:
+Верни JSON строго в таком формате:
 {
   "tasks": [
-    { "type": "тип_задания", ... }
+${jsonExamples.join(',\n')}
   ]
 }
 
-ВАЖНО: Создай ИМЕННО указанное количество заданий, не больше и не меньше!
-`
+В массиве "tasks" должно быть РОВНО ${totalNeeded} элементов. Не больше и не меньше!
+Каждое задание ОБЯЗАТЕЛЬНО должно иметь поле "type".`
 
     const isPaid = params.isPaid ?? false
     const generationModel = getGenerationModel(isPaid)
@@ -699,10 +716,11 @@ ${tasksToGenerate.join('\n')}
     const completion = await this.client.chat.completions.create({
       model: generationModel,
       messages: [
+        { role: 'system', content: systemPrompt },
         { role: 'user', content: retryPrompt }
       ],
       max_tokens: 4000,
-      temperature: 0.5 // Ниже температура для более точного следования
+      temperature: 0.4
     })
 
     const content = completion.choices[0]?.message?.content || ''
@@ -715,7 +733,9 @@ ${tasksToGenerate.join('\n')}
 
     try {
       const parsed = JSON.parse(jsonMatch[0])
-      return parsed.tasks || []
+      const tasks = parsed.tasks || []
+      console.log(`[УчиОн] RETRY: requested ${totalNeeded}, got ${tasks.length}`)
+      return tasks
     } catch {
       console.error('[УчиОн] RETRY: JSON parse error')
       return []
