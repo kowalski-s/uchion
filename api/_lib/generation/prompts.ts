@@ -4,7 +4,7 @@ import {
   type TaskTypeId,
   getTaskType,
   type DifficultyLevel,
-  getDifficulty,
+  getDifficultyPrompt,
   type WorksheetFormatId,
   getWorksheetFormat,
   getFormatVariant,
@@ -225,11 +225,8 @@ ${allDist.map((d) => `  ✓ ${d.type}: РОВНО ${d.count} шт.`).join('\n')}
 // Block 6: Difficulty
 // =============================================================================
 
-function getDifficultyBlock(level: DifficultyLevel): string {
-  const config = getDifficulty(level)
-  return `
-${config.promptModifier}
-  `.trim()
+function getDifficultyBlock(level: DifficultyLevel, subject: string, grade: number): string {
+  return getDifficultyPrompt(level, subject, grade)
 }
 
 // =============================================================================
@@ -318,7 +315,7 @@ export function buildPrompt(params: PromptParams): string {
     getGradeBlock(params.subject, params.grade),
     getTopicBlock(params.topic),
     getTaskTypesBlock(params.taskTypes, params.format, params.variantIndex),
-    getDifficultyBlock(params.difficulty),
+    getDifficultyBlock(params.difficulty, params.subject, params.grade),
     getFormatBlock(),
     ANTI_PATTERNS_PROMPT,
   ]
@@ -343,7 +340,7 @@ export function buildUserPrompt(
     getGradeBlock(params.subject, params.grade),
     getTopicBlock(params.topic),
     getTaskTypesBlock(params.taskTypes, params.format, params.variantIndex),
-    getDifficultyBlock(params.difficulty),
+    getDifficultyBlock(params.difficulty, params.subject, params.grade),
     getFormatBlock(),
     ANTI_PATTERNS_PROMPT,
   ]

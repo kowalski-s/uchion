@@ -34,7 +34,7 @@ const SUBJECT_NAMES: Record<string, string> = {
   russian: 'Русский язык',
 }
 
-const MAX_FIXES_PER_GENERATION = 5
+const MAX_FIXES_PER_GENERATION = 10
 
 export async function fixTask(
   task: GeneratedTask,
