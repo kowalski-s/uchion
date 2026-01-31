@@ -9,7 +9,7 @@ export const subscriptionStatusEnum = pgEnum('subscription_status', ['active', '
 export const generationStatusEnum = pgEnum('generation_status', ['pending', 'processing', 'completed', 'failed'])
 export const paymentStatusEnum = pgEnum('payment_status', ['pending', 'succeeded', 'failed', 'refunded'])
 export const paymentIntentStatusEnum = pgEnum('payment_intent_status', ['created', 'paid', 'failed', 'expired'])
-export const subjectEnum = pgEnum('subject', ['math', 'russian'])
+export const subjectEnum = pgEnum('subject', ['math', 'algebra', 'geometry', 'russian'])
 export const difficultyEnum = pgEnum('difficulty', ['easy', 'medium', 'hard'])
 
 // ==================== USERS TABLE ====================

@@ -46,14 +46,6 @@ const InputSchema = z.object({
 
 type Input = z.infer<typeof InputSchema>
 
-// Map subject to DB enum (algebra/geometry -> math until DB migration)
-function mapSubjectForDB(subject: string): 'math' | 'russian' {
-  if (subject === 'algebra' || subject === 'geometry' || subject === 'math') {
-    return 'math'
-  }
-  return 'russian'
-}
-
 // ==================== POST /api/generate ====================
 router.post('/', withAuth(async (req: AuthenticatedRequest, res: Response) => {
   const parse = InputSchema.safeParse(req.body)
@@ -199,7 +191,7 @@ router.post('/', withAuth(async (req: AuthenticatedRequest, res: Response) => {
       const [inserted] = await db.insert(worksheets).values({
         userId,
         folderId: input.folderId || null,
-        subject: mapSubjectForDB(input.subject),
+        subject: input.subject,
         grade: input.grade,
         topic: input.topic,
         difficulty: input.difficulty || 'medium',

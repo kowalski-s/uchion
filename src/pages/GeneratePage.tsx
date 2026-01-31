@@ -114,11 +114,11 @@ export default function GeneratePage() {
   const queryClient = useQueryClient()
   const saveSession = useSessionStore(s => s.saveSession)
   const setCurrent = useSessionStore(s => s.setCurrent)
-  const { user } = useAuth()
+  const { user, refreshAuth } = useAuth()
   const [errorText, setErrorText] = useState<string | null>(null)
   const [errorCode, setErrorCode] = useState<string | null>(null)
   const [progress, setProgress] = useState(0)
-  const [generationsLeft, setGenerationsLeft] = useState(getGenerationsLeft(user))
+  const generationsLeft = getGenerationsLeft(user)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const greeting = getGreeting()
 
@@ -209,8 +209,8 @@ export default function GeneratePage() {
         void e
       }
 
-      // Update limit after successful generation
-      setGenerationsLeft(getGenerationsLeft(user))
+      // Refresh user data to get updated generationsLeft from server
+      refreshAuth()
 
       saveSession(sessionId, {
         payload: { subject: form.getValues('subject'), grade: form.getValues('grade'), topic: form.getValues('topic') },

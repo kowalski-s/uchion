@@ -505,7 +505,7 @@ router.post('/users/:id/unblock', withAdminAuth(async (req: AuthenticatedRequest
 const GenerationsQuerySchema = z.object({
   page: z.string().optional().transform(v => Math.max(1, parseInt(v || '1'))),
   limit: z.string().optional().transform(v => Math.min(100, Math.max(1, parseInt(v || '20')))),
-  subject: z.enum(['all', 'math', 'russian']).optional().default('all'),
+  subject: z.enum(['all', 'math', 'algebra', 'geometry', 'russian']).optional().default('all'),
   search: z.string().optional(), // Поиск по email пользователя или теме
 })
 
@@ -999,7 +999,7 @@ router.post('/alerts/test/timeout', withAdminAuth(async (req: AuthenticatedReque
 const TestLowQualitySchema = z.object({
   score: z.number().int().min(0).max(10).default(5),
   topic: z.string().min(1).max(200).default('Тестовая тема'),
-  subject: z.enum(['math', 'russian']).default('math'),
+  subject: z.enum(['math', 'algebra', 'geometry', 'russian']).default('math'),
   grade: z.number().int().min(1).max(4).default(3),
 })
 

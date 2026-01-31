@@ -66,6 +66,8 @@ type ViewMode = 'worksheets' | 'logs'
 const subjectTabs: { value: SubjectFilter; label: string; color: string }[] = [
   { value: 'all', label: 'Все предметы', color: 'bg-slate-700' },
   { value: 'math', label: 'Математика', color: 'bg-blue-500' },
+  { value: 'algebra', label: 'Алгебра', color: 'bg-indigo-500' },
+  { value: 'geometry', label: 'Геометрия', color: 'bg-violet-500' },
   { value: 'russian', label: 'Русский язык', color: 'bg-emerald-500' },
 ]
 

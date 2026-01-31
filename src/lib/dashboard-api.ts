@@ -218,6 +218,8 @@ export function formatPlanName(plan: string): string {
 export function formatSubjectName(subject: string): string {
   const names: Record<string, string> = {
     math: 'Математика',
+    algebra: 'Алгебра',
+    geometry: 'Геометрия',
     russian: 'Русский язык',
   }
   return names[subject] || subject

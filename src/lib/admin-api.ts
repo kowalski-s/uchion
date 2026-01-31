@@ -38,7 +38,7 @@ export interface AdminGeneration {
   userId: string
   userEmail: string | null
   userName: string | null
-  subject: 'math' | 'russian'
+  subject: 'math' | 'algebra' | 'geometry' | 'russian'
   grade: number
   topic: string
   title: string | null
@@ -59,7 +59,7 @@ export interface AdminPayment {
 
 export interface AdminWorksheet {
   id: string
-  subject: 'math' | 'russian'
+  subject: 'math' | 'algebra' | 'geometry' | 'russian'
   grade: number
   topic: string
   title: string | null
@@ -192,7 +192,7 @@ export async function unblockUser(userId: string): Promise<void> {
 
 // ==================== GENERATIONS ====================
 
-export type SubjectFilter = 'all' | 'math' | 'russian'
+export type SubjectFilter = 'all' | 'math' | 'algebra' | 'geometry' | 'russian'
 
 export interface FetchAdminGenerationsOptions {
   page?: number
@@ -240,7 +240,7 @@ export interface GenerationLog {
   userEmail: string | null
   userName: string | null
   worksheetId: string | null
-  worksheetSubject: 'math' | 'russian' | null
+  worksheetSubject: 'math' | 'algebra' | 'geometry' | 'russian' | null
   worksheetGrade: number | null
   worksheetTopic: string | null
   status: GenerationLogStatus
