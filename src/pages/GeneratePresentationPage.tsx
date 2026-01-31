@@ -284,17 +284,16 @@ export default function GeneratePresentationPage() {
                     </svg>
                     Скачать .pptx
                   </button>
-                  {generatedResult.pdfBase64 && (
-                    <button
-                      onClick={handleDownloadPdf}
-                      className="inline-flex h-10 px-5 items-center justify-center rounded-xl bg-red-500/80 hover:bg-red-500/90 text-sm font-semibold text-white shadow-md shadow-red-400/20 transition-all hover:shadow-red-400/30"
-                    >
-                      <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                      </svg>
-                      Скачать PDF
-                    </button>
-                  )}
+                  <button
+                    onClick={handleDownloadPdf}
+                    disabled={!generatedResult.pdfBase64}
+                    className="inline-flex h-10 px-5 items-center justify-center rounded-xl bg-red-500/80 hover:bg-red-500/90 text-sm font-semibold text-white shadow-md shadow-red-400/20 transition-all hover:shadow-red-400/30 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Скачать PDF
+                  </button>
                   <button
                     onClick={handleCreateNew}
                     className="h-10 px-5 rounded-xl border-2 border-slate-200 bg-white text-slate-700 text-sm font-medium hover:border-slate-300 transition-all"

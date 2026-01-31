@@ -1,13 +1,23 @@
-# Build stage
+# syntax=docker/dockerfile:1
+
+# ============================================
+# Stage 1: Chromium base (heaviest layer, cached separately)
+# ============================================
+FROM node:20-alpine AS chromium-base
+RUN apk add --no-cache chromium
+
+# ============================================
+# Stage 2: Build frontend + backend
+# ============================================
 FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files
+# Copy package files (cached if package*.json unchanged)
 COPY package*.json ./
 
 # Install all dependencies (including dev)
-RUN npm ci
+RUN --mount=type=cache,target=/root/.npm npm ci
 
 # Copy source files
 COPY . .
@@ -19,23 +29,22 @@ ENV VITE_TELEGRAM_BOT_USERNAME=$VITE_TELEGRAM_BOT_USERNAME
 # Build frontend (Vite) and server (TypeScript)
 RUN npm run build
 
-# Production stage
-FROM node:20-alpine AS runner
+# ============================================
+# Stage 3: Production (uses cached Chromium layer)
+# ============================================
+FROM chromium-base AS runner
 
 WORKDIR /app
 
 # Set production environment
 ENV NODE_ENV=production
-
-# Install Chromium for PDF generation
-RUN apk add --no-cache chromium
 ENV CHROME_PATH=/usr/bin/chromium-browser
 
 # Copy package files
 COPY package*.json ./
 
-# Install only production dependencies
-RUN npm ci --omit=dev
+# Install only production dependencies (npm cache persisted between builds)
+RUN --mount=type=cache,target=/root/.npm npm ci --omit=dev
 
 # Copy built assets from builder
 COPY --from=builder /app/dist ./dist
