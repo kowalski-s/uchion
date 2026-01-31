@@ -5,6 +5,7 @@ import { users, presentations, subscriptions } from '../../db/schema.js';
 import { eq, sql, and, gt } from 'drizzle-orm';
 import { getAIProvider } from '../../api/_lib/ai-provider.js';
 import { generatePptx } from '../../api/_lib/presentations/generator.js';
+import { generatePresentationPdf } from '../../api/_lib/presentations/pdf-generator.js';
 import { withAuth } from '../middleware/auth.js';
 import { checkGenerateRateLimit } from '../middleware/rate-limit.js';
 const router = Router();
@@ -125,6 +126,20 @@ router.post('/generate', withAuth(async (req, res) => {
             res.end();
             return;
         }
+        sendEvent({ type: 'progress', percent: 90 });
+        // 7b. Generate PDF from same structure
+        let pdfBase64;
+        try {
+            const effectiveThemePdf = input.themeType === 'preset' && input.themePreset
+                ? input.themePreset
+                : 'custom';
+            pdfBase64 = await generatePresentationPdf(structure, effectiveThemePdf);
+        }
+        catch (e) {
+            console.error('[API] PDF generation error:', e);
+            // Non-fatal: PDF is optional, proceed with empty string
+            pdfBase64 = '';
+        }
         sendEvent({ type: 'progress', percent: 95 });
         // 8. Save to presentations table
         const id = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : String(Date.now());
@@ -155,7 +170,9 @@ router.post('/generate', withAuth(async (req, res) => {
                 id: dbId || id,
                 title: structure.title,
                 pptxBase64,
+                pdfBase64,
                 slideCount: structure.slides.length,
+                structure,
             },
         });
         res.end();

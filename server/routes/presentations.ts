@@ -6,6 +6,7 @@ import { users, presentations, subscriptions } from '../../db/schema.js'
 import { eq, sql, and, gt } from 'drizzle-orm'
 import { getAIProvider } from '../../api/_lib/ai-provider.js'
 import { generatePptx } from '../../api/_lib/presentations/generator.js'
+import { generatePresentationPdf } from '../../api/_lib/presentations/pdf-generator.js'
 import { withAuth } from '../middleware/auth.js'
 import { checkGenerateRateLimit } from '../middleware/rate-limit.js'
 import type { AuthenticatedRequest } from '../types.js'
@@ -15,7 +16,7 @@ const router = Router()
 // SSE event types
 type SSEEvent =
   | { type: 'progress'; percent: number }
-  | { type: 'result'; data: { id: string; title: string; pptxBase64: string; slideCount: number } }
+  | { type: 'result'; data: { id: string; title: string; pptxBase64: string; pdfBase64: string; slideCount: number; structure: import('../../shared/types').PresentationStructure } }
   | { type: 'error'; code: string; message: string }
 
 const InputSchema = z.object({
@@ -155,6 +156,21 @@ router.post('/generate', withAuth(async (req: AuthenticatedRequest, res: Respons
       return
     }
 
+    sendEvent({ type: 'progress', percent: 90 })
+
+    // 7b. Generate PDF from same structure
+    let pdfBase64: string
+    try {
+      const effectiveThemePdf = input.themeType === 'preset' && input.themePreset
+        ? input.themePreset
+        : 'custom' as const
+      pdfBase64 = await generatePresentationPdf(structure, effectiveThemePdf)
+    } catch (e) {
+      console.error('[API] PDF generation error:', e)
+      // Non-fatal: PDF is optional, proceed with empty string
+      pdfBase64 = ''
+    }
+
     sendEvent({ type: 'progress', percent: 95 })
 
     // 8. Save to presentations table
@@ -188,7 +204,9 @@ router.post('/generate', withAuth(async (req: AuthenticatedRequest, res: Respons
         id: dbId || id,
         title: structure.title,
         pptxBase64,
+        pdfBase64,
         slideCount: structure.slides.length,
+        structure,
       },
     })
     res.end()

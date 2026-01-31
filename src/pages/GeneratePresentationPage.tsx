@@ -9,7 +9,8 @@ import CustomSelect from '../components/ui/CustomSelect'
 import { useAuth } from '../lib/auth'
 import { getGenerationsLeft, canGenerate } from '../lib/limits'
 import Header from '../components/Header'
-import type { PresentationThemePreset } from '../../shared/types'
+import type { PresentationThemePreset, PresentationStructure } from '../../shared/types'
+import SlidePreview from '../components/presentations/SlidePreview'
 
 // =============================================================================
 // Types and Constants
@@ -66,12 +67,12 @@ function getGreeting(): string {
   return 'Добрый вечер'
 }
 
-// Helper to download .pptx from base64
-const downloadPptx = (base64: string, filename: string) => {
+// Helper to download a file from base64
+const downloadBase64File = (base64: string, filename: string, mimeType: string) => {
   const binary = atob(base64)
   const bytes = new Uint8Array(binary.length)
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-  const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' })
+  const blob = new Blob([bytes], { type: mimeType })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
@@ -94,7 +95,9 @@ export default function GeneratePresentationPage() {
     id: string
     title: string
     pptxBase64: string
+    pdfBase64: string
     slideCount: number
+    structure: PresentationStructure
   } | null>(null)
 
   const form = useForm<GeneratePresentationFormValues>({
@@ -203,10 +206,16 @@ export default function GeneratePresentationPage() {
     mutation.mutate(values)
   }
 
-  const handleDownload = () => {
+  const handleDownloadPptx = () => {
     if (!generatedResult) return
     const filename = `${generatedResult.title.replace(/[^a-zа-яё0-9\s]/gi, '_')}.pptx`
-    downloadPptx(generatedResult.pptxBase64, filename)
+    downloadBase64File(generatedResult.pptxBase64, filename, 'application/vnd.openxmlformats-officedocument.presentationml.presentation')
+  }
+
+  const handleDownloadPdf = () => {
+    if (!generatedResult?.pdfBase64) return
+    const filename = `${generatedResult.title.replace(/[^a-zа-яё0-9\s]/gi, '_')}.pdf`
+    downloadBase64File(generatedResult.pdfBase64, filename, 'application/pdf')
   }
 
   const handleCreateNew = () => {
@@ -255,37 +264,54 @@ export default function GeneratePresentationPage() {
           </div>
         )}
 
-        {/* Success state - show download */}
+        {/* Success state - preview + download */}
         {generatedResult && (
-          <div className="w-full mb-6 bg-white rounded-2xl p-8 shadow-sm border border-purple-100">
-            <div className="flex flex-col items-center gap-4">
-              <svg className="w-16 h-16 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <div>
-                <h2 className="text-2xl font-bold text-slate-900 mb-1">Презентация готова!</h2>
-                <p className="text-slate-600">{generatedResult.slideCount} слайдов</p>
-              </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={handleDownload}
-                  className="group relative inline-flex h-12 px-8 items-center justify-center overflow-hidden rounded-xl bg-[#A855F7]/80 hover:bg-[#A855F7]/90 text-base font-semibold text-white shadow-md shadow-purple-400/20 transition-all hover:shadow-purple-400/30"
-                >
-                  <span className="flex items-center gap-2">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="w-full mb-6 space-y-6">
+            {/* Header with title + action buttons */}
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-purple-100">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="text-center sm:text-left">
+                  <h2 className="text-xl font-bold text-slate-900">{generatedResult.title}</h2>
+                  <p className="text-sm text-slate-500 mt-0.5">{generatedResult.slideCount} слайдов</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={handleDownloadPptx}
+                    className="inline-flex h-10 px-5 items-center justify-center rounded-xl bg-[#A855F7]/80 hover:bg-[#A855F7]/90 text-sm font-semibold text-white shadow-md shadow-purple-400/20 transition-all hover:shadow-purple-400/30"
+                  >
+                    <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                     </svg>
                     Скачать .pptx
-                  </span>
-                </button>
-                <button
-                  onClick={handleCreateNew}
-                  className="px-6 py-3 rounded-xl border-2 border-slate-200 bg-white text-slate-700 font-medium hover:border-slate-300 transition-all"
-                >
-                  Создать новую
-                </button>
+                  </button>
+                  {generatedResult.pdfBase64 && (
+                    <button
+                      onClick={handleDownloadPdf}
+                      className="inline-flex h-10 px-5 items-center justify-center rounded-xl bg-red-500/80 hover:bg-red-500/90 text-sm font-semibold text-white shadow-md shadow-red-400/20 transition-all hover:shadow-red-400/30"
+                    >
+                      <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                      Скачать PDF
+                    </button>
+                  )}
+                  <button
+                    onClick={handleCreateNew}
+                    className="h-10 px-5 rounded-xl border-2 border-slate-200 bg-white text-slate-700 text-sm font-medium hover:border-slate-300 transition-all"
+                  >
+                    Создать новую
+                  </button>
+                </div>
               </div>
             </div>
+
+            {/* Slide preview grid */}
+            {generatedResult.structure && (
+              <SlidePreview
+                structure={generatedResult.structure}
+                themePreset={form.getValues('themeType') === 'preset' ? form.getValues('themePreset') : undefined}
+              />
+            )}
           </div>
         )}
 

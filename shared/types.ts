@@ -124,7 +124,9 @@ export type GeneratePresentationResponseOk = {
     id: string
     title: string
     pptxBase64: string
+    pdfBase64: string
     slideCount: number
+    structure: PresentationStructure
   }
 }
 
