@@ -274,18 +274,21 @@ class OpenAIProvider implements AIProvider {
     console.log('[УчиОн] Split: testTasks=', testTasks.length, 'openTasksList=', openTasksList.length)
     console.log('[УчиОн] Targets: testQuestions=', testQuestions, 'openTasks=', openTasks)
 
-    // RETRY: Если не хватает заданий - догенерируем
-    const missingOpen = openTasks - openTasksList.length
-    const missingTest = testQuestions - testTasks.length
+    // RETRY: Если не хватает заданий - догенерируем (до 2 попыток)
+    const MAX_RETRIES = 2
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      const missingOpen = openTasks - openTasksList.length
+      const missingTest = testQuestions - testTasks.length
 
-    if (missingOpen > 0 || missingTest > 0) {
-      console.log(`[УчиОн] RETRY: Need ${missingOpen} more open tasks, ${missingTest} more test tasks`)
+      if (missingOpen <= 0 && missingTest <= 0) break
+
+      console.log(`[УчиОн] Task count mismatch: got ${openTasksList.length} open (expected ${openTasks}), ${testTasks.length} test (expected ${testQuestions}). Retrying... (attempt ${attempt}/${MAX_RETRIES})`)
 
       try {
         const retryTasks = await this.generateMissingTasks(
           params,
-          missingOpen,
-          missingTest,
+          Math.max(0, missingOpen),
+          Math.max(0, missingTest),
           taskTypes,
           difficulty
         )
@@ -298,11 +301,18 @@ class OpenAIProvider implements AIProvider {
           }
         }
 
-        console.log('[УчиОн] After retry: testTasks=', testTasks.length, 'openTasksList=', openTasksList.length)
+        console.log(`[УчиОн] After retry ${attempt}: testTasks=${testTasks.length}, openTasksList=${openTasksList.length}`)
       } catch (retryError) {
-        console.error('[УчиОн] Retry failed:', retryError)
+        console.error(`[УчиОн] Retry ${attempt} failed:`, retryError)
         // Continue with what we have
       }
+    }
+
+    // Final count log
+    const finalMissingOpen = openTasks - openTasksList.length
+    const finalMissingTest = testQuestions - testTasks.length
+    if (finalMissingOpen > 0 || finalMissingTest > 0) {
+      console.warn(`[УчиОн] After ${MAX_RETRIES} retries still missing: ${Math.max(0, finalMissingOpen)} open, ${Math.max(0, finalMissingTest)} test`)
     }
 
     // Детерминированная валидация заданий (без LLM)
