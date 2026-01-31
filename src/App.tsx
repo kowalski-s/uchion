@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import CookieConsent from './components/CookieConsent'
 import GeneratePage from './pages/GeneratePage'
+import GeneratePresentationPage from './pages/GeneratePresentationPage'
 import WorksheetPage from './pages/WorksheetPage'
 import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
@@ -34,6 +35,7 @@ export default function App() {
       <CookieConsent />
       <Routes>
         <Route path="/" element={<GeneratePage />} />
+        <Route path="/presentations/generate" element={<GeneratePresentationPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/worksheet/:sessionId" element={<WorksheetPage />} />

@@ -227,11 +227,64 @@ function preprocessLatex(latex: string): string {
 }
 
 /**
+ * Convert plain ^ exponent notation to \(...\) delimited LaTeX.
+ * Only processes text outside existing \(...\) and \[...\] blocks.
+ * Handles: 2^5, (-2)^3, (x^3)^2, x^{10}, a_n, x_1
+ */
+function preprocessCaretNotation(text: string): string {
+  const parts: string[] = []
+  let lastEnd = 0
+  const delimRegex = /\\\([\s\S]*?\\\)|\\\[[\s\S]*?\\\]/g
+  let m: RegExpExecArray | null
+
+  while ((m = delimRegex.exec(text)) !== null) {
+    if (m.index > lastEnd) {
+      parts.push(processCaretsAndSubscripts(text.slice(lastEnd, m.index)))
+    }
+    parts.push(m[0])
+    lastEnd = m.index + m[0].length
+  }
+
+  if (lastEnd < text.length) {
+    parts.push(processCaretsAndSubscripts(text.slice(lastEnd)))
+  }
+
+  return parts.join('')
+}
+
+function processCaretsAndSubscripts(text: string): string {
+  // Convert plain ^ and _ notation to \(...\) delimited LaTeX
+  // Handles: 2^5, (-2)^3, (x^3)^2, x^{10}, x_1, a_{n+1}
+  // Base: parenthesized group or alphanumeric token
+  // Exponent/subscript: braced group or single alphanumeric char
+  return text.replace(
+    /((?:\([^)]*\)|[a-zA-Z0-9]+)(?:[\^_](?:\{[^}]*\}|[a-zA-Z0-9]))+)/g,
+    (match) => {
+      // Skip if contains backslash (already LaTeX like ^\circ)
+      if (match.includes('\\')) return match
+      try {
+        return katex.renderToString(match, {
+          throwOnError: false,
+          displayMode: false,
+          trust: true,
+          strict: false,
+        })
+      } catch {
+        return match
+      }
+    }
+  )
+}
+
+/**
  * Parses text and renders LaTeX formulas
  */
 function renderMathInText(text: string): string {
   // Normalize text: handle double-escaped backslashes from JSON parsing
   let processedText = text.replace(/\\\\/g, '\\')
+
+  // Pre-process: convert plain ^ and _ notation to rendered math
+  processedText = preprocessCaretNotation(processedText)
 
   // First, handle explicit delimiters \(...\) and \[...\]
   // Replace \(...\) with rendered KaTeX

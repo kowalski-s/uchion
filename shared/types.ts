@@ -88,3 +88,39 @@ export interface Folder {
 export interface FolderWithCount extends Folder {
   worksheetCount: number
 }
+
+// ==================== PRESENTATIONS ====================
+
+export type PresentationThemePreset = 'professional' | 'educational' | 'minimal' | 'scientific'
+
+export interface PresentationSlide {
+  type: 'title' | 'content' | 'conclusion'
+  title: string
+  content: string[] // bullet points or text lines
+}
+
+export interface PresentationStructure {
+  title: string
+  slides: PresentationSlide[]
+}
+
+export type GeneratePresentationPayload = {
+  subject: Subject
+  grade: number
+  topic: string
+  themeType: 'preset' | 'custom'
+  themePreset?: PresentationThemePreset
+  themeCustom?: string
+}
+
+export type GeneratePresentationResponseOk = {
+  status: 'ok'
+  data: {
+    id: string
+    title: string
+    pptxBase64: string
+    slideCount: number
+  }
+}
+
+export type GeneratePresentationResponse = GeneratePresentationResponseOk | GenerateResponseError

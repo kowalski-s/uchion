@@ -1,4 +1,4 @@
-import type { Worksheet, Subject, TestQuestion, Assignment, WorksheetAnswers } from '../../shared/types'
+import type { Worksheet, Subject, TestQuestion, Assignment, WorksheetAnswers, PresentationStructure } from '../../shared/types'
 import OpenAI from 'openai'
 import {
   buildSystemPrompt,
@@ -19,6 +19,7 @@ import { timedLLMCall } from './ai/validator.js'
 import { checkValidationScore } from './alerts/generation-alerts.js'
 import { validateWorksheet as validateTasksDeterministic } from './generation/validation/deterministic.js'
 import { runMultiAgentValidation } from './generation/validation/agents/index.js'
+import { getPresentationSubjectConfig } from './generation/config/presentations/index.js'
 
 import { getGenerationModel, getAgentsModel } from './ai-models.js'
 
@@ -41,6 +42,16 @@ export type GenerateParams = {
   isPaid?: boolean
 }
 
+export type GeneratePresentationParams = {
+  subject: Subject
+  grade: number
+  topic: string
+  themeType: 'preset' | 'custom'
+  themePreset?: string
+  themeCustom?: string
+  isPaid?: boolean
+}
+
 export type RegenerateTaskParams = {
   subject: Subject
   grade: number
@@ -60,6 +71,7 @@ export type RegenerateTaskResult = {
 export interface AIProvider {
   generateWorksheet(params: GenerateParams, onProgress?: (percent: number) => void): Promise<Worksheet>
   regenerateTask(params: RegenerateTaskParams): Promise<RegenerateTaskResult>
+  generatePresentation(params: GeneratePresentationParams, onProgress?: (percent: number) => void): Promise<PresentationStructure>
 }
 
 // New unified task structure from AI
@@ -157,6 +169,50 @@ class DummyProvider implements AIProvider {
       },
       answer: 'Ответ на перегенерированное задание'
     }
+  }
+
+  async generatePresentation(params: GeneratePresentationParams, onProgress?: (percent: number) => void): Promise<PresentationStructure> {
+    console.log('[УчиОн] DummyProvider.generatePresentation called', params)
+    onProgress?.(10)
+
+    const contentSlides = []
+    for (let i = 1; i <= 8; i++) {
+      contentSlides.push({
+        type: 'content' as const,
+        title: `Слайд ${i + 1}: Тема "${params.topic}"`,
+        content: [
+          `Пункт 1 по теме "${params.topic}" для ${params.grade} класса`,
+          `Пункт 2 с демо-содержимым`,
+          `Пункт 3 с дополнительной информацией`,
+        ],
+      })
+    }
+
+    onProgress?.(70)
+
+    const structure: PresentationStructure = {
+      title: `${params.topic} — ${params.grade} класс`,
+      slides: [
+        {
+          type: 'title',
+          title: `${params.topic}`,
+          content: [`${params.grade} класс`, `Предмет: ${params.subject}`],
+        },
+        ...contentSlides,
+        {
+          type: 'conclusion',
+          title: 'Итоги',
+          content: [
+            `Мы изучили тему "${params.topic}"`,
+            'Закрепили основные понятия',
+            'Рассмотрели примеры',
+          ],
+        },
+      ],
+    }
+
+    onProgress?.(90)
+    return structure
   }
 }
 
@@ -646,6 +702,119 @@ ${taskTypeConfig.promptInstruction}
     }
 
     return this.convertSingleTask(task, params.isTest)
+  }
+
+  /**
+   * Generate a presentation structure via LLM
+   */
+  async generatePresentation(params: GeneratePresentationParams, onProgress?: (percent: number) => void): Promise<PresentationStructure> {
+    console.log('[УчиОн] OpenAIProvider.generatePresentation called', params)
+    onProgress?.(5)
+
+    const subjectConfig = getPresentationSubjectConfig(params.subject)
+
+    const systemPrompt = `${subjectConfig.systemPrompt} Ты опытный методист-${subjectConfig.name.toLowerCase()}, создаёшь учебные презентации для ${params.grade} класса. Контент должен быть по ФГОС.`
+
+    let styleInstruction: string
+    if (params.themeType === 'custom' && params.themeCustom) {
+      styleInstruction = `Стиль: ${params.themeCustom}`
+    } else if (params.themeType === 'preset' && params.themePreset) {
+      styleInstruction = `Стиль: ${params.themePreset}`
+    } else {
+      styleInstruction = 'Стиль: professional'
+    }
+
+    const userPrompt = `Создай презентацию на тему "${params.topic}" для ${params.grade} класса по предмету "${subjectConfig.name}". Ровно 10 слайдов.
+
+Структура:
+- Слайд 1: title (заголовок презентации и подзаголовок)
+- Слайды 2-9: content (основной материал, по 3-5 пунктов на слайд)
+- Слайд 10: conclusion (итоги/выводы)
+
+${styleInstruction}
+
+Верни JSON:
+{"title": "Название презентации", "slides": [{"type": "title", "title": "...", "content": ["подзаголовок"]}, {"type": "content", "title": "...", "content": ["пункт1", "пункт2", "пункт3"]}, ..., {"type": "conclusion", "title": "Итоги", "content": ["вывод1", "вывод2"]}]}
+
+ВАЖНО:
+- Ровно 10 слайдов
+- Первый слайд type="title", последний type="conclusion", остальные type="content"
+- Каждый слайд ОБЯЗАТЕЛЬНО имеет поля "type", "title", "content" (массив строк)
+- Контент должен быть содержательным, по ФГОС, для ${params.grade} класса`
+
+    onProgress?.(15)
+
+    const isPaid = params.isPaid ?? false
+    const generationModel = getGenerationModel(isPaid)
+    console.log(`[УчиОн] Presentation model: ${generationModel} (isPaid: ${isPaid})`)
+
+    let completion
+    try {
+      completion = await timedLLMCall(
+        "presentation-generation",
+        () => this.client.chat.completions.create({
+          model: generationModel,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ],
+          max_tokens: 4000,
+          temperature: 0.6
+        })
+      )
+    } catch (error) {
+      console.error('[УчиОн] OpenAI API Error (generatePresentation):', error)
+      throw new Error('AI_ERROR')
+    }
+
+    onProgress?.(65)
+
+    // Parse response
+    const content = completion.choices[0]?.message?.content || ''
+    console.log('[УчиОн] Presentation raw response length:', content.length)
+
+    let structure: PresentationStructure
+    try {
+      const jsonMatch = content.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) {
+        console.error('[УчиОн] No JSON found in presentation response')
+        throw new Error('AI_ERROR')
+      }
+      const parsed = JSON.parse(jsonMatch[0])
+
+      // Validate structure
+      if (!parsed.title || !Array.isArray(parsed.slides) || parsed.slides.length === 0) {
+        console.error('[УчиОн] Invalid presentation structure:', { hasTitle: !!parsed.title, slidesCount: parsed.slides?.length })
+        throw new Error('AI_ERROR')
+      }
+
+      // Validate each slide has required fields
+      for (let i = 0; i < parsed.slides.length; i++) {
+        const slide = parsed.slides[i]
+        if (!slide.type || !slide.title || !Array.isArray(slide.content)) {
+          console.warn(`[УчиОн] Fixing slide ${i}: missing fields`, { type: slide.type, title: slide.title, hasContent: Array.isArray(slide.content) })
+          slide.type = slide.type || 'content'
+          slide.title = slide.title || `Слайд ${i + 1}`
+          slide.content = Array.isArray(slide.content) ? slide.content : (slide.content ? [String(slide.content)] : [])
+        }
+        // Ensure content items are strings
+        slide.content = slide.content.map((item: unknown) => String(item))
+      }
+
+      structure = {
+        title: parsed.title,
+        slides: parsed.slides,
+      }
+    } catch (e) {
+      if (e instanceof Error && e.message === 'AI_ERROR') throw e
+      console.error('[УчиОн] JSON parse error (generatePresentation):', e)
+      throw new Error('AI_ERROR')
+    }
+
+    onProgress?.(75)
+    console.log(`[УчиОн] Presentation generated: "${structure.title}", ${structure.slides.length} slides`)
+
+    return structure
   }
 
   /**

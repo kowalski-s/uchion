@@ -12,6 +12,7 @@ import authRoutes from './server/routes/auth.js'
 import foldersRoutes from './server/routes/folders.js'
 import worksheetsRoutes from './server/routes/worksheets.js'
 import generateRoutes from './server/routes/generate.js'
+import presentationsRoutes from './server/routes/presentations.js'
 import healthRoutes from './server/routes/health.js'
 import adminRoutes from './server/routes/admin.js'
 import telegramRoutes from './server/routes/telegram.js'
@@ -178,6 +179,7 @@ app.use('/api/auth', authRoutes)
 app.use('/api/folders', foldersRoutes)
 app.use('/api/worksheets', worksheetsRoutes)
 app.use('/api/generate', generateRoutes)
+app.use('/api/presentations', presentationsRoutes)
 app.use('/api/admin', adminRoutes)
 app.use('/api/telegram', telegramRoutes)
 app.use('/api/billing', billingRoutes)

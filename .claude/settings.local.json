@@ -47,7 +47,9 @@
       "Bash(timeout /t 5 /nobreak)",
       "Bash(findstr:*)",
       "Bash(npm run db:migrate:*)",
-      "Bash(npx vitest:*)"
+      "Bash(npx vitest:*)",
+      "Bash(npx vite build:*)",
+      "Bash(npm ls:*)"
     ]
   }
 }
