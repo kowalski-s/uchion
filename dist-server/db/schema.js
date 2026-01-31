@@ -7,8 +7,10 @@ export const subscriptionStatusEnum = pgEnum('subscription_status', ['active', '
 export const generationStatusEnum = pgEnum('generation_status', ['pending', 'processing', 'completed', 'failed']);
 export const paymentStatusEnum = pgEnum('payment_status', ['pending', 'succeeded', 'failed', 'refunded']);
 export const paymentIntentStatusEnum = pgEnum('payment_intent_status', ['created', 'paid', 'failed', 'expired']);
-export const subjectEnum = pgEnum('subject', ['math', 'russian']);
+export const subjectEnum = pgEnum('subject', ['math', 'algebra', 'geometry', 'russian']);
 export const difficultyEnum = pgEnum('difficulty', ['easy', 'medium', 'hard']);
+export const presentationThemeTypeEnum = pgEnum('presentation_theme_type', ['preset', 'custom']);
+export const presentationThemePresetEnum = pgEnum('presentation_theme_preset', ['professional', 'educational', 'minimal', 'scientific']);
 // ==================== USERS TABLE ====================
 export const users = pgTable('users', {
     id: uuid('id').primaryKey().defaultRandom(),
@@ -161,11 +163,32 @@ export const refreshTokens = pgTable('refresh_tokens', {
     jtiIdx: index('refresh_tokens_jti_idx').on(table.jti),
     familyIdIdx: index('refresh_tokens_family_id_idx').on(table.familyId),
 }));
+// ==================== PRESENTATIONS TABLE ====================
+export const presentations = pgTable('presentations', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    title: varchar('title', { length: 300 }).notNull(),
+    subject: subjectEnum('subject').notNull(),
+    grade: integer('grade').notNull(),
+    topic: varchar('topic', { length: 500 }).notNull(),
+    themeType: presentationThemeTypeEnum('theme_type').notNull(),
+    themePreset: presentationThemePresetEnum('theme_preset'),
+    themeCustom: varchar('theme_custom', { length: 100 }),
+    slideCount: integer('slide_count').notNull().default(10),
+    structure: text('structure').notNull(), // JSON string
+    pptxBase64: text('pptx_base64'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+    userIdIdx: index('presentations_user_id_idx').on(table.userId),
+    subjectIdx: index('presentations_subject_idx').on(table.subject),
+    createdAtIdx: index('presentations_created_at_idx').on(table.createdAt),
+}));
 // ==================== RELATIONS ====================
 export const usersRelations = relations(users, ({ many, one }) => ({
     worksheets: many(worksheets),
     folders: many(folders),
     generations: many(generations),
+    presentations: many(presentations),
     subscription: one(subscriptions),
     payments: many(payments),
     paymentIntents: many(paymentIntents),
@@ -229,6 +252,12 @@ export const refreshTokensRelations = relations(refreshTokens, ({ one }) => ({
 export const paymentIntentsRelations = relations(paymentIntents, ({ one }) => ({
     user: one(users, {
         fields: [paymentIntents.userId],
+        references: [users.id],
+    }),
+}));
+export const presentationsRelations = relations(presentations, ({ one }) => ({
+    user: one(users, {
+        fields: [presentations.userId],
         references: [users.id],
     }),
 }));

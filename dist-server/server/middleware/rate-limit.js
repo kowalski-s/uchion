@@ -104,6 +104,36 @@ export async function checkBillingWebhookRateLimit(req) {
     const limiter = createLimiter('rl:bill:wh', 100, 60);
     return consumeLimit(limiter, getClientIp(req));
 }
+/**
+ * Middleware wrapper that applies rate limiting before the handler runs.
+ * Eliminates boilerplate rate limit checks inside every handler.
+ *
+ * Usage with authenticated routes:
+ *   router.get('/', withAuth(withRateLimit({ prefix: 'worksheets:list', maxRequests: 30, windowSeconds: 60 },
+ *     async (req, res) => { ... }
+ *   )))
+ */
+export function withRateLimit(options, handler) {
+    return async (req, res) => {
+        const keyMode = options.keyMode ?? 'user';
+        const identifier = keyMode === 'user' && 'user' in req && req.user
+            ? `${options.prefix}:${req.user.id}`
+            : `${options.prefix}:${getClientIp(req)}`;
+        const result = await checkRateLimit(req, {
+            maxRequests: options.maxRequests,
+            windowSeconds: options.windowSeconds,
+            identifier,
+        });
+        if (!result.success) {
+            const retryAfter = Math.ceil((result.reset - Date.now()) / 1000);
+            return res
+                .status(429)
+                .setHeader('Retry-After', retryAfter.toString())
+                .json({ error: 'Too many requests' });
+        }
+        return handler(req, res);
+    };
+}
 // ==================== DAILY GENERATION LIMIT ====================
 /**
  * Check and increment daily generation counter for paid users.

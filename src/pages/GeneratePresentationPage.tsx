@@ -24,6 +24,12 @@ const SUBJECTS: { value: Subject; label: string; grades: number[] }[] = [
   { value: 'russian', label: 'Русский язык', grades: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] },
 ]
 
+const SLIDE_COUNTS: { value: 12 | 18 | 24; label: string; description: string }[] = [
+  { value: 12, label: 'Короткая', description: '12 слайдов' },
+  { value: 18, label: 'Средняя', description: '18 слайдов' },
+  { value: 24, label: 'Детальная', description: '24 слайда' },
+]
+
 const THEME_PRESETS: { value: PresentationThemePreset; label: string; description: string; color: string }[] = [
   { value: 'professional', label: 'Профессиональный', description: 'Строгий, деловой', color: 'bg-blue-900' },
   { value: 'educational', label: 'Образовательный', description: 'Яркий, школьный', color: 'bg-purple-600' },
@@ -42,6 +48,7 @@ const GeneratePresentationFormSchema = z.object({
   themeType: z.enum(['preset', 'custom']),
   themePreset: z.enum(['professional', 'educational', 'minimal', 'scientific']).optional(),
   themeCustom: z.string().max(100, 'Максимум 100 символов').optional(),
+  slideCount: z.union([z.literal(12), z.literal(18), z.literal(24)]).optional(),
 })
 
 type GeneratePresentationFormValues = z.infer<typeof GeneratePresentationFormSchema>
@@ -99,12 +106,14 @@ export default function GeneratePresentationPage() {
       themeType: 'preset',
       themePreset: 'educational',
       themeCustom: '',
+      slideCount: 18,
     }
   })
 
   const watchSubject = form.watch('subject')
   const watchThemeType = form.watch('themeType')
   const watchThemePreset = form.watch('themePreset')
+  const watchSlideCount = form.watch('slideCount')
 
   // Get available grades for selected subject
   const availableGrades = useMemo(() => {
@@ -187,14 +196,6 @@ export default function GeneratePresentationPage() {
       return
     }
 
-    // Check if user has enough generations (presentation costs 2)
-    const generationCost = 2
-    if (generationsLeft < generationCost) {
-      setErrorCode('LIMIT_EXCEEDED')
-      setErrorText(`Недостаточно генераций. Требуется: ${generationCost}, доступно: ${generationsLeft}`)
-      return
-    }
-
     setErrorText(null)
     setErrorCode(null)
     setProgress(0)
@@ -220,6 +221,7 @@ export default function GeneratePresentationPage() {
       themeType: 'preset',
       themePreset: 'educational',
       themeCustom: '',
+      slideCount: 18,
     })
   }
 
@@ -384,6 +386,28 @@ export default function GeneratePresentationPage() {
                 </div>
               </div>
 
+              {/* Slide count selector */}
+              <div className="mb-6">
+                <label className="block text-sm font-semibold text-slate-700 text-left mb-3">Количество слайдов</label>
+                <div className="grid grid-cols-3 gap-3">
+                  {SLIDE_COUNTS.map(sc => (
+                    <button
+                      key={sc.value}
+                      type="button"
+                      onClick={() => form.setValue('slideCount', sc.value)}
+                      className={`px-4 py-3 rounded-xl border-2 transition-all text-center ${
+                        watchSlideCount === sc.value
+                          ? 'border-[#8C52FF] bg-purple-50'
+                          : 'border-slate-200 hover:border-slate-300 bg-white'
+                      }`}
+                    >
+                      <div className="text-sm font-semibold text-slate-900">{sc.label}</div>
+                      <div className="text-xs text-slate-500">{sc.description}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* Custom theme input - shown when custom is selected */}
               {watchThemeType === 'custom' && (
                 <div className="mb-6 animate-in fade-in slide-in-from-top-2 duration-300">
@@ -404,7 +428,7 @@ export default function GeneratePresentationPage() {
               <div className="flex justify-end">
                 <button
                   type="submit"
-                  disabled={mutation.isPending || (!!user && generationsLeft < 2)}
+                  disabled={mutation.isPending || (!!user && generationsLeft < 1)}
                   className="group relative inline-flex h-12 px-8 items-center justify-center overflow-hidden rounded-xl bg-[#A855F7]/80 hover:bg-[#A855F7]/90 text-base font-semibold text-white shadow-md shadow-purple-400/20 transition-all hover:shadow-purple-400/30 disabled:opacity-60 disabled:hover:bg-[#A855F7]/80"
                 >
                   {mutation.isPending ? (
@@ -422,7 +446,7 @@ export default function GeneratePresentationPage() {
                         <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
                           <path d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" />
                         </svg>
-                        2
+                        1
                       </span>
                     </span>
                   )}

@@ -113,6 +113,7 @@ function generateWorksheetHtml(worksheet) {
       font-style: normal;
     }
   ` : '';
+    // Build individual task HTML items
     const assignmentsHtml = worksheet.assignments.map((task, i) => {
         const matchingData = parseMatchingData(task.text);
         if (matchingData) {
@@ -175,6 +176,11 @@ function generateWorksheetHtml(worksheet) {
   <style>
     ${fontFaceCSS}
 
+    @page {
+      size: A4;
+      margin: 12mm 14mm;
+    }
+
     * {
       margin: 0;
       padding: 0;
@@ -183,22 +189,19 @@ function generateWorksheetHtml(worksheet) {
 
     body {
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      font-size: 12pt;
-      line-height: 1.5;
+      font-size: 11pt;
+      line-height: 1.4;
       color: #111827;
       background: white;
     }
 
-    .page {
-      width: 210mm;
-      min-height: 297mm;
-      padding: 15mm;
-      background: white;
-      page-break-after: always;
+    /* Content section — each starts on a new page, content flows naturally */
+    .content-section {
+      page-break-before: always;
     }
 
-    .page:last-child {
-      page-break-after: auto;
+    .content-section:first-child {
+      page-break-before: auto;
     }
 
     /* Header */
@@ -207,18 +210,18 @@ function generateWorksheetHtml(worksheet) {
       justify-content: space-between;
       align-items: flex-start;
       border-bottom: 2px solid #f3f4f6;
-      padding-bottom: 16px;
-      margin-bottom: 24px;
+      padding-bottom: 12px;
+      margin-bottom: 16px;
     }
 
     .logo {
-      font-size: 24px;
+      font-size: 22px;
       font-weight: bold;
       color: #4f46e5;
     }
 
     .meta-fields {
-      font-size: 11px;
+      font-size: 10px;
       color: #6b7280;
     }
 
@@ -226,86 +229,86 @@ function generateWorksheetHtml(worksheet) {
       display: flex;
       align-items: center;
       gap: 8px;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
     }
 
     .meta-line {
       flex: 1;
-      min-width: 180px;
+      min-width: 160px;
       border-bottom: 1px solid #d1d5db;
     }
 
     /* Title */
     .title {
       text-align: center;
-      font-size: 24px;
+      font-size: 20px;
       font-weight: bold;
       color: #111827;
-      margin-bottom: 24px;
+      margin-bottom: 16px;
     }
 
     /* Section titles */
     .section-title {
       display: flex;
       align-items: center;
-      gap: 12px;
-      font-size: 18px;
+      gap: 10px;
+      font-size: 16px;
       font-weight: bold;
       color: #111827;
-      margin-bottom: 20px;
+      margin-bottom: 14px;
     }
 
     .section-badge {
       display: flex;
       align-items: center;
       justify-content: center;
-      width: 28px;
-      height: 28px;
+      width: 26px;
+      height: 26px;
       background: #4f46e5;
       color: white;
       border-radius: 6px;
-      font-size: 14px;
+      font-size: 13px;
       font-weight: bold;
     }
 
     /* Tasks/Assignments */
     .task-block {
-      margin-bottom: 24px;
-      page-break-inside: avoid;
+      margin-bottom: 14px;
+      break-inside: avoid;
     }
 
     .task-text {
-      font-size: 14px;
+      font-size: 12px;
       font-weight: 500;
       color: #111827;
-      line-height: 1.6;
-      margin-bottom: 12px;
+      line-height: 1.5;
+      margin-bottom: 6px;
     }
 
     .task-number {
       color: #4f46e5;
-      margin-right: 8px;
+      margin-right: 6px;
     }
 
     .answer-field {
-      height: 120px;
-      border: 2px dashed #e5e7eb;
-      border-radius: 8px;
+      height: 56px;
+      border: 1.5px dashed #d1d5db;
+      border-radius: 6px;
       background: rgba(249, 250, 251, 0.3);
     }
 
     /* Matching task styles */
     .matching-instruction {
-      font-size: 13px;
+      font-size: 12px;
       color: #374151;
-      margin-bottom: 16px;
-      margin-left: 24px;
+      margin-bottom: 10px;
+      margin-left: 20px;
     }
 
     .matching-columns {
       display: flex;
-      gap: 32px;
-      margin-left: 24px;
+      gap: 20px;
+      margin-left: 20px;
     }
 
     .matching-column {
@@ -313,97 +316,97 @@ function generateWorksheetHtml(worksheet) {
     }
 
     .matching-item {
-      padding: 10px 14px;
-      margin-bottom: 10px;
+      padding: 6px 10px;
+      margin-bottom: 6px;
       background: white;
       border: 1px solid #e5e7eb;
-      border-radius: 8px;
-      font-size: 12px;
+      border-radius: 6px;
+      font-size: 11px;
       color: #374151;
     }
 
     .matching-number, .matching-letter {
       font-weight: bold;
       color: #4f46e5;
-      margin-right: 8px;
+      margin-right: 6px;
     }
 
     /* Test questions */
     .test-question {
       border: 1px solid #e5e7eb;
-      border-radius: 12px;
-      padding: 16px 20px;
-      margin-bottom: 16px;
+      border-radius: 10px;
+      padding: 12px 16px;
+      margin-bottom: 10px;
       background: white;
-      page-break-inside: avoid;
+      break-inside: avoid;
     }
 
     .question-text {
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 500;
       color: #111827;
-      margin-bottom: 12px;
+      margin-bottom: 8px;
     }
 
     .question-number {
-      margin-right: 8px;
+      margin-right: 6px;
     }
 
     .options {
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 5px;
     }
 
     .option {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
     }
 
     .option-letter {
-      width: 24px;
-      height: 24px;
+      width: 22px;
+      height: 22px;
       display: flex;
       align-items: center;
       justify-content: center;
       border: 1px solid #e5e7eb;
       border-radius: 50%;
-      font-size: 11px;
+      font-size: 10px;
       font-weight: bold;
       color: #6b7280;
       flex-shrink: 0;
     }
 
     .option-text {
-      font-size: 12px;
+      font-size: 11px;
       color: #374151;
     }
 
     /* Evaluation */
     .evaluation-section {
       background: #f9fafb;
-      border-radius: 12px;
-      padding: 24px;
-      margin-bottom: 24px;
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 20px;
     }
 
     .evaluation-title {
       font-weight: bold;
       color: #111827;
-      margin-bottom: 16px;
+      margin-bottom: 12px;
     }
 
     .checkbox-item {
       display: flex;
       align-items: center;
-      gap: 12px;
-      margin-bottom: 12px;
+      gap: 10px;
+      margin-bottom: 10px;
     }
 
     .checkbox {
-      width: 20px;
-      height: 20px;
+      width: 18px;
+      height: 18px;
       border: 1px solid #d1d5db;
       border-radius: 4px;
       background: white;
@@ -413,35 +416,35 @@ function generateWorksheetHtml(worksheet) {
     /* Notes */
     .notes-section {
       background: #f9fafb;
-      border-radius: 12px;
-      padding: 24px;
-      min-height: 400px;
+      border-radius: 10px;
+      padding: 20px;
+      min-height: 360px;
     }
 
     .notes-title {
       font-weight: bold;
       color: #111827;
-      margin-bottom: 16px;
+      margin-bottom: 14px;
     }
 
     .note-line {
       border-bottom: 1px solid #d1d5db;
-      height: 32px;
+      height: 28px;
     }
 
     /* Answers page */
     .answers-title {
       text-align: center;
-      font-size: 20px;
+      font-size: 18px;
       font-weight: bold;
       color: #111827;
-      margin-bottom: 32px;
+      margin-bottom: 24px;
     }
 
     .answers-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 32px;
+      gap: 24px;
     }
 
     .answers-grid.single-column {
@@ -449,10 +452,10 @@ function generateWorksheetHtml(worksheet) {
     }
 
     .answers-column h3 {
-      font-size: 16px;
+      font-size: 14px;
       font-weight: bold;
       color: #4f46e5;
-      margin-bottom: 16px;
+      margin-bottom: 12px;
     }
 
     .answers-list {
@@ -462,24 +465,24 @@ function generateWorksheetHtml(worksheet) {
     .answer-item {
       background: #f9fafb;
       border: 1px solid #f3f4f6;
-      border-radius: 8px;
-      padding: 12px;
-      margin-bottom: 12px;
-      font-size: 12px;
+      border-radius: 6px;
+      padding: 8px 10px;
+      margin-bottom: 8px;
+      font-size: 11px;
       color: #374151;
-      page-break-inside: avoid;
+      break-inside: avoid;
     }
 
     .answer-item-inline {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
       background: #f9fafb;
       border: 1px solid #f3f4f6;
-      border-radius: 8px;
-      padding: 12px 16px;
-      margin-bottom: 8px;
-      font-size: 12px;
+      border-radius: 6px;
+      padding: 8px 12px;
+      margin-bottom: 6px;
+      font-size: 11px;
       font-weight: 500;
       color: #374151;
     }
@@ -487,22 +490,21 @@ function generateWorksheetHtml(worksheet) {
     .answer-number {
       font-weight: bold;
       color: #6366f1;
-      margin-right: 8px;
+      margin-right: 6px;
     }
 
     @media print {
-      .page {
-        margin: 0;
-        padding: 10mm;
-        box-shadow: none;
+      body {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
       }
     }
   </style>
 </head>
 <body>
   ${hasAssignments ? `
-  <!-- PAGE 1: Assignments -->
-  <div class="page">
+  <!-- Assignments section -->
+  <div class="content-section">
     <div class="header">
       <div class="logo">УчиОн</div>
       <div class="meta-fields">
@@ -531,8 +533,8 @@ function generateWorksheetHtml(worksheet) {
   ` : ''}
 
   ${hasTest ? `
-  <!-- PAGE 2: Test -->
-  <div class="page">
+  <!-- Test section -->
+  <div class="content-section">
     ${!hasAssignments ? `
     <div class="header">
       <div class="logo">УчиОн</div>
@@ -562,8 +564,8 @@ function generateWorksheetHtml(worksheet) {
   </div>
   ` : ''}
 
-  <!-- PAGE 3: Evaluation & Notes -->
-  <div class="page">
+  <!-- Evaluation & Notes -->
+  <div class="content-section">
     <div class="evaluation-section">
       <div class="evaluation-title">Оценка урока</div>
       <div class="checkbox-item">
@@ -586,8 +588,8 @@ function generateWorksheetHtml(worksheet) {
     </div>
   </div>
 
-  <!-- PAGE 4: Answers -->
-  <div class="page">
+  <!-- Answers -->
+  <div class="content-section">
     <h2 class="answers-title">Ответы</h2>
 
     <div class="answers-grid${!hasAssignments || !hasTest ? ' single-column' : ''}">
@@ -831,12 +833,11 @@ export async function buildPdf(worksheet, meta) {
             format: 'A4',
             printBackground: true,
             margin: {
-                top: '0mm',
-                right: '0mm',
-                bottom: '0mm',
-                left: '0mm',
+                top: '12mm',
+                right: '14mm',
+                bottom: '12mm',
+                left: '14mm',
             },
-            preferCSSPageSize: true,
         });
         console.log('[PDF] PDF generated, buffer size:', pdfBuffer.length);
         const base64 = Buffer.from(pdfBuffer).toString('base64');

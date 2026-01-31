@@ -49,6 +49,7 @@ export type GeneratePresentationParams = {
   themeType: 'preset' | 'custom'
   themePreset?: string
   themeCustom?: string
+  slideCount?: 12 | 18 | 24
   isPaid?: boolean
 }
 
@@ -175,17 +176,30 @@ class DummyProvider implements AIProvider {
     console.log('[УчиОн] DummyProvider.generatePresentation called', params)
     onProgress?.(10)
 
-    const contentSlides = []
-    for (let i = 1; i <= 8; i++) {
-      contentSlides.push({
-        type: 'content' as const,
-        title: `Слайд ${i + 1}: Тема "${params.topic}"`,
+    const targetSlides = params.slideCount || 18
+    // Build diverse slide types for testing
+    const middleSlides: PresentationStructure['slides'] = []
+    const slideTypes = ['content', 'twoColumn', 'table', 'example', 'formula', 'diagram', 'chart', 'practice'] as const
+    for (let i = 0; i < targetSlides - 2; i++) {
+      const slideType = slideTypes[i % slideTypes.length]
+      const base = {
+        title: `Слайд ${i + 2}: ${slideType} — "${params.topic}"`,
         content: [
           `Пункт 1 по теме "${params.topic}" для ${params.grade} класса`,
           `Пункт 2 с демо-содержимым`,
           `Пункт 3 с дополнительной информацией`,
+          `Пункт 4 — расширенный материал`,
         ],
-      })
+      }
+      if (slideType === 'twoColumn') {
+        middleSlides.push({ ...base, type: 'twoColumn', leftColumn: ['Левый 1', 'Левый 2', 'Левый 3'], rightColumn: ['Правый 1', 'Правый 2', 'Правый 3'] })
+      } else if (slideType === 'table') {
+        middleSlides.push({ ...base, type: 'table', tableData: { headers: ['Понятие', 'Определение', 'Пример'], rows: [['Демо A', 'Описание A', 'Пример A'], ['Демо B', 'Описание B', 'Пример B'], ['Демо C', 'Описание C', 'Пример C']] } })
+      } else if (slideType === 'chart') {
+        middleSlides.push({ ...base, type: 'chart', chartData: { labels: ['Янв', 'Фев', 'Мар', 'Апр'], values: [10, 25, 15, 30] } })
+      } else {
+        middleSlides.push({ ...base, type: slideType })
+      }
     }
 
     onProgress?.(70)
@@ -198,7 +212,7 @@ class DummyProvider implements AIProvider {
           title: `${params.topic}`,
           content: [`${params.grade} класс`, `Предмет: ${params.subject}`],
         },
-        ...contentSlides,
+        ...middleSlides,
         {
           type: 'conclusion',
           title: 'Итоги',
@@ -206,6 +220,7 @@ class DummyProvider implements AIProvider {
             `Мы изучили тему "${params.topic}"`,
             'Закрепили основные понятия',
             'Рассмотрели примеры',
+            'Готовы к практическим заданиям',
           ],
         },
       ],
@@ -724,23 +739,56 @@ ${taskTypeConfig.promptInstruction}
       styleInstruction = 'Стиль: professional'
     }
 
-    const userPrompt = `Создай презентацию на тему "${params.topic}" для ${params.grade} класса по предмету "${subjectConfig.name}". Ровно 10 слайдов.
+    const slideCount = params.slideCount || 18
 
-Структура:
-- Слайд 1: title (заголовок презентации и подзаголовок)
-- Слайды 2-9: content (основной материал, по 3-5 пунктов на слайд)
-- Слайд 10: conclusion (итоги/выводы)
+    // Subject-specific requirements
+    const subjectHints: Record<string, string> = {
+      math: 'Обязательно используй слайды типа "example" (задача + пошаговое решение) и "formula" (ключевые формулы). Добавь "practice" (задачи для самостоятельного решения). Используй "table" для сравнений/свойств.',
+      algebra: 'Обязательно используй "formula" (формулы, тождества), "example" (примеры решения уравнений/неравенств), "chart" (графики функций с числовыми данными). Добавь "practice" слайд.',
+      geometry: 'Обязательно используй "formula" (теоремы, формулы), "diagram" (описание геометрических фигур и их свойств), "example" (задачи с решением). Используй "table" для сравнения фигур.',
+      russian: 'Обязательно используй "table" (правила, исключения, парадигмы), "example" (разбор предложений/слов), "twoColumn" (сравнение правил). Добавь "practice" слайд с упражнениями.',
+    }
+    const subjectHint = subjectHints[params.subject] || ''
+
+    const userPrompt = `Создай презентацию на тему "${params.topic}" для ${params.grade} класса по предмету "${subjectConfig.name}". Ровно ${slideCount} слайдов.
+
+Доступные типы слайдов (используй РАЗНООБРАЗНО, не только "content"):
+- "title" — первый слайд: заголовок + подзаголовок
+- "content" — обычный слайд с буллетами (4-6 пунктов, подробно!)
+- "twoColumn" — два столбца для сравнений. Поля: leftColumn (массив строк), rightColumn (массив строк)
+- "table" — таблица с данными. Поле: tableData: {headers: [...], rows: [[...], [...]]}
+- "example" — задача/пример + пошаговое решение (content: ["Задача: ...", "Шаг 1: ...", "Шаг 2: ...", "Ответ: ..."])
+- "formula" — ключевая формула/правило крупно (content: ["формула", "пояснение", "где ..."])
+- "diagram" — описание схемы/классификации (content: ["Элемент 1 → описание", "Элемент 2 → описание"])
+- "chart" — диаграмма. Поле: chartData: {labels: [...], values: [...числа...]}
+- "practice" — практические задания (content: ["1. Задание ...", "2. Задание ...", "3. Задание ..."])
+- "conclusion" — последний слайд: итоги/выводы
+
+${subjectHint}
 
 ${styleInstruction}
 
 Верни JSON:
-{"title": "Название презентации", "slides": [{"type": "title", "title": "...", "content": ["подзаголовок"]}, {"type": "content", "title": "...", "content": ["пункт1", "пункт2", "пункт3"]}, ..., {"type": "conclusion", "title": "Итоги", "content": ["вывод1", "вывод2"]}]}
+{"title": "Название", "slides": [
+  {"type": "title", "title": "...", "content": ["подзаголовок"]},
+  {"type": "content", "title": "...", "content": ["пункт1", "пункт2", "пункт3", "пункт4"]},
+  {"type": "twoColumn", "title": "Сравнение ...", "content": ["Описание"], "leftColumn": ["А", "Б"], "rightColumn": ["В", "Г"]},
+  {"type": "table", "title": "...", "content": [], "tableData": {"headers": ["Кол1","Кол2"], "rows": [["a","b"],["c","d"]]}},
+  {"type": "example", "title": "Пример", "content": ["Задача: ...", "Решение: шаг 1 ...", "Ответ: ..."]},
+  {"type": "formula", "title": "Формула", "content": ["S = a * b", "где a — длина, b — ширина"]},
+  {"type": "chart", "title": "...", "content": ["Описание"], "chartData": {"labels": ["A","B","C"], "values": [10,20,30]}},
+  {"type": "practice", "title": "Практика", "content": ["1. Задание...", "2. Задание...", "3. Задание..."]},
+  {"type": "conclusion", "title": "Итоги", "content": ["вывод1", "вывод2", "вывод3"]}
+]}
 
 ВАЖНО:
-- Ровно 10 слайдов
-- Первый слайд type="title", последний type="conclusion", остальные type="content"
+- Ровно ${slideCount} слайдов
+- Первый слайд type="title", последний type="conclusion"
+- Используй МИНИМУМ 4-5 РАЗНЫХ типов слайдов (не только "content"!)
 - Каждый слайд ОБЯЗАТЕЛЬНО имеет поля "type", "title", "content" (массив строк)
-- Контент должен быть содержательным, по ФГОС, для ${params.grade} класса`
+- На content-слайдах пиши 4-6 подробных пунктов, не 2-3
+- Контент должен быть содержательным, по ФГОС, для ${params.grade} класса
+- Для "table" обязательно заполни tableData, для "twoColumn" — leftColumn/rightColumn, для "chart" — chartData`
 
     onProgress?.(15)
 
@@ -758,7 +806,7 @@ ${styleInstruction}
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userPrompt }
           ],
-          max_tokens: 4000,
+          max_tokens: 8000,
           temperature: 0.6
         })
       )
@@ -788,6 +836,9 @@ ${styleInstruction}
         throw new Error('AI_ERROR')
       }
 
+      // Valid slide types
+      const validTypes = new Set(['title', 'content', 'twoColumn', 'table', 'example', 'formula', 'diagram', 'chart', 'practice', 'conclusion'])
+
       // Validate each slide has required fields
       for (let i = 0; i < parsed.slides.length; i++) {
         const slide = parsed.slides[i]
@@ -797,8 +848,24 @@ ${styleInstruction}
           slide.title = slide.title || `Слайд ${i + 1}`
           slide.content = Array.isArray(slide.content) ? slide.content : (slide.content ? [String(slide.content)] : [])
         }
+        // Normalize unknown types to 'content'
+        if (!validTypes.has(slide.type)) {
+          console.warn(`[УчиОн] Unknown slide type "${slide.type}" at index ${i}, falling back to "content"`)
+          slide.type = 'content'
+        }
         // Ensure content items are strings
         slide.content = slide.content.map((item: unknown) => String(item))
+        // Validate optional structured data
+        if (slide.tableData) {
+          if (!Array.isArray(slide.tableData.headers)) slide.tableData.headers = []
+          if (!Array.isArray(slide.tableData.rows)) slide.tableData.rows = []
+        }
+        if (slide.leftColumn && !Array.isArray(slide.leftColumn)) slide.leftColumn = []
+        if (slide.rightColumn && !Array.isArray(slide.rightColumn)) slide.rightColumn = []
+        if (slide.chartData) {
+          if (!Array.isArray(slide.chartData.labels)) slide.chartData.labels = []
+          if (!Array.isArray(slide.chartData.values)) slide.chartData.values = []
+        }
       }
 
       structure = {

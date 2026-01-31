@@ -4,7 +4,7 @@ import path from 'path';
 const envLocalPath = path.resolve(process.cwd(), '.env.local');
 console.log('[ENV] Loading from:', envLocalPath);
 const result = dotenv.config({ path: envLocalPath, override: true });
-console.log('[ENV] Loaded .env.local, AI_MODEL_GENERATION =', process.env.AI_MODEL_GENERATION);
+console.log('[ENV] Loaded .env.local, AI_MODEL_FREE =', process.env.AI_MODEL_FREE, ', AI_MODEL_PAID =', process.env.AI_MODEL_PAID, ', AI_MODEL_AGENTS =', process.env.AI_MODEL_AGENTS);
 dotenv.config({ path: '.env' });
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';

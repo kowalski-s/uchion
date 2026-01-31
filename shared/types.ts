@@ -94,9 +94,13 @@ export interface FolderWithCount extends Folder {
 export type PresentationThemePreset = 'professional' | 'educational' | 'minimal' | 'scientific'
 
 export interface PresentationSlide {
-  type: 'title' | 'content' | 'conclusion'
+  type: 'title' | 'content' | 'twoColumn' | 'table' | 'example' | 'formula' | 'diagram' | 'chart' | 'practice' | 'conclusion'
   title: string
   content: string[] // bullet points or text lines
+  tableData?: { headers: string[]; rows: string[][] }
+  leftColumn?: string[]
+  rightColumn?: string[]
+  chartData?: { labels: string[]; values: number[] }
 }
 
 export interface PresentationStructure {
@@ -111,6 +115,7 @@ export type GeneratePresentationPayload = {
   themeType: 'preset' | 'custom'
   themePreset?: PresentationThemePreset
   themeCustom?: string
+  slideCount?: 12 | 18 | 24
 }
 
 export type GeneratePresentationResponseOk = {

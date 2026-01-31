@@ -25,6 +25,7 @@ const InputSchema = z.object({
   themeType: z.enum(['preset', 'custom']),
   themePreset: z.enum(['professional', 'educational', 'minimal', 'scientific']).optional(),
   themeCustom: z.string().max(100).optional(),
+  slideCount: z.union([z.literal(12), z.literal(18), z.literal(24)]).optional(),
 })
 
 // ==================== POST /api/presentations/generate ====================
@@ -132,6 +133,7 @@ router.post('/generate', withAuth(async (req: AuthenticatedRequest, res: Respons
       themeType: input.themeType,
       themePreset: input.themePreset,
       themeCustom: input.themeCustom,
+      slideCount: input.slideCount as 12 | 18 | 24 | undefined,
       isPaid,
     }, (percent) => {
       sendEvent({ type: 'progress', percent })

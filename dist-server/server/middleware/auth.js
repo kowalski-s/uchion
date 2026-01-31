@@ -55,39 +55,4 @@ export function withAdminAuth(handler) {
         return await handler(req, res);
     });
 }
-/**
- * Middleware that optionally authenticates
- * Provides user if authenticated, null otherwise
- */
-export function withOptionalAuth(handler) {
-    return async (req, res) => {
-        try {
-            const token = getTokenFromCookie(req, ACCESS_TOKEN_COOKIE);
-            if (!token) {
-                return await handler(req, res);
-            }
-            const payload = verifyAccessToken(token);
-            if (!payload) {
-                return await handler(req, res);
-            }
-            // Verify user still exists in database and is not deleted
-            const [user] = await db
-                .select({
-                id: users.id,
-                email: users.email,
-                name: users.name,
-                role: users.role,
-            })
-                .from(users)
-                .where(and(eq(users.id, payload.sub), isNull(users.deletedAt)))
-                .limit(1);
-            req.user = user || null;
-            return await handler(req, res);
-        }
-        catch (error) {
-            console.error('[Auth Middleware] Error:', error);
-            return await handler(req, res);
-        }
-    };
-}
 //# sourceMappingURL=auth.js.map

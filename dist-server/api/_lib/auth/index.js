@@ -5,5 +5,5 @@ export { createAccessToken, createRefreshToken, verifyAccessToken, verifyRefresh
 // Cookie management
 export { ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE, STATE_COOKIE, PKCE_COOKIE, setAuthCookies, clearAuthCookies, setOAuthStateCookie, setPKCECookie, clearOAuthCookies, getTokenFromCookie, getStateCookie, getPKCECookie, } from './cookies.js';
 // Middleware
-export { withAuth, withAdminAuth, withOptionalAuth } from './middleware.js';
+export { withAuth, withAdminAuth } from './middleware.js';
 //# sourceMappingURL=index.js.map
