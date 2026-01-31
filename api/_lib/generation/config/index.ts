@@ -4,7 +4,7 @@ export * from './task-types.js'
 export * from './difficulty.js'
 export * from './worksheet-formats.js'
 export * from './task-distribution.js'
-export { validateWorksheet, type ValidationResult, type ValidationError, type ValidationWarning } from '../validation/deterministic.js'
+export { validateWorksheet, type ValidationResult, type ValidationError, type ValidationWarning } from '../validation/index.js'
 
 import { mathConfig } from './subjects/math.js'
 import { algebraConfig } from './subjects/algebra.js'

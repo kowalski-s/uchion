@@ -16,6 +16,7 @@ import {
 import { timedLLMCall } from './ai/validator.js'
 import { checkValidationScore } from './alerts/generation-alerts.js'
 import { validateWorksheet as validateTasksDeterministic } from './generation/validation/deterministic.js'
+import { runMultiAgentValidation } from './generation/validation/agents/index.js'
 
 // =============================================================================
 // Types
@@ -281,6 +282,22 @@ class OpenAIProvider implements AIProvider {
       console.log(`[УчиОн] Validation warnings (${validationResult.warnings.length}):`,
         validationResult.warnings.map(w => `  [${w.taskIndex}] ${w.code}: ${w.message}`).join('\n')
       )
+    }
+
+    // Мультиагентная валидация (LLM-based, параллельно)
+    const allTasksForAgents = [...testTasks, ...openTasksList]
+    const agentValidation = await runMultiAgentValidation(allTasksForAgents, {
+      subject: params.subject,
+      grade: params.grade,
+      topic: params.topic,
+    })
+
+    if (agentValidation.problemTasks.length > 0) {
+      console.warn(`[УчиОн] Agent validation: ${agentValidation.problemTasks.length} problem tasks:`,
+        agentValidation.allIssues.map(i => `  [${i.taskIndex}] (${i.agent}) ${i.issue.code}: ${i.issue.message}`).join('\n')
+      )
+    } else {
+      console.log('[УчиОн] Agent validation: all tasks OK')
     }
 
     // Преобразуем в формат Worksheet
