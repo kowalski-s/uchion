@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useSessionStore } from '../store/session'
 import { DummyProvider, regenerateTask } from '../lib/api'
+import { updateWorksheet as updateWorksheetApi } from '../lib/dashboard-api'
 import type { Worksheet } from '../../shared/types'
 import { buildWorksheetPdf } from '../lib/pdf-client'
 import { useWorksheetEditor } from '../hooks/useWorksheetEditor'
@@ -209,19 +210,47 @@ export default function WorksheetPage() {
       })
 
       if (result.status === 'ok' && result.data) {
+        // Build updated worksheet before calling setState (which is async/batched)
+        const current = editor.worksheet!
+        let updated: Worksheet | null = null
+
         if (isTest && result.data.testQuestion) {
+          const newTest = [...current.test]
+          newTest[index] = result.data.testQuestion
+          const newTestAnswers = [...current.answers.test]
+          newTestAnswers[index] = result.data.answer
+          updated = { ...current, test: newTest, answers: { ...current.answers, test: newTestAnswers } }
           editor.replaceTestQuestion(index, result.data.testQuestion, result.data.answer)
         } else if (!isTest && result.data.assignment) {
+          const newAssignments = [...current.assignments]
+          newAssignments[index] = result.data.assignment
+          const newAssignmentAnswers = [...current.answers.assignments]
+          newAssignmentAnswers[index] = result.data.answer
+          updated = { ...current, assignments: newAssignments, answers: { ...current.answers, assignments: newAssignmentAnswers } }
           editor.replaceAssignment(index, result.data.assignment, result.data.answer)
         }
 
-        // Persist to localStorage
-        try {
-          const updated = editor.worksheet
-          if (updated) {
+        // Persist to localStorage + session store + DB
+        if (updated) {
+          try {
             localStorage.setItem('uchion_cached_worksheet', JSON.stringify(updated))
+          } catch { /* ignore */ }
+
+          if (sessionId) {
+            const session = sessionStore.getSession(sessionId)
+            if (session) {
+              sessionStore.saveSession(sessionId, { ...session, worksheet: updated })
+            }
           }
-        } catch { /* ignore */ }
+
+          // Save to DB if worksheet has a valid UUID (authenticated user)
+          const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+          if (updated.id && uuidRegex.test(updated.id)) {
+            try {
+              await updateWorksheetApi(updated.id, { content: JSON.stringify(updated) })
+            } catch { /* ignore - localStorage is primary store here */ }
+          }
+        }
       } else {
         alert(result.message || 'Не удалось перегенерировать задание.')
       }

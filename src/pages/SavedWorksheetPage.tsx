@@ -180,20 +180,31 @@ export default function SavedWorksheetPage() {
       })
 
       if (result.status === 'ok' && result.data) {
+        // Build updated worksheet before calling setState (which is async/batched)
+        const current = editor.worksheet!
+        let updated: Worksheet | null = null
+
         if (isTest && result.data.testQuestion) {
+          const newTest = [...current.test]
+          newTest[index] = result.data.testQuestion
+          const newTestAnswers = [...current.answers.test]
+          newTestAnswers[index] = result.data.answer
+          updated = { ...current, test: newTest, answers: { ...current.answers, test: newTestAnswers } }
           editor.replaceTestQuestion(index, result.data.testQuestion, result.data.answer)
         } else if (!isTest && result.data.assignment) {
+          const newAssignments = [...current.assignments]
+          newAssignments[index] = result.data.assignment
+          const newAssignmentAnswers = [...current.answers.assignments]
+          newAssignmentAnswers[index] = result.data.answer
+          updated = { ...current, assignments: newAssignments, answers: { ...current.answers, assignments: newAssignmentAnswers } }
           editor.replaceAssignment(index, result.data.assignment, result.data.answer)
         }
 
         // Persist to DB
-        if (id) {
+        if (id && updated) {
           try {
-            const current = editor.worksheet
-            if (current) {
-              await updateWorksheetApi(id, { content: JSON.stringify(current) })
-              queryClient.invalidateQueries({ queryKey: ['worksheet', id] })
-            }
+            await updateWorksheetApi(id, { content: JSON.stringify(updated) })
+            queryClient.invalidateQueries({ queryKey: ['worksheet', id] })
           } catch { /* ignore */ }
         }
       } else {
