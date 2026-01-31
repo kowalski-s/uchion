@@ -284,21 +284,29 @@ class OpenAIProvider implements AIProvider {
       )
     }
 
-    // Мультиагентная валидация (LLM-based, параллельно)
+    // Мультиагентная валидация (LLM-based, параллельно) + auto-fix
     const allTasksForAgents = [...testTasks, ...openTasksList]
-    const agentValidation = await runMultiAgentValidation(allTasksForAgents, {
-      subject: params.subject,
-      grade: params.grade,
-      topic: params.topic,
-    })
+    const agentValidation = await runMultiAgentValidation(
+      allTasksForAgents,
+      { subject: params.subject, grade: params.grade, topic: params.topic },
+      { autoFix: true }
+    )
 
     if (agentValidation.problemTasks.length > 0) {
       console.warn(`[УчиОн] Agent validation: ${agentValidation.problemTasks.length} problem tasks:`,
         agentValidation.allIssues.map(i => `  [${i.taskIndex}] (${i.agent}) ${i.issue.code}: ${i.issue.message}`).join('\n')
       )
+      const fixedCount = agentValidation.fixResults.filter(r => r.success).length
+      console.log(`[УчиОн] Fixed ${fixedCount} of ${agentValidation.fixResults.length} problem tasks`)
     } else {
       console.log('[УчиОн] Agent validation: all tasks OK')
     }
+
+    // Use fixed tasks instead of originals
+    const finalTasks = agentValidation.fixedTasks
+    const testOffset = testTasks.length
+    testTasks = finalTasks.slice(0, testOffset) as typeof testTasks
+    openTasksList = finalTasks.slice(testOffset) as typeof openTasksList
 
     // Преобразуем в формат Worksheet
     const worksheet = this.convertToWorksheet(params, testTasks, openTasksList, testQuestions, openTasks)

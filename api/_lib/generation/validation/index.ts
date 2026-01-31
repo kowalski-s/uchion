@@ -8,3 +8,6 @@ export type {
   AgentResult,
   MultiAgentValidationResult,
 } from './agents/index.js'
+
+export { fixTask } from './agents/task-fixer.js'
+export type { FixResult } from './agents/task-fixer.js'
