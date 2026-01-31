@@ -1,4 +1,5 @@
 import OpenAI from 'openai'
+import { getAgentsModel } from '../../../ai-models.js'
 import { getGradeConfig } from '../../config/index.js'
 import type { TaskTypeId } from '../../config/task-types.js'
 import type { AgentResult, AgentTaskResult, AgentIssue } from './index.js'
@@ -69,7 +70,8 @@ export async function checkContent(
 
   const apiKey = process.env.OPENAI_API_KEY
   const baseURL = process.env.AI_BASE_URL
-  const model = process.env.AI_MODEL_GENERATION || 'gpt-4.1-mini'
+  const model = getAgentsModel()
+  console.log(`[${agentName}] Agent model: ${model}`)
 
   if (!apiKey) {
     console.warn(`[${agentName}] No API key, skipping`)

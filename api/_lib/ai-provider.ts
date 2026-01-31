@@ -20,6 +20,11 @@ import { checkValidationScore } from './alerts/generation-alerts.js'
 import { validateWorksheet as validateTasksDeterministic } from './generation/validation/deterministic.js'
 import { runMultiAgentValidation } from './generation/validation/agents/index.js'
 
+import { getGenerationModel, getAgentsModel } from './ai-models.js'
+
+// Re-export for convenience
+export { getGenerationModel, getAgentsModel }
+
 // =============================================================================
 // Types
 // =============================================================================
@@ -33,6 +38,7 @@ export type GenerateParams = {
   difficulty?: DifficultyLevel
   format?: WorksheetFormatId
   variantIndex?: number
+  isPaid?: boolean
 }
 
 export type RegenerateTaskParams = {
@@ -42,6 +48,7 @@ export type RegenerateTaskParams = {
   difficulty: DifficultyLevel
   taskType: TaskTypeId
   isTest: boolean
+  isPaid?: boolean
 }
 
 export type RegenerateTaskResult = {
@@ -203,8 +210,9 @@ class OpenAIProvider implements AIProvider {
     onProgress?.(15)
 
     // Генерируем задания
-    const generationModel = process.env.AI_MODEL_GENERATION || 'gpt-4.1-mini'
-    console.log('[УчиОн] Using model:', generationModel)
+    const isPaid = params.isPaid ?? false
+    const generationModel = getGenerationModel(isPaid)
+    console.log(`[УчиОн] Generation model: ${generationModel} (isPaid: ${isPaid})`)
 
     let completion
     try {
@@ -587,7 +595,9 @@ ${taskTypeConfig.promptInstruction}
 ВАЖНО: Создай РОВНО 1 задание, не больше и не меньше!
 `.trim()
 
-    const generationModel = process.env.AI_MODEL_GENERATION || 'gpt-4.1-mini'
+    const isPaid = params.isPaid ?? false
+    const generationModel = getGenerationModel(isPaid)
+    console.log(`[УчиОн] Regenerate model: ${generationModel} (isPaid: ${isPaid})`)
 
     let completion
     try {
@@ -673,7 +683,8 @@ ${tasksToGenerate.join('\n')}
 ВАЖНО: Создай ИМЕННО указанное количество заданий, не больше и не меньше!
 `
 
-    const generationModel = process.env.AI_MODEL_GENERATION || 'gpt-4.1-mini'
+    const isPaid = params.isPaid ?? false
+    const generationModel = getGenerationModel(isPaid)
 
     const completion = await this.client.chat.completions.create({
       model: generationModel,

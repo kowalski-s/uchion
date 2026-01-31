@@ -1,4 +1,5 @@
 import OpenAI from 'openai'
+import { getAgentsModel } from '../../../ai-models.js'
 import type { TaskTypeId } from '../../config/task-types.js'
 import type { AgentIssue } from './index.js'
 
@@ -44,7 +45,7 @@ export async function fixTask(
   const start = Date.now()
   const apiKey = process.env.OPENAI_API_KEY
   const baseURL = process.env.AI_BASE_URL
-  const model = process.env.AI_MODEL_GENERATION || 'gpt-4.1-mini'
+  const model = getAgentsModel()
 
   if (!apiKey) {
     return { success: false, originalTask: task, error: 'No API key' }

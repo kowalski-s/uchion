@@ -153,6 +153,9 @@ router.post('/', withAuth(async (req: AuthenticatedRequest, res: Response) => {
   try {
     const ai = getAIProvider()
 
+    // Determine if user has paid subscription (use better model)
+    const isPaid = isPaidUser || req.user.role === 'admin'
+
     // Pass progress callback with extended params
     const generateParams = {
       subject: input.subject,
@@ -162,6 +165,7 @@ router.post('/', withAuth(async (req: AuthenticatedRequest, res: Response) => {
       difficulty: input.difficulty,
       format: input.format,
       variantIndex: input.variantIndex,
+      isPaid,
     }
     const worksheet = await ai.generateWorksheet(generateParams as GeneratePayload, (percent) => {
       sendEvent({ type: 'progress', percent })
@@ -311,6 +315,15 @@ router.post('/regenerate-task', withAuth(async (req: AuthenticatedRequest, res: 
   }
 
   try {
+    // Determine if user has paid subscription (use better model)
+    const [sub] = await db
+      .select({ plan: subscriptions.plan, status: subscriptions.status })
+      .from(subscriptions)
+      .where(eq(subscriptions.userId, userId))
+      .limit(1)
+
+    const isPaid = (sub && sub.plan !== 'free' && sub.status === 'active') || req.user.role === 'admin'
+
     const ai = getAIProvider()
     const result = await ai.regenerateTask({
       subject: input.context.subject,
@@ -319,6 +332,7 @@ router.post('/regenerate-task', withAuth(async (req: AuthenticatedRequest, res: 
       difficulty: input.context.difficulty,
       taskType: input.taskType,
       isTest: input.isTest,
+      isPaid,
     })
 
     return res.json({
