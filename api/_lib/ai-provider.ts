@@ -288,7 +288,7 @@ class OpenAIProvider implements AIProvider {
     const allTasksForAgents = [...testTasks, ...openTasksList]
     const agentValidation = await runMultiAgentValidation(
       allTasksForAgents,
-      { subject: params.subject, grade: params.grade, topic: params.topic },
+      { subject: params.subject, grade: params.grade, topic: params.topic, difficulty },
       { autoFix: true }
     )
 
@@ -388,30 +388,53 @@ class OpenAIProvider implements AIProvider {
     })
 
     // Собираем ответы
-    const answersAssignments: string[] = openTasksList.slice(0, targetOpenCount).map(task => {
+    const answersAssignments: string[] = openTasksList.slice(0, targetOpenCount).map((task, i) => {
+      let answer = ''
       if (task.type === 'open_question') {
-        return task.correctAnswer || ''
+        answer = task.correctAnswer || ''
       } else if (task.type === 'matching') {
         const pairs = task.correctPairs || []
-        return pairs.map(([l, r]) => `${l + 1}-${String.fromCharCode(65 + r)}`).join(', ')
+        answer = pairs.map(([l, r]) => `${l + 1}-${String.fromCharCode(65 + r)}`).join(', ')
       } else if (task.type === 'fill_blank') {
         const blanks = task.blanks || []
-        return blanks.map(b => `(${b.position}) ${b.correctAnswer}`).join('; ')
+        answer = blanks.map(b => `(${b.position}) ${b.correctAnswer}`).join('; ')
       }
-      return ''
+      if (!answer) {
+        console.warn(`[УчиОн] Empty answer for open task ${i} (type: ${task.type})`, {
+          hasCorrectAnswer: !!task.correctAnswer,
+          hasCorrectPairs: !!(task.correctPairs?.length),
+          hasBlanks: !!(task.blanks?.length),
+        })
+      }
+      return answer
     })
 
-    const answersTest: string[] = testTasks.slice(0, targetTestCount).map(task => {
+    const answersTest: string[] = testTasks.slice(0, targetTestCount).map((task, i) => {
+      let answer = ''
       if (task.type === 'single_choice') {
         const options = task.options || []
         const idx = task.correctIndex ?? 0
-        return options[idx] || ''
+        if (idx >= options.length) {
+          console.warn(`[УчиОн] single_choice task ${i}: correctIndex ${idx} out of bounds (options: ${options.length})`)
+        }
+        answer = options[idx] || options[0] || ''
       } else if (task.type === 'multiple_choice') {
         const options = task.options || []
-        const idxs = task.correctIndices || []
-        return idxs.map(i => options[i]).filter(Boolean).join(', ')
+        const idxs = task.correctIndices || [0]
+        const outOfBounds = idxs.filter(idx => idx >= options.length)
+        if (outOfBounds.length > 0) {
+          console.warn(`[УчиОн] multiple_choice task ${i}: correctIndices ${outOfBounds.join(',')} out of bounds (options: ${options.length})`)
+        }
+        answer = idxs.map(idx => options[idx]).filter(Boolean).join(', ')
       }
-      return ''
+      if (!answer) {
+        console.warn(`[УчиОн] Empty answer for test task ${i} (type: ${task.type})`, {
+          hasOptions: !!(task.options?.length),
+          correctIndex: task.correctIndex,
+          correctIndices: task.correctIndices,
+        })
+      }
+      return answer
     })
 
     return {

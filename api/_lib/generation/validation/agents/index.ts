@@ -1,7 +1,9 @@
 import { verifyAnswers } from './answer-verifier.js'
 import { checkContent } from './content-checker.js'
+import { checkQuality } from './quality-checker.js'
 import { fixTask, MAX_FIXES_PER_GENERATION, type FixResult } from './task-fixer.js'
 import type { TaskTypeId } from '../../config/task-types.js'
+import type { DifficultyLevel } from '../../config/difficulty.js'
 
 // =============================================================================
 // Shared agent types
@@ -95,19 +97,20 @@ function collectTasksWithErrors(
 
 export async function runMultiAgentValidation(
   tasks: GeneratedTask[],
-  params: { subject: string; grade: number; topic: string },
+  params: { subject: string; grade: number; topic: string; difficulty: DifficultyLevel },
   options: { autoFix: boolean } = { autoFix: true }
 ): Promise<MultiAgentValidationResult> {
   const start = Date.now()
   console.log(`[УчиОн] Multi-agent validation started for ${tasks.length} tasks`)
 
-  // 1. Run agents in parallel
-  const [answerResult, contentResult] = await Promise.all([
+  // 1. Run all 3 agents in parallel
+  const [answerResult, contentResult, qualityResult] = await Promise.all([
     verifyAnswers(tasks, params.subject),
     checkContent(tasks, params.subject, params.grade, params.topic),
+    checkQuality(tasks, params.subject, params.grade, params.difficulty),
   ])
 
-  const agents = [answerResult, contentResult]
+  const agents = [answerResult, contentResult, qualityResult]
 
   // 2. Collect all issues
   const allIssues: Array<{ taskIndex: number; agent: string; issue: AgentIssue }> = []
@@ -138,7 +141,7 @@ export async function runMultiAgentValidation(
   const fixResults: FixResult[] = []
 
   if (options.autoFix && problemTasks.length > 0) {
-    const tasksWithErrors = collectTasksWithErrors(answerResult, contentResult)
+    const tasksWithErrors = collectTasksWithErrors(answerResult, contentResult, qualityResult)
     const toFix = tasksWithErrors.slice(0, MAX_FIXES_PER_GENERATION)
 
     if (tasksWithErrors.length > MAX_FIXES_PER_GENERATION) {
@@ -176,4 +179,5 @@ export async function runMultiAgentValidation(
 
 export { verifyAnswers } from './answer-verifier.js'
 export { checkContent } from './content-checker.js'
+export { checkQuality } from './quality-checker.js'
 export { fixTask, type FixResult } from './task-fixer.js'
