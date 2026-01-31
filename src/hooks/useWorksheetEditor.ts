@@ -49,6 +49,10 @@ export interface UseWorksheetEditorReturn {
   updateAssignmentAnswer: (index: number, value: string) => void
   /** Update test answer */
   updateTestAnswer: (index: number, value: string) => void
+  /** Replace an assignment and its answer (for regeneration, works on base worksheet) */
+  replaceAssignment: (index: number, assignment: { title: string; text: string }, answer: string) => void
+  /** Replace a test question and its answer (for regeneration, works on base worksheet) */
+  replaceTestQuestion: (index: number, question: { question: string; options: string[]; answer: string }, answer: string) => void
 }
 
 function deepClone<T>(obj: T): T {
@@ -172,6 +176,48 @@ export function useWorksheetEditor(options: UseWorksheetEditorOptions): UseWorks
     })
   }, [])
 
+  // Replace assignment (regeneration - updates base worksheet directly)
+  const replaceAssignment = useCallback((index: number, assignment: { title: string; text: string }, answer: string) => {
+    setWorksheet(prev => {
+      if (!prev) return prev
+      const newAssignments = [...prev.assignments]
+      newAssignments[index] = assignment
+      const newAnswers = [...prev.answers.assignments]
+      newAnswers[index] = answer
+      return { ...prev, assignments: newAssignments, answers: { ...prev.answers, assignments: newAnswers } }
+    })
+    // Also update editedWorksheet if in edit mode
+    setEditedWorksheet(prev => {
+      if (!prev) return prev
+      const newAssignments = [...prev.assignments]
+      newAssignments[index] = assignment
+      const newAnswers = [...prev.answers.assignments]
+      newAnswers[index] = answer
+      return { ...prev, assignments: newAssignments, answers: { ...prev.answers, assignments: newAnswers } }
+    })
+  }, [])
+
+  // Replace test question (regeneration - updates base worksheet directly)
+  const replaceTestQuestion = useCallback((index: number, question: { question: string; options: string[]; answer: string }, answer: string) => {
+    setWorksheet(prev => {
+      if (!prev) return prev
+      const newTest = [...prev.test]
+      newTest[index] = question
+      const newAnswers = [...prev.answers.test]
+      newAnswers[index] = answer
+      return { ...prev, test: newTest, answers: { ...prev.answers, test: newAnswers } }
+    })
+    // Also update editedWorksheet if in edit mode
+    setEditedWorksheet(prev => {
+      if (!prev) return prev
+      const newTest = [...prev.test]
+      newTest[index] = question
+      const newAnswers = [...prev.answers.test]
+      newAnswers[index] = answer
+      return { ...prev, test: newTest, answers: { ...prev.answers, test: newAnswers } }
+    })
+  }, [])
+
   // Save changes
   const saveChanges = useCallback(async (): Promise<boolean> => {
     if (!editedWorksheet || !isDirty) {
@@ -255,5 +301,7 @@ export function useWorksheetEditor(options: UseWorksheetEditorOptions): UseWorks
     updateTestOption,
     updateAssignmentAnswer,
     updateTestAnswer,
+    replaceAssignment,
+    replaceTestQuestion,
   }
 }

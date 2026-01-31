@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../lib/auth'
-import { fetchWorksheet, formatSubjectName } from '../lib/dashboard-api'
+import { fetchWorksheet, formatSubjectName, updateWorksheet as updateWorksheetApi } from '../lib/dashboard-api'
+import { regenerateTask } from '../lib/api'
 import { buildWorksheetPdf } from '../lib/pdf-client'
 import type { Worksheet } from '../../shared/types'
 import { useWorksheetEditor } from '../hooks/useWorksheetEditor'
@@ -63,6 +64,7 @@ export default function SavedWorksheetPage() {
   const [activePage, setActivePage] = useState(1)
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null)
+  const [regeneratingIndex, setRegeneratingIndex] = useState<{ index: number; isTest: boolean } | null>(null)
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -153,6 +155,54 @@ export default function SavedWorksheetPage() {
     } catch (err) {
       void err
       alert('Не удалось создать PDF. Попробуйте еще раз.')
+    }
+  }
+
+  // Handle regenerate task
+  const handleRegenerateTask = async (index: number, taskType: string, isTest: boolean) => {
+    if (!editor.worksheet || regeneratingIndex) return
+
+    setRegeneratingIndex({ index, isTest })
+
+    try {
+      const difficulty = (worksheetData?.difficulty as string) || 'medium'
+
+      const result = await regenerateTask({
+        taskIndex: index,
+        taskType,
+        isTest,
+        context: {
+          subject: worksheetData?.subject || editor.worksheet.subject,
+          grade: worksheetData?.grade || parseInt(editor.worksheet.grade.match(/\d+/)?.[0] || '1'),
+          topic: editor.worksheet.topic,
+          difficulty,
+        },
+      })
+
+      if (result.status === 'ok' && result.data) {
+        if (isTest && result.data.testQuestion) {
+          editor.replaceTestQuestion(index, result.data.testQuestion, result.data.answer)
+        } else if (!isTest && result.data.assignment) {
+          editor.replaceAssignment(index, result.data.assignment, result.data.answer)
+        }
+
+        // Persist to DB
+        if (id) {
+          try {
+            const current = editor.worksheet
+            if (current) {
+              await updateWorksheetApi(id, { content: JSON.stringify(current) })
+              queryClient.invalidateQueries({ queryKey: ['worksheet', id] })
+            }
+          } catch { /* ignore */ }
+        }
+      } else {
+        alert(result.message || 'Не удалось перегенерировать задание.')
+      }
+    } catch {
+      alert('Не удалось перегенерировать задание. Попробуйте ещё раз.')
+    } finally {
+      setRegeneratingIndex(null)
     }
   }
 
@@ -360,6 +410,8 @@ export default function SavedWorksheetPage() {
             onUpdateTestOption={editor.updateTestOption}
             onUpdateAssignmentAnswer={editor.updateAssignmentAnswer}
             onUpdateTestAnswer={editor.updateTestAnswer}
+            onRegenerateTask={handleRegenerateTask}
+            regeneratingIndex={regeneratingIndex}
           />
         </div>
       </main>

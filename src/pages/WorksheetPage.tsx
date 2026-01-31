@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useSessionStore } from '../store/session'
-import { DummyProvider } from '../lib/api'
+import { DummyProvider, regenerateTask } from '../lib/api'
 import type { Worksheet } from '../../shared/types'
 import { buildWorksheetPdf } from '../lib/pdf-client'
 import { useWorksheetEditor } from '../hooks/useWorksheetEditor'
@@ -55,6 +55,7 @@ export default function WorksheetPage() {
   const [activePage, setActivePage] = useState(1)
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null)
+  const [regeneratingIndex, setRegeneratingIndex] = useState<{ index: number; isTest: boolean } | null>(null)
 
   // Worksheet editor hook
   const editor = useWorksheetEditor({
@@ -181,6 +182,53 @@ export default function WorksheetPage() {
       setShowUnsavedDialog(true)
     } else {
       editor.exitEditMode()
+    }
+  }
+
+  // Handle regenerate task
+  const handleRegenerateTask = async (index: number, taskType: string, isTest: boolean) => {
+    if (!editor.worksheet || regeneratingIndex) return
+
+    setRegeneratingIndex({ index, isTest })
+
+    try {
+      const gradeNum = parseInt(editor.worksheet.grade.match(/\d+/)?.[0] || '1')
+      const session = sessionId ? sessionStore.getSession(sessionId) : null
+      const difficulty = (session?.payload as Record<string, unknown>)?.difficulty as string || 'medium'
+
+      const result = await regenerateTask({
+        taskIndex: index,
+        taskType,
+        isTest,
+        context: {
+          subject: editor.worksheet.subject,
+          grade: gradeNum,
+          topic: editor.worksheet.topic,
+          difficulty,
+        },
+      })
+
+      if (result.status === 'ok' && result.data) {
+        if (isTest && result.data.testQuestion) {
+          editor.replaceTestQuestion(index, result.data.testQuestion, result.data.answer)
+        } else if (!isTest && result.data.assignment) {
+          editor.replaceAssignment(index, result.data.assignment, result.data.answer)
+        }
+
+        // Persist to localStorage
+        try {
+          const updated = editor.worksheet
+          if (updated) {
+            localStorage.setItem('uchion_cached_worksheet', JSON.stringify(updated))
+          }
+        } catch { /* ignore */ }
+      } else {
+        alert(result.message || 'Не удалось перегенерировать задание.')
+      }
+    } catch {
+      alert('Не удалось перегенерировать задание. Попробуйте ещё раз.')
+    } finally {
+      setRegeneratingIndex(null)
     }
   }
 
@@ -333,6 +381,8 @@ export default function WorksheetPage() {
             onUpdateTestOption={editor.updateTestOption}
             onUpdateAssignmentAnswer={editor.updateAssignmentAnswer}
             onUpdateTestAnswer={editor.updateTestAnswer}
+            onRegenerateTask={handleRegenerateTask}
+            regeneratingIndex={regeneratingIndex}
           />
         </div>
       </main>

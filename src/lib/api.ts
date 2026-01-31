@@ -65,6 +65,32 @@ export async function generateWorksheet(
   return finalResult
 }
 
+// Regenerate a single task in a worksheet
+export async function regenerateTask(params: {
+  taskIndex: number
+  taskType: string
+  isTest: boolean
+  context: { subject: string; grade: number; topic: string; difficulty: string }
+}): Promise<{
+  status: 'ok' | 'error'
+  code?: string
+  message?: string
+  data?: {
+    testQuestion?: { question: string; options: string[]; answer: string }
+    assignment?: { title: string; text: string }
+    answer: string
+  }
+}> {
+  const res = await fetch('/api/generate/regenerate-task', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(params),
+  })
+
+  return res.json()
+}
+
 // Dummy provider for dev/testing without DB
 export const DummyProvider = {
   getWorksheetById: async (id: string): Promise<import('../../shared/types').Worksheet | null> => {

@@ -7,7 +7,7 @@ import { eq, sql, and, gt } from 'drizzle-orm'
 import { getAIProvider } from '../../api/_lib/ai-provider.js'
 import { buildPdf } from '../../api/_lib/pdf.js'
 import { withAuth } from '../middleware/auth.js'
-import { checkGenerateRateLimit, checkDailyGenerationLimit } from '../middleware/rate-limit.js'
+import { checkGenerateRateLimit, checkDailyGenerationLimit, checkRateLimit } from '../middleware/rate-limit.js'
 import { trackGeneration } from '../../api/_lib/alerts/generation-alerts.js'
 import type { AuthenticatedRequest } from '../types.js'
 import type { GeneratePayload, Worksheet } from '../../shared/types.js'
@@ -245,6 +245,104 @@ router.post('/', withAuth(async (req: AuthenticatedRequest, res: Response) => {
 
     sendEvent({ type: 'error', code, message: 'Не удалось сгенерировать лист. Попробуйте ещё раз.' })
     res.end()
+  }
+}))
+
+// ==================== POST /api/generate/regenerate-task ====================
+
+const RegenerateInputSchema = z.object({
+  taskIndex: z.number().int().min(0),
+  taskType: TaskTypeIdSchema,
+  isTest: z.boolean(),
+  context: z.object({
+    subject: z.enum(['math', 'algebra', 'geometry', 'russian']),
+    grade: z.number().int().min(1).max(11),
+    topic: z.string().min(3).max(200),
+    difficulty: DifficultyLevelSchema,
+  }),
+})
+
+router.post('/regenerate-task', withAuth(async (req: AuthenticatedRequest, res: Response) => {
+  const parse = RegenerateInputSchema.safeParse(req.body)
+  if (!parse.success) {
+    return res.status(400).json({
+      status: 'error',
+      code: 'VALIDATION_ERROR',
+      message: 'Проверьте введённые данные.',
+    })
+  }
+
+  const input = parse.data
+  const userId = req.user.id
+
+  // Rate limit: 10 per minute
+  const rateLimitResult = await checkRateLimit(req, {
+    maxRequests: 10,
+    windowSeconds: 60,
+    identifier: `regen:${userId}`,
+  })
+  if (!rateLimitResult.success) {
+    return res.status(429).json({
+      status: 'error',
+      code: 'RATE_LIMIT_EXCEEDED',
+      message: 'Слишком много запросов на перегенерацию. Попробуйте позже.',
+    })
+  }
+
+  // Atomically decrement generationsLeft (costs 1 generation)
+  const [decremented] = await db
+    .update(users)
+    .set({
+      generationsLeft: sql`${users.generationsLeft} - 1`,
+      updatedAt: new Date(),
+    })
+    .where(and(
+      eq(users.id, userId),
+      gt(users.generationsLeft, 0)
+    ))
+    .returning({ generationsLeft: users.generationsLeft })
+
+  if (!decremented) {
+    return res.status(403).json({
+      status: 'error',
+      code: 'LIMIT_EXCEEDED',
+      message: 'Лимит генераций исчерпан. Приобретите дополнительные генерации.',
+    })
+  }
+
+  try {
+    const ai = getAIProvider()
+    const result = await ai.regenerateTask({
+      subject: input.context.subject,
+      grade: input.context.grade,
+      topic: input.context.topic,
+      difficulty: input.context.difficulty,
+      taskType: input.taskType,
+      isTest: input.isTest,
+    })
+
+    return res.json({
+      status: 'ok',
+      data: result,
+    })
+  } catch (err) {
+    console.error('[API] Regenerate task error:', err)
+
+    // Rollback credit
+    await db
+      .update(users)
+      .set({
+        generationsLeft: sql`${users.generationsLeft} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId))
+      .catch((rollbackErr) => console.error('[API] Failed to rollback generationsLeft:', rollbackErr))
+
+    return res.status(500).json({
+      status: 'error',
+      code: 'AI_ERROR',
+      message: 'Не удалось перегенерировать задание. Попробуйте ещё раз.',
+    })
   }
 }))
 

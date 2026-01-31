@@ -11,6 +11,8 @@ import {
   type TaskTypeId,
   type DifficultyLevel,
   type WorksheetFormatId,
+  getTaskType,
+  getDifficultyPrompt,
   validateTask
 } from './generation/config/index.js'
 import { timedLLMCall } from './ai/validator.js'
@@ -33,8 +35,24 @@ export type GenerateParams = {
   variantIndex?: number
 }
 
+export type RegenerateTaskParams = {
+  subject: Subject
+  grade: number
+  topic: string
+  difficulty: DifficultyLevel
+  taskType: TaskTypeId
+  isTest: boolean
+}
+
+export type RegenerateTaskResult = {
+  testQuestion?: TestQuestion
+  assignment?: Assignment
+  answer: string
+}
+
 export interface AIProvider {
   generateWorksheet(params: GenerateParams, onProgress?: (percent: number) => void): Promise<Worksheet>
+  regenerateTask(params: RegenerateTaskParams): Promise<RegenerateTaskResult>
 }
 
 // New unified task structure from AI
@@ -108,6 +126,29 @@ class DummyProvider implements AIProvider {
       test,
       answers,
       pdfBase64: ''
+    }
+  }
+
+  async regenerateTask(params: RegenerateTaskParams): Promise<RegenerateTaskResult> {
+    console.log('[УчиОн] DummyProvider.regenerateTask called', params)
+
+    if (params.isTest) {
+      return {
+        testQuestion: {
+          question: `Перегенерированный вопрос по теме "${params.topic}"?`,
+          options: ['Вариант А', 'Вариант Б', 'Вариант В', 'Вариант Г'],
+          answer: 'Вариант А'
+        },
+        answer: 'Вариант А'
+      }
+    }
+
+    return {
+      assignment: {
+        title: 'Задание',
+        text: `Перегенерированное задание по теме "${params.topic}"`
+      },
+      answer: 'Ответ на перегенерированное задание'
     }
   }
 }
@@ -450,6 +491,141 @@ class OpenAIProvider implements AIProvider {
       },
       pdfBase64: ''
     }
+  }
+
+  /**
+   * Convert a single GeneratedTask to assignment/testQuestion + answer
+   */
+  private convertSingleTask(task: GeneratedTask, isTest: boolean): RegenerateTaskResult {
+    if (isTest) {
+      if (task.type === 'single_choice') {
+        const options = task.options || []
+        const correctIdx = task.correctIndex ?? 0
+        const answer = options[correctIdx] || options[0] || ''
+        return {
+          testQuestion: {
+            question: task.question || '',
+            options,
+            answer
+          },
+          answer
+        }
+      } else if (task.type === 'multiple_choice') {
+        const options = task.options || []
+        const correctIdxs = task.correctIndices || [0]
+        const answers = correctIdxs.map(i => options[i]).filter(Boolean)
+        const answer = answers.join(', ')
+        return {
+          testQuestion: {
+            question: task.question || '',
+            options,
+            answer
+          },
+          answer
+        }
+      }
+      return { testQuestion: { question: '', options: [], answer: '' }, answer: '' }
+    }
+
+    // Open task types
+    let text = ''
+    let answer = ''
+
+    if (task.type === 'open_question') {
+      text = task.question || ''
+      answer = task.correctAnswer || ''
+    } else if (task.type === 'matching') {
+      const matchingData = {
+        type: 'matching',
+        instruction: task.instruction || 'Соотнеси элементы',
+        leftColumn: task.leftColumn || [],
+        rightColumn: task.rightColumn || [],
+      }
+      text = `<!--MATCHING:${JSON.stringify(matchingData)}-->`
+      const pairs = task.correctPairs || []
+      answer = pairs.map(([l, r]) => `${l + 1}-${String.fromCharCode(65 + r)}`).join(', ')
+    } else if (task.type === 'fill_blank') {
+      text = task.textWithBlanks || ''
+      const blanks = task.blanks || []
+      answer = blanks.map(b => `(${b.position}) ${b.correctAnswer}`).join('; ')
+    }
+
+    return {
+      assignment: { title: 'Задание', text },
+      answer
+    }
+  }
+
+  /**
+   * Regenerate a single task via LLM
+   */
+  async regenerateTask(params: RegenerateTaskParams): Promise<RegenerateTaskResult> {
+    console.log('[УчиОн] OpenAIProvider.regenerateTask called', params)
+
+    const systemPrompt = buildSystemPrompt(params.subject)
+    const taskTypeConfig = getTaskType(params.taskType)
+    const difficultyPrompt = getDifficultyPrompt(params.difficulty, params.subject, params.grade)
+
+    const userPrompt = `
+Создай РОВНО 1 задание для рабочего листа.
+
+Предмет: ${params.subject}
+Класс: ${params.grade}
+Тема: "${params.topic}"
+Сложность: ${difficultyPrompt}
+
+Тип задания: ${taskTypeConfig.name}
+${taskTypeConfig.promptInstruction}
+
+Верни JSON:
+{
+  "tasks": [
+    { "type": "${params.taskType}", ... }
+  ]
+}
+
+ВАЖНО: Создай РОВНО 1 задание, не больше и не меньше!
+`.trim()
+
+    const generationModel = process.env.AI_MODEL_GENERATION || 'gpt-4.1-mini'
+
+    let completion
+    try {
+      completion = await timedLLMCall(
+        "regenerate-task",
+        () => this.client.chat.completions.create({
+          model: generationModel,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ],
+          max_tokens: 2000,
+          temperature: 0.5
+        })
+      )
+    } catch (error) {
+      console.error('[УчиОн] OpenAI API Error (regenerateTask):', error)
+      throw new Error('AI_ERROR')
+    }
+
+    const content = completion.choices[0]?.message?.content || ''
+    let generatedJson: GeneratedWorksheetJson
+    try {
+      const jsonMatch = content.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) throw new Error('No JSON')
+      generatedJson = JSON.parse(jsonMatch[0])
+    } catch (e) {
+      console.error('[УчиОн] JSON parse error (regenerateTask):', e)
+      throw new Error('AI_ERROR')
+    }
+
+    const task = generatedJson.tasks?.[0]
+    if (!task) {
+      console.error('[УчиОн] No task in response (regenerateTask)')
+      throw new Error('AI_ERROR')
+    }
+
+    return this.convertSingleTask(task, params.isTest)
   }
 
   /**
