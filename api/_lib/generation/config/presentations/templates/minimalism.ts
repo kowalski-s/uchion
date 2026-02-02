@@ -79,7 +79,7 @@ const contentsItemSchema = z.object({
 })
 
 const contentsSlideSchema = z.object({
-  title: z.string().default('Содержание'),
+  title: z.string(),
   items: z.array(contentsItemSchema).min(2).max(6),
 })
 
@@ -313,8 +313,8 @@ const practiceSlide: SlideLayoutConfig<z.infer<typeof practiceSchema>> = {
 
 // --- End Slide ---
 const endSlideSchema = z.object({
-  thankYou: z.string().default('СПАСИБО ЗА ВНИМАНИЕ'),
-  title: z.string().default('Вопросы?'),
+  thankYou: z.string(),
+  title: z.string(),
   contactInfo: z.string().max(300).optional().describe('Teacher name, class, school on separate lines'),
 })
 
