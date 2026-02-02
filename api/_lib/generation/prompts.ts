@@ -10,6 +10,7 @@ import {
   getFormatVariant,
 } from './config/index.js'
 import { distributeOpenTasks, distributeTestTasks, type TaskDistribution } from './config/task-distribution.js'
+import { sanitizeUserInput } from './sanitize.js'
 
 // =============================================================================
 // Types
@@ -127,8 +128,9 @@ ${topicsList}
 // =============================================================================
 
 function getTopicBlock(topic: string): string {
+  const safeTopic = sanitizeUserInput(topic)
   return `
-ТЕМА ЗАДАНИЯ: ${topic}
+ТЕМА ЗАДАНИЯ: <user_topic>${safeTopic}</user_topic>
 
 Все задания должны быть строго по этой теме.
 Если тема выходит за рамки указанного класса - всё равно создай задания, но адаптируй сложность.

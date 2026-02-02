@@ -15,21 +15,23 @@ describe('Shared Schemas', () => {
   })
 
   describe('GenerateSchema', () => {
-    it('should accept valid grades (1-4)', () => {
+    it('should accept valid grades (1-11)', () => {
       const validPayload1 = { subject: 'math', grade: 1, topic: 'Счёт' }
       const validPayload4 = { subject: 'math', grade: 4, topic: 'Дроби' }
+      const validPayload11 = { subject: 'algebra', grade: 11, topic: 'Логарифмы' }
 
       expect(() => GenerateSchema.parse(validPayload1)).not.toThrow()
       expect(() => GenerateSchema.parse(validPayload4)).not.toThrow()
+      expect(() => GenerateSchema.parse(validPayload11)).not.toThrow()
     })
 
     it('should reject invalid grades', () => {
       const payload0 = { subject: 'math', grade: 0, topic: 'Тема' }
-      const payload5 = { subject: 'math', grade: 5, topic: 'Тема' }
+      const payload12 = { subject: 'math', grade: 12, topic: 'Тема' }
       const payloadString = { subject: 'math', grade: '2', topic: 'Тема' }
 
       expect(() => GenerateSchema.parse(payload0)).toThrow()
-      expect(() => GenerateSchema.parse(payload5)).toThrow()
+      expect(() => GenerateSchema.parse(payload12)).toThrow()
       expect(() => GenerateSchema.parse(payloadString)).toThrow()
     })
 

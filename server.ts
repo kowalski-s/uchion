@@ -14,7 +14,7 @@ import worksheetsRoutes from './server/routes/worksheets.js'
 import generateRoutes from './server/routes/generate.js'
 import presentationsRoutes from './server/routes/presentations.js'
 import healthRoutes from './server/routes/health.js'
-import adminRoutes from './server/routes/admin.js'
+import adminRoutes from './server/routes/admin/index.js'
 import telegramRoutes from './server/routes/telegram.js'
 import billingRoutes from './server/routes/billing.js'
 
@@ -208,10 +208,8 @@ app.get('/{*path}', (req, res) => {
 
 // ==================== ERROR HANDLING ====================
 
-app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error('[Server Error]', err)
-  res.status(500).json({ error: 'Internal server error' })
-})
+import { errorHandler } from './server/middleware/error-handler.js'
+app.use(errorHandler)
 
 // ==================== START SERVER ====================
 

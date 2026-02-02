@@ -8,31 +8,11 @@ import { buildPdf } from '../../api/_lib/pdf.js';
 import { withAuth } from '../middleware/auth.js';
 import { checkGenerateRateLimit, checkDailyGenerationLimit, checkRateLimit } from '../middleware/rate-limit.js';
 import { trackGeneration } from '../../api/_lib/alerts/generation-alerts.js';
+import { GenerateSchema, TaskTypeIdSchema, DifficultyLevelSchema } from '../../shared/worksheet.js';
 const router = Router();
-// Task type and format enums for validation
-const TaskTypeIdSchema = z.enum([
-    'single_choice',
-    'multiple_choice',
-    'open_question',
-    'matching',
-    'fill_blank',
-]);
-const DifficultyLevelSchema = z.enum(['easy', 'medium', 'hard']);
-const WorksheetFormatIdSchema = z.enum(['open_only', 'test_only', 'test_and_open']);
-const InputSchema = z.object({
-    subject: z.enum(['math', 'algebra', 'geometry', 'russian']),
-    grade: z.number().int().min(1).max(11),
-    topic: z.string().min(3).max(200),
-    folderId: z.string().uuid().nullable().optional(),
-    // New fields for extended generation
-    taskTypes: z.array(TaskTypeIdSchema).min(1).max(5).optional(),
-    difficulty: DifficultyLevelSchema.optional(),
-    format: WorksheetFormatIdSchema.optional(),
-    variantIndex: z.number().int().min(0).max(2).optional(),
-});
 // ==================== POST /api/generate ====================
 router.post('/', withAuth(async (req, res) => {
-    const parse = InputSchema.safeParse(req.body);
+    const parse = GenerateSchema.safeParse(req.body);
     if (!parse.success) {
         return res.status(400).json({
             status: 'error',

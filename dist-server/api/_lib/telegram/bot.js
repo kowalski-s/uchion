@@ -2,6 +2,7 @@
  * Telegram Bot API utilities
  * Used for sending alerts to admins and handling bot commands
  */
+import crypto from 'crypto';
 import { db } from '../../../db/index.js';
 import { users } from '../../../db/schema.js';
 import { eq, and, isNotNull } from 'drizzle-orm';
@@ -131,14 +132,19 @@ export async function sendAdminAlert(options) {
  */
 export function verifyWebhookSecret(secretToken, expectedToken) {
     if (!expectedToken) {
-        // If no secret token is configured, skip verification (not recommended for production)
-        console.warn('[Telegram Webhook] No secret token configured - skipping verification');
-        return true;
+        console.error('[Telegram Webhook] No secret token configured - rejecting request');
+        return false;
     }
     if (!secretToken) {
         console.error('[Telegram Webhook] Missing secret token in request');
         return false;
     }
-    return secretToken === expectedToken;
+    // Use timing-safe comparison to prevent timing attacks
+    const a = Buffer.from(secretToken, 'utf8');
+    const b = Buffer.from(expectedToken, 'utf8');
+    if (a.length !== b.length) {
+        return false;
+    }
+    return crypto.timingSafeEqual(a, b);
 }
 //# sourceMappingURL=bot.js.map

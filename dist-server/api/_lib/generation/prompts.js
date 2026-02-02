@@ -1,5 +1,6 @@
 import { getSubjectConfig, getGradeConfig, getTaskType, getDifficultyPrompt, getFormatVariant, } from './config/index.js';
 import { distributeOpenTasks, distributeTestTasks } from './config/task-distribution.js';
+import { sanitizeUserInput } from './sanitize.js';
 // =============================================================================
 // Block 1: Role and Context
 // =============================================================================
@@ -89,8 +90,9 @@ ${topicsList}
 // Block 4: User Topic
 // =============================================================================
 function getTopicBlock(topic) {
+    const safeTopic = sanitizeUserInput(topic);
     return `
-ТЕМА ЗАДАНИЯ: ${topic}
+ТЕМА ЗАДАНИЯ: <user_topic>${safeTopic}</user_topic>
 
 Все задания должны быть строго по этой теме.
 Если тема выходит за рамки указанного класса - всё равно создай задания, но адаптируй сложность.

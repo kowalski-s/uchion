@@ -11,6 +11,7 @@ import { checkGenerateRateLimit, checkDailyGenerationLimit, checkRateLimit } fro
 import { trackGeneration } from '../../api/_lib/alerts/generation-alerts.js'
 import type { AuthenticatedRequest } from '../types.js'
 import type { GeneratePayload, Worksheet } from '../../shared/types.js'
+import { GenerateSchema, TaskTypeIdSchema, DifficultyLevelSchema } from '../../shared/worksheet.js'
 
 const router = Router()
 
@@ -19,36 +20,11 @@ type SSEEvent =
   | { type: 'result'; data: { worksheet: Worksheet } }
   | { type: 'error'; code: string; message: string }
 
-// Task type and format enums for validation
-const TaskTypeIdSchema = z.enum([
-  'single_choice',
-  'multiple_choice',
-  'open_question',
-  'matching',
-  'fill_blank',
-])
-
-const DifficultyLevelSchema = z.enum(['easy', 'medium', 'hard'])
-
-const WorksheetFormatIdSchema = z.enum(['open_only', 'test_only', 'test_and_open'])
-
-const InputSchema = z.object({
-  subject: z.enum(['math', 'algebra', 'geometry', 'russian']),
-  grade: z.number().int().min(1).max(11),
-  topic: z.string().min(3).max(200),
-  folderId: z.string().uuid().nullable().optional(),
-  // New fields for extended generation
-  taskTypes: z.array(TaskTypeIdSchema).min(1).max(5).optional(),
-  difficulty: DifficultyLevelSchema.optional(),
-  format: WorksheetFormatIdSchema.optional(),
-  variantIndex: z.number().int().min(0).max(2).optional(),
-})
-
-type Input = z.infer<typeof InputSchema>
+type Input = z.infer<typeof GenerateSchema>
 
 // ==================== POST /api/generate ====================
 router.post('/', withAuth(async (req: AuthenticatedRequest, res: Response) => {
-  const parse = InputSchema.safeParse(req.body)
+  const parse = GenerateSchema.safeParse(req.body)
   if (!parse.success) {
     return res.status(400).json({
       status: 'error',

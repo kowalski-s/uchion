@@ -455,8 +455,13 @@ router.get('/payment-status/:orderId', withAuth(async (req, res) => {
     });
 }));
 // ==================== TEST ENDPOINT (Development only) ====================
-if (!IS_PRODUCTION) {
+if (process.env.NODE_ENV === 'development') {
     router.get('/prodamus/test-payment', async (req, res) => {
+        // Only allow on localhost to prevent access on staging/shared environments
+        const host = req.hostname || req.headers.host || '';
+        if (host !== 'localhost' && host !== '127.0.0.1' && !host.startsWith('localhost:') && !host.startsWith('127.0.0.1:')) {
+            return res.status(404).json({ error: 'Not found' });
+        }
         const { order_id } = req.query;
         if (!order_id || typeof order_id !== 'string') {
             return res.status(400).send('Missing order_id');

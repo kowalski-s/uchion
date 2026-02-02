@@ -266,7 +266,6 @@ function processCaretsAndSubscripts(text: string): string {
         return katex.renderToString(match, {
           throwOnError: false,
           displayMode: false,
-          trust: true,
           strict: false,
         })
       } catch {
@@ -294,7 +293,6 @@ function renderMathInText(text: string): string {
       return katex.renderToString(preprocessed, {
         throwOnError: false,
         displayMode: false,
-        trust: true,
         strict: false,
       })
     } catch {
@@ -309,7 +307,6 @@ function renderMathInText(text: string): string {
       return katex.renderToString(preprocessed, {
         throwOnError: false,
         displayMode: true,
-        trust: true,
         strict: false,
       })
     } catch {
@@ -357,7 +354,6 @@ function renderMathInText(text: string): string {
           const rendered = katex.renderToString(preprocessed, {
             throwOnError: false,
             displayMode: false,
-            trust: true,
             strict: false,
           })
           result += rendered
@@ -384,7 +380,6 @@ function renderMathInText(text: string): string {
           const rendered = katex.renderToString(num + '^\\circ', {
             throwOnError: false,
             displayMode: false,
-            trust: true,
             strict: false,
           })
           result += rendered
