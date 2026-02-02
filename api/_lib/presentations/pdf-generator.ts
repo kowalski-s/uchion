@@ -31,10 +31,10 @@ const THEMES: Record<PresentationThemePreset, PdfTheme> = {
     accent: hexToRgb('FF6B35'),
   },
   minimal: {
-    bg: [1, 1, 1],
+    bg: hexToRgb('F5F3F0'),
     title: hexToRgb('1A1A1A'),
-    text: hexToRgb('444444'),
-    accent: hexToRgb('999999'),
+    text: hexToRgb('2D2D2D'),
+    accent: hexToRgb('8B7355'),
   },
   scientific: {
     bg: hexToRgb('F8FAF8'),

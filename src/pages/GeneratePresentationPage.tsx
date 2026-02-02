@@ -34,7 +34,7 @@ const SLIDE_COUNTS: { value: 12 | 18 | 24; label: string; description: string }[
 const THEME_PRESETS: { value: PresentationThemePreset; label: string; description: string; color: string }[] = [
   { value: 'professional', label: 'Профессиональный', description: 'Строгий, деловой', color: 'bg-blue-900' },
   { value: 'educational', label: 'Образовательный', description: 'Яркий, школьный', color: 'bg-purple-600' },
-  { value: 'minimal', label: 'Минимализм', description: 'Простой, чистый', color: 'bg-slate-400' },
+  { value: 'minimal', label: 'Минимализм', description: 'Тёплый, элегантный', color: 'bg-[#8B7355]' },
   { value: 'scientific', label: 'Научный', description: 'Для формул', color: 'bg-green-900' },
 ]
 

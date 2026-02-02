@@ -29,11 +29,11 @@ const THEMES: Record<PresentationThemePreset, ThemeColors> = {
     accentLight: '#FFF0E8',
   },
   minimal: {
-    bg: '#FFFFFF',
+    bg: '#F5F3F0',
     title: '#1A1A1A',
-    text: '#444444',
-    accent: '#999999',
-    accentLight: '#F3F3F3',
+    text: '#2D2D2D',
+    accent: '#8B7355',
+    accentLight: '#E8E4DF',
   },
   scientific: {
     bg: '#F8FAF8',

@@ -1,5 +1,6 @@
 import PptxGenJS from 'pptxgenjs'
 import type { PresentationStructure, PresentationSlide, PresentationThemePreset } from '../../../shared/types.js'
+import { generateMinimalismPptx } from './minimalism-generator.js'
 
 // =============================================================================
 // Theme Configuration
@@ -541,6 +542,11 @@ export async function generatePptx(
   themePreset: PresentationThemePreset | 'custom',
   customDescription?: string
 ): Promise<string> {
+  // Use dedicated minimalism renderer for warm dark+beige style
+  if (themePreset === 'minimal') {
+    return generateMinimalismPptx(structure)
+  }
+
   const pres = new PptxGenJS()
 
   // Set layout to widescreen 16:9

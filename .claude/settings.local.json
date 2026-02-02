@@ -49,7 +49,8 @@
       "Bash(npm run db:migrate:*)",
       "Bash(npx vitest:*)",
       "Bash(npx vite build:*)",
-      "Bash(npm ls:*)"
+      "Bash(npm ls:*)",
+      "Bash(wc:*)"
     ]
   }
 }

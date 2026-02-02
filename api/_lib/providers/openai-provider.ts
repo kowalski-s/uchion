@@ -547,6 +547,20 @@ ${taskTypeConfig.promptInstruction}
     }
     const subjectHint = subjectHints[params.subject] || ''
 
+    // Extra constraints for minimalism theme
+    const isMinimalTheme = (params.themeType === 'preset' && params.themePreset === 'minimal')
+    const minimalConstraints = isMinimalTheme ? `
+ДОПОЛНИТЕЛЬНЫЕ ТРЕБОВАНИЯ для минималистичного стиля:
+- ОБЯЗАТЕЛЬНО включи теорию, определения и правила по теме
+- ОБЯЗАТЕЛЬНО включи формулы (если они есть в изучаемой теме)
+- Слайды "practice" (задания) — максимум 5 заданий, БЕЗ ответов на том же слайде
+- Ответы на задания размести на ОТДЕЛЬНОМ слайде type="content" с заголовком "Ответы" ПОСЛЕ слайда с заданиями
+- НЕ используй тип "chart" — в минималистичном стиле нет диаграмм
+- Первый слайд: в content[0] напиши название предмета (например "Математика"), в content[1] — подзаголовок, в content[2] — "класс • учебный год"
+- Используй "twoColumn" для определений (leftColumn + rightColumn — по 3-5 ключевых понятий)
+- Используй "formula" для ключевых формул (content[0] = сама формула крупно, content[1] = описание, далее пояснения переменных)
+- Для завершающего слайда (conclusion) title="Вопросы?", content = данные учителя (если есть)` : ''
+
     const userPrompt = `Создай презентацию на тему "${params.topic}" для ${params.grade} класса по предмету "${subjectConfig.name}". Ровно ${slideCount} слайдов.
 
 Доступные типы слайдов (используй РАЗНООБРАЗНО, не только "content"):
@@ -564,6 +578,7 @@ ${taskTypeConfig.promptInstruction}
 ${subjectHint}
 
 ${styleInstruction}
+${minimalConstraints}
 
 Верни JSON:
 {"title": "Название", "slides": [

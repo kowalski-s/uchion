@@ -6,3 +6,16 @@ export {
   getPresentationSubjectConfig,
   type PresentationSubjectConfig,
 } from './subjects/index.js'
+
+export {
+  minimalismTemplate,
+  getTemplate,
+  getAllTemplates,
+  getTemplateIds,
+  hasTemplate,
+  validatePresentation,
+  GeneratedPresentationSchema,
+  type PresentationTemplateConfig,
+  type TemplateRegistry,
+  type SlideType,
+} from './templates/index.js'
