@@ -1,5 +1,12 @@
-import { PDFDocument, rgb, StandardFonts } from 'pdf-lib'
+import { PDFDocument, rgb } from 'pdf-lib'
+import fontkit from '@pdf-lib/fontkit'
+import fs from 'fs'
+import path from 'path'
+import { fileURLToPath } from 'url'
 import type { PresentationStructure, PresentationSlide, PresentationThemePreset } from '../../../shared/types.js'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 // =============================================================================
 // Theme colors (matches PPTX generator)
@@ -515,8 +522,35 @@ export async function generatePresentationPdf(
   const theme = THEMES[effectivePreset]
 
   const doc = await PDFDocument.create()
-  const font = await doc.embedFont(StandardFonts.Helvetica)
-  const boldFont = await doc.embedFont(StandardFonts.HelveticaBold)
+  doc.registerFontkit(fontkit)
+
+  // Load Inter fonts with Cyrillic support
+  const fontPaths = [
+    {
+      regular: path.join(process.cwd(), 'public/fonts/Inter-Regular.ttf'),
+      bold: path.join(process.cwd(), 'public/fonts/Inter-Bold.ttf'),
+    },
+    {
+      regular: path.join(__dirname, '../_assets/fonts/Inter-Regular.ttf'),
+      bold: path.join(__dirname, '../_assets/fonts/Inter-Bold.ttf'),
+    },
+  ]
+
+  let regularBytes: Buffer | undefined
+  let boldBytes: Buffer | undefined
+  for (const p of fontPaths) {
+    try {
+      regularBytes = fs.readFileSync(p.regular)
+      boldBytes = fs.readFileSync(p.bold)
+      break
+    } catch { /* try next path */ }
+  }
+  if (!regularBytes || !boldBytes) {
+    throw new Error('Inter font files not found for PDF generation')
+  }
+
+  const font = await doc.embedFont(regularBytes, { subset: true })
+  const boldFont = await doc.embedFont(boldBytes, { subset: true })
 
   const total = structure.slides.length
 
