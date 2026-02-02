@@ -196,17 +196,50 @@ interface TestQuestion {
 
 ## 9. Error Handling
 
-Error codes:
-- `VALIDATION_ERROR` -- невалидный input
-- `AI_ERROR` -- модель не смогла сгенерировать
-- `PDF_ERROR` -- ошибка сборки PDF
-- `SERVER_ERROR` -- внутренняя ошибка
-- `RATE_LIMIT` -- превышен лимит
-- `UNAUTHORIZED` -- нужна авторизация
-- `FORBIDDEN` -- нет прав
+### HTTP Status Codes
+- `400` Bad Request -- validation errors, invalid input
+- `401` Unauthorized -- missing or invalid authentication
+- `403` Forbidden -- insufficient permissions, limit exceeded
+- `404` Not Found -- resource does not exist
+- `429` Too Many Requests -- rate limit exceeded
+- `500` Internal Server Error -- server-side errors
+
+### Standard Error Format
+Most endpoints return errors as JSON:
 
 ```json
-{ "error": { "code": "VALIDATION_ERROR", "message": "..." } }
+{ "error": "Error message string" }
+```
+
+With field-level validation details:
+```json
+{
+  "error": "Validation error",
+  "details": {
+    "topic": "Topic must be 3-200 characters"
+  }
+}
+```
+
+### Headers
+- `Retry-After` (seconds) -- included with 429 responses
+
+### Error Codes
+Common codes returned in responses:
+- `VALIDATION_ERROR` -- invalid input (400)
+- `UNAUTHORIZED` -- authentication required (401)
+- `NOT_FOUND` -- resource not found (404)
+- `RATE_LIMIT_EXCEEDED` -- rate limit hit (429)
+- `FOLDER_LIMIT_EXCEEDED` -- folder limit reached (403)
+- `AI_ERROR` -- AI generation failed (500)
+- `PDF_ERROR` -- PDF generation failed (500)
+- `INTERNAL_ERROR` -- internal server error (500)
+
+### SSE Error Format
+SSE endpoints (`/api/generate`, `/api/presentations`) use a different format:
+
+```json
+data: { "type": "error", "code": "AI_ERROR", "message": "..." }
 ```
 
 ---

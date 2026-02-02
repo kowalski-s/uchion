@@ -22,6 +22,7 @@ import { runMultiAgentValidation } from '../generation/validation/agents/index.j
 import { getPresentationSubjectConfig } from '../generation/config/presentations/index.js'
 import { getGenerationModel } from '../ai-models.js'
 import type { AIProvider, GenerateParams, GeneratePresentationParams, RegenerateTaskParams, RegenerateTaskResult, GeneratedTask, GeneratedWorksheetJson } from '../ai-provider.js'
+import { getCircuitBreaker } from './circuit-breaker.js'
 
 // =============================================================================
 // OpenAIProvider - real generation via AI
@@ -131,44 +132,58 @@ export class OpenAIProvider implements AIProvider {
     console.log('[УчиОн] Targets: testQuestions=', testQuestions, 'openTasks=', openTasks)
 
     // RETRY: Generate missing tasks (up to 3 attempts) with exponential backoff
+    // Circuit breaker prevents retries if AI provider is systematically failing
+    const circuitBreaker = getCircuitBreaker()
     const MAX_RETRIES = 3
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-      const missingOpen = openTasks - openTasksList.length
-      const missingTest = testQuestions - testTasks.length
 
-      if (missingOpen <= 0 && missingTest <= 0) break
+    // Check circuit breaker before starting retry loop
+    if (circuitBreaker.isOpen()) {
+      console.warn('[УчиОн] Circuit breaker is OPEN - skipping retry loop due to systematic AI failures')
+    } else {
+      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        const missingOpen = openTasks - openTasksList.length
+        const missingTest = testQuestions - testTasks.length
 
-      console.log(`[УчиОн] Task count mismatch: got ${openTasksList.length} open (expected ${openTasks}), ${testTasks.length} test (expected ${testQuestions}). Retrying... (attempt ${attempt}/${MAX_RETRIES})`)
+        if (missingOpen <= 0 && missingTest <= 0) break
 
-      // Exponential backoff: 1s, 2s, 4s
-      await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt - 1)))
+        console.log(`[УчиОн] Task count mismatch: got ${openTasksList.length} open (expected ${openTasks}), ${testTasks.length} test (expected ${testQuestions}). Retrying... (attempt ${attempt}/${MAX_RETRIES})`)
 
-      const retryOpenCount = Math.max(0, missingOpen)
-      const retryTestCount = Math.max(0, missingTest)
+        // Exponential backoff: 1s, 2s, 4s
+        await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt - 1)))
 
-      // Early exit if nothing to retry
-      if (retryOpenCount === 0 && retryTestCount === 0) break
+        const retryOpenCount = Math.max(0, missingOpen)
+        const retryTestCount = Math.max(0, missingTest)
 
-      try {
-        const retryTasks = await this.generateMissingTasks(
-          params,
-          retryOpenCount,
-          retryTestCount,
-          taskTypes,
-          difficulty
-        )
+        // Early exit if nothing to retry
+        if (retryOpenCount === 0 && retryTestCount === 0) break
 
-        for (const task of retryTasks) {
-          if (task.type === 'single_choice' || task.type === 'multiple_choice') {
-            testTasks.push(task)
-          } else {
-            openTasksList.push(task)
+        try {
+          const retryTasks = await this.generateMissingTasks(
+            params,
+            retryOpenCount,
+            retryTestCount,
+            taskTypes,
+            difficulty
+          )
+
+          for (const task of retryTasks) {
+            if (task.type === 'single_choice' || task.type === 'multiple_choice') {
+              testTasks.push(task)
+            } else {
+              openTasksList.push(task)
+            }
           }
-        }
 
-        console.log(`[УчиОн] After retry ${attempt}: testTasks=${testTasks.length}, openTasksList=${openTasksList.length}`)
-      } catch (retryError) {
-        console.error(`[УчиОн] Retry ${attempt} failed:`, retryError)
+          console.log(`[УчиОн] After retry ${attempt}: testTasks=${testTasks.length}, openTasksList=${openTasksList.length}`)
+
+          // Record success in circuit breaker
+          circuitBreaker.recordSuccess()
+        } catch (retryError) {
+          console.error(`[УчиОн] Retry ${attempt} failed:`, retryError)
+
+          // Record failure in circuit breaker
+          circuitBreaker.recordFailure()
+        }
       }
     }
 
