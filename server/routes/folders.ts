@@ -6,7 +6,7 @@ import { db } from '../../db/index.js'
 import { folders, worksheets, subscriptions } from '../../db/schema.js'
 import { withAuth, type AuthUser } from '../middleware/auth.js'
 import { ApiError } from '../middleware/error-handler.js'
-import { checkRateLimit } from '../middleware/rate-limit.js'
+import { requireRateLimit } from '../middleware/rate-limit.js'
 import type { AuthenticatedRequest } from '../types.js'
 
 const router = Router()
@@ -36,15 +36,11 @@ const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
 router.get('/', withAuth(async (req: AuthenticatedRequest, res: Response) => {
   const user = req.user
 
-  const rateLimitResult = await checkRateLimit(req, {
+  await requireRateLimit(req, {
     maxRequests: 60,
     windowSeconds: 60,
     identifier: `folders:list:${user.id}`,
   })
-  if (!rateLimitResult.success) {
-    const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000)
-    throw ApiError.tooManyRequests('Too many requests', retryAfter)
-  }
 
   const userFolders = await db
     .select({
@@ -93,15 +89,11 @@ router.get('/', withAuth(async (req: AuthenticatedRequest, res: Response) => {
 router.post('/', withAuth(async (req: AuthenticatedRequest, res: Response) => {
   const user = req.user
 
-  const rateLimitResult = await checkRateLimit(req, {
+  await requireRateLimit(req, {
     maxRequests: 20,
     windowSeconds: 60,
     identifier: `folders:create:${user.id}`,
   })
-  if (!rateLimitResult.success) {
-    const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000)
-    throw ApiError.tooManyRequests('Too many requests', retryAfter)
-  }
 
   const parse = CreateFolderSchema.safeParse(req.body)
   if (!parse.success) {
@@ -128,8 +120,7 @@ router.post('/', withAuth(async (req: AuthenticatedRequest, res: Response) => {
     ))
 
   if (folderCount >= folderLimit) {
-    return res.status(403).json({
-      error: 'Достигнут лимит папок',
+    throw new ApiError(403, 'Достигнут лимит папок', 'FOLDER_LIMIT_EXCEEDED', {
       message: userPlan === 'free'
         ? `Бесплатный тариф позволяет создать до ${folderLimit} папок.`
         : `Достигнут максимальный лимит папок (${folderLimit}).`,
@@ -205,15 +196,11 @@ router.get('/:id', withAuth(async (req: AuthenticatedRequest, res: Response) => 
     throw ApiError.badRequest('Invalid folder ID format')
   }
 
-  const rateLimitResult = await checkRateLimit(req, {
+  await requireRateLimit(req, {
     maxRequests: 60,
     windowSeconds: 60,
     identifier: `folders:get:${user.id}`,
   })
-  if (!rateLimitResult.success) {
-    const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000)
-    throw ApiError.tooManyRequests('Too many requests', retryAfter)
-  }
 
   const [folder] = await db
     .select({
@@ -279,15 +266,11 @@ router.patch('/:id', withAuth(async (req: AuthenticatedRequest, res: Response) =
     throw ApiError.badRequest('Invalid folder ID format')
   }
 
-  const rateLimitResult = await checkRateLimit(req, {
+  await requireRateLimit(req, {
     maxRequests: 30,
     windowSeconds: 60,
     identifier: `folders:update:${user.id}`,
   })
-  if (!rateLimitResult.success) {
-    const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000)
-    throw ApiError.tooManyRequests('Too many requests', retryAfter)
-  }
 
   const parse = UpdateFolderSchema.safeParse(req.body)
   if (!parse.success) {
@@ -362,15 +345,11 @@ router.delete('/:id', withAuth(async (req: AuthenticatedRequest, res: Response) 
     throw ApiError.badRequest('Invalid folder ID format')
   }
 
-  const rateLimitResult = await checkRateLimit(req, {
+  await requireRateLimit(req, {
     maxRequests: 10,
     windowSeconds: 60,
     identifier: `folders:delete:${user.id}`,
   })
-  if (!rateLimitResult.success) {
-    const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000)
-    throw ApiError.tooManyRequests('Too many requests', retryAfter)
-  }
 
   const [folder] = await db
     .select({ userId: folders.userId })

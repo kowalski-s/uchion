@@ -6,7 +6,7 @@ import { db } from '../../../db/index.js'
 import { users, worksheets, generations, subscriptions, payments, folders, paymentIntents, refreshTokens } from '../../../db/schema.js'
 import { withAdminAuth } from '../../middleware/auth.js'
 import { ApiError } from '../../middleware/error-handler.js'
-import { checkRateLimit } from '../../middleware/rate-limit.js'
+import { requireRateLimit } from '../../middleware/rate-limit.js'
 import type { AuthenticatedRequest } from '../../types.js'
 
 /** Escape LIKE special characters to prevent wildcard injection */
@@ -29,15 +29,11 @@ const UsersQuerySchema = z.object({
 })
 
 router.get('/', withAdminAuth(async (req: AuthenticatedRequest, res: Response) => {
-  const rateLimitResult = await checkRateLimit(req, {
+  await requireRateLimit(req, {
     maxRequests: 30,
     windowSeconds: 60,
     identifier: `admin:users:${req.user.id}`,
   })
-  if (!rateLimitResult.success) {
-    const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000)
-    throw ApiError.tooManyRequests('Too many requests', retryAfter)
-  }
 
   const parse = UsersQuerySchema.safeParse(req.query)
   if (!parse.success) {
@@ -168,15 +164,11 @@ router.get('/:id', withAdminAuth(async (req: AuthenticatedRequest, res: Response
     throw ApiError.badRequest('Invalid user ID format')
   }
 
-  const rateLimitResult = await checkRateLimit(req, {
+  await requireRateLimit(req, {
     maxRequests: 60,
     windowSeconds: 60,
     identifier: `admin:user-detail:${req.user.id}`,
   })
-  if (!rateLimitResult.success) {
-    const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000)
-    throw ApiError.tooManyRequests('Too many requests', retryAfter)
-  }
 
   const [user] = await db
     .select({
@@ -287,15 +279,11 @@ router.post('/:id/block', withAdminAuth(async (req: AuthenticatedRequest, res: R
     throw ApiError.badRequest('Cannot block yourself')
   }
 
-  const rateLimitResult = await checkRateLimit(req, {
+  await requireRateLimit(req, {
     maxRequests: 10,
     windowSeconds: 60,
     identifier: `admin:block-user:${req.user.id}`,
   })
-  if (!rateLimitResult.success) {
-    const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000)
-    throw ApiError.tooManyRequests('Too many requests', retryAfter)
-  }
 
   const [user] = await db
     .select({ id: users.id, deletedAt: users.deletedAt })
@@ -329,15 +317,11 @@ router.post('/:id/unblock', withAdminAuth(async (req: AuthenticatedRequest, res:
     throw ApiError.badRequest('Invalid user ID format')
   }
 
-  const rateLimitResult = await checkRateLimit(req, {
+  await requireRateLimit(req, {
     maxRequests: 10,
     windowSeconds: 60,
     identifier: `admin:unblock-user:${req.user.id}`,
   })
-  if (!rateLimitResult.success) {
-    const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000)
-    throw ApiError.tooManyRequests('Too many requests', retryAfter)
-  }
 
   const [user] = await db
     .select({ id: users.id, deletedAt: users.deletedAt })
@@ -365,15 +349,11 @@ router.post('/:id/unblock', withAdminAuth(async (req: AuthenticatedRequest, res:
 
 // ==================== DELETE /api/admin/users/:id/purge ====================
 router.delete('/:id/purge', withAdminAuth(async (req: AuthenticatedRequest, res: Response) => {
-  const rateLimitResult = await checkRateLimit(req, {
+  await requireRateLimit(req, {
     maxRequests: 5,
     windowSeconds: 60,
     identifier: `admin:purge:${req.user.id}`,
   })
-  if (!rateLimitResult.success) {
-    const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000)
-    throw ApiError.tooManyRequests('Too many requests', retryAfter)
-  }
 
   const userId = req.params.id
   if (!uuidRegex.test(userId)) {

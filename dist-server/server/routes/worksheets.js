@@ -5,7 +5,7 @@ import { db } from '../../db/index.js';
 import { worksheets, folders } from '../../db/schema.js';
 import { withAuth } from '../middleware/auth.js';
 import { ApiError } from '../middleware/error-handler.js';
-import { checkRateLimit } from '../middleware/rate-limit.js';
+import { requireRateLimit } from '../middleware/rate-limit.js';
 const router = Router();
 const UpdateWorksheetSchema = z.object({
     title: z.string().min(1).max(200).optional(),
@@ -16,15 +16,11 @@ const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
 // ==================== GET /api/worksheets ====================
 router.get('/', withAuth(async (req, res) => {
     const user = req.user;
-    const rateLimitResult = await checkRateLimit(req, {
+    await requireRateLimit(req, {
         maxRequests: 30,
         windowSeconds: 60,
         identifier: `worksheets:list:${user.id}`,
     });
-    if (!rateLimitResult.success) {
-        const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000);
-        throw ApiError.tooManyRequests('Too many requests', retryAfter);
-    }
     const { folderId, limit: limitStr } = req.query;
     const limit = Math.min(parseInt(limitStr) || 50, 100);
     const conditions = [
@@ -64,15 +60,11 @@ router.get('/:id', withAuth(async (req, res) => {
     if (!id || !uuidRegex.test(id)) {
         throw ApiError.badRequest('Invalid worksheet ID format');
     }
-    const rateLimitResult = await checkRateLimit(req, {
+    await requireRateLimit(req, {
         maxRequests: 60,
         windowSeconds: 60,
         identifier: `worksheet:get:${user.id}`,
     });
-    if (!rateLimitResult.success) {
-        const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000);
-        throw ApiError.tooManyRequests('Too many requests', retryAfter);
-    }
     const [worksheet] = await db
         .select({
         id: worksheets.id,
@@ -126,15 +118,11 @@ router.patch('/:id', withAuth(async (req, res) => {
     if (!id || !uuidRegex.test(id)) {
         throw ApiError.badRequest('Invalid worksheet ID format');
     }
-    const rateLimitResult = await checkRateLimit(req, {
+    await requireRateLimit(req, {
         maxRequests: 30,
         windowSeconds: 60,
         identifier: `worksheet:update:${user.id}`,
     });
-    if (!rateLimitResult.success) {
-        const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000);
-        throw ApiError.tooManyRequests('Too many requests', retryAfter);
-    }
     const parse = UpdateWorksheetSchema.safeParse(req.body);
     if (!parse.success) {
         throw ApiError.validation(parse.error.flatten().fieldErrors);
@@ -193,15 +181,11 @@ router.delete('/:id', withAuth(async (req, res) => {
     if (!id || !uuidRegex.test(id)) {
         throw ApiError.badRequest('Invalid worksheet ID format');
     }
-    const rateLimitResult = await checkRateLimit(req, {
+    await requireRateLimit(req, {
         maxRequests: 10,
         windowSeconds: 60,
         identifier: `worksheet:delete:${user.id}`,
     });
-    if (!rateLimitResult.success) {
-        const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000);
-        throw ApiError.tooManyRequests('Too many requests', retryAfter);
-    }
     const [worksheet] = await db
         .select({ userId: worksheets.userId })
         .from(worksheets)

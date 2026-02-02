@@ -6,17 +6,13 @@ import { users, subscriptions } from '../../db/schema.js';
 import { getTokenFromCookie, setAuthCookies, clearAuthCookies, clearOAuthCookies, setOAuthStateCookie, setPKCECookie, getStateCookie, getPKCECookie, ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE, } from '../middleware/cookies.js';
 import { verifyAccessToken, verifyRefreshToken, createAccessToken, createRefreshToken, revokeRefreshToken, decodeRefreshToken, getTokenFamilyId, } from '../../api/_lib/auth/tokens.js';
 import { generateState, generatePKCE, buildYandexAuthUrl, exchangeYandexCode, validateState, } from '../../api/_lib/auth/oauth.js';
-import { checkAuthRateLimit, checkMeRateLimit, checkRefreshRateLimit, checkOAuthRedirectRateLimit, } from '../middleware/rate-limit.js';
+import { checkAuthRateLimit, requireMeRateLimit, requireRefreshRateLimit, requireOAuthRedirectRateLimit, } from '../middleware/rate-limit.js';
 import { ApiError } from '../middleware/error-handler.js';
 import { logOAuthCallbackSuccess, logOAuthCallbackFailed, logRateLimitExceeded, logCsrfDetected, logInvalidSignature, logExpiredAuth, } from '../middleware/audit-log.js';
 const router = Router();
 // ==================== GET /api/auth/me ====================
 router.get('/me', async (req, res) => {
-    const rateLimitResult = await checkMeRateLimit(req);
-    if (!rateLimitResult.success) {
-        const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000);
-        throw ApiError.tooManyRequests('Too many requests', retryAfter);
-    }
+    await requireMeRateLimit(req);
     const token = getTokenFromCookie(req, ACCESS_TOKEN_COOKIE);
     if (!token) {
         throw ApiError.unauthorized('Not authenticated');
@@ -77,11 +73,7 @@ router.post('/logout', async (req, res) => {
 });
 // ==================== POST /api/auth/refresh ====================
 router.post('/refresh', async (req, res) => {
-    const rateLimitResult = await checkRefreshRateLimit(req);
-    if (!rateLimitResult.success) {
-        const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000);
-        throw ApiError.tooManyRequests('Too many refresh attempts', retryAfter);
-    }
+    await requireRefreshRateLimit(req);
     try {
         const refreshToken = getTokenFromCookie(req, REFRESH_TOKEN_COOKIE);
         if (!refreshToken) {
@@ -120,21 +112,18 @@ router.post('/refresh', async (req, res) => {
         return res.status(200).json({ success: true });
     }
     catch (error) {
-        if (error instanceof ApiError)
+        if (error instanceof ApiError) {
+            // clearAuthCookies already called before the throw in the cases above
             throw error;
+        }
         console.error('[Refresh] Error:', error);
         clearAuthCookies(res);
-        return res.status(401).json({ error: 'Token refresh failed' });
+        throw ApiError.unauthorized('Token refresh failed');
     }
 });
 // ==================== GET /api/auth/yandex/redirect ====================
 router.get('/yandex/redirect', async (req, res) => {
-    const rateLimitResult = await checkOAuthRedirectRateLimit(req);
-    if (!rateLimitResult.success) {
-        const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000);
-        console.warn('[Yandex OAuth] Rate limit exceeded on redirect');
-        throw ApiError.tooManyRequests('Too many requests. Please try again later.', retryAfter);
-    }
+    await requireOAuthRedirectRateLimit(req);
     const clientId = process.env.YANDEX_CLIENT_ID;
     const appUrl = process.env.APP_URL;
     if (!clientId) {

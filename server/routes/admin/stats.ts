@@ -4,23 +4,19 @@ import { isNull, gte, sql, count, eq, and } from 'drizzle-orm'
 import { db } from '../../../db/index.js'
 import { users, worksheets, generations, subscriptions } from '../../../db/schema.js'
 import { withAdminAuth } from '../../middleware/auth.js'
-import { ApiError } from '../../middleware/error-handler.js'
-import { checkRateLimit } from '../../middleware/rate-limit.js'
+import { requireRateLimit } from '../../middleware/rate-limit.js'
 import type { AuthenticatedRequest } from '../../types.js'
+
 
 const router = Router()
 
 // ==================== GET /api/admin/stats ====================
 router.get('/', withAdminAuth(async (req: AuthenticatedRequest, res: Response) => {
-  const rateLimitResult = await checkRateLimit(req, {
+  await requireRateLimit(req, {
     maxRequests: 30,
     windowSeconds: 60,
     identifier: `admin:stats:${req.user.id}`,
   })
-  if (!rateLimitResult.success) {
-    const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000)
-    throw ApiError.tooManyRequests('Too many requests', retryAfter)
-  }
 
   const [totalUsersResult] = await db
     .select({ count: count() })

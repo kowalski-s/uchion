@@ -5,7 +5,7 @@ import { db } from '../../../db/index.js';
 import { users, worksheets, generations, subscriptions, payments, folders, paymentIntents, refreshTokens } from '../../../db/schema.js';
 import { withAdminAuth } from '../../middleware/auth.js';
 import { ApiError } from '../../middleware/error-handler.js';
-import { checkRateLimit } from '../../middleware/rate-limit.js';
+import { requireRateLimit } from '../../middleware/rate-limit.js';
 /** Escape LIKE special characters to prevent wildcard injection */
 function escapeLike(input) {
     return input.replace(/[%_\\]/g, '\\$&');
@@ -22,15 +22,11 @@ const UsersQuerySchema = z.object({
     sortOrder: z.enum(['asc', 'desc']).optional().default('desc'),
 });
 router.get('/', withAdminAuth(async (req, res) => {
-    const rateLimitResult = await checkRateLimit(req, {
+    await requireRateLimit(req, {
         maxRequests: 30,
         windowSeconds: 60,
         identifier: `admin:users:${req.user.id}`,
     });
-    if (!rateLimitResult.success) {
-        const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000);
-        throw ApiError.tooManyRequests('Too many requests', retryAfter);
-    }
     const parse = UsersQuerySchema.safeParse(req.query);
     if (!parse.success) {
         throw ApiError.validation(parse.error.flatten().fieldErrors);
@@ -131,15 +127,11 @@ router.get('/:id', withAdminAuth(async (req, res) => {
     if (!id || !uuidRegex.test(id)) {
         throw ApiError.badRequest('Invalid user ID format');
     }
-    const rateLimitResult = await checkRateLimit(req, {
+    await requireRateLimit(req, {
         maxRequests: 60,
         windowSeconds: 60,
         identifier: `admin:user-detail:${req.user.id}`,
     });
-    if (!rateLimitResult.success) {
-        const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000);
-        throw ApiError.tooManyRequests('Too many requests', retryAfter);
-    }
     const [user] = await db
         .select({
         id: users.id,
@@ -228,15 +220,11 @@ router.post('/:id/block', withAdminAuth(async (req, res) => {
     if (id === req.user.id) {
         throw ApiError.badRequest('Cannot block yourself');
     }
-    const rateLimitResult = await checkRateLimit(req, {
+    await requireRateLimit(req, {
         maxRequests: 10,
         windowSeconds: 60,
         identifier: `admin:block-user:${req.user.id}`,
     });
-    if (!rateLimitResult.success) {
-        const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000);
-        throw ApiError.tooManyRequests('Too many requests', retryAfter);
-    }
     const [user] = await db
         .select({ id: users.id, deletedAt: users.deletedAt })
         .from(users)
@@ -261,15 +249,11 @@ router.post('/:id/unblock', withAdminAuth(async (req, res) => {
     if (!id || !uuidRegex.test(id)) {
         throw ApiError.badRequest('Invalid user ID format');
     }
-    const rateLimitResult = await checkRateLimit(req, {
+    await requireRateLimit(req, {
         maxRequests: 10,
         windowSeconds: 60,
         identifier: `admin:unblock-user:${req.user.id}`,
     });
-    if (!rateLimitResult.success) {
-        const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000);
-        throw ApiError.tooManyRequests('Too many requests', retryAfter);
-    }
     const [user] = await db
         .select({ id: users.id, deletedAt: users.deletedAt })
         .from(users)
@@ -290,15 +274,11 @@ router.post('/:id/unblock', withAdminAuth(async (req, res) => {
 }));
 // ==================== DELETE /api/admin/users/:id/purge ====================
 router.delete('/:id/purge', withAdminAuth(async (req, res) => {
-    const rateLimitResult = await checkRateLimit(req, {
+    await requireRateLimit(req, {
         maxRequests: 5,
         windowSeconds: 60,
         identifier: `admin:purge:${req.user.id}`,
     });
-    if (!rateLimitResult.success) {
-        const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000);
-        throw ApiError.tooManyRequests('Too many requests', retryAfter);
-    }
     const userId = req.params.id;
     if (!uuidRegex.test(userId)) {
         throw ApiError.badRequest('Invalid user ID format');

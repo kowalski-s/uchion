@@ -3,7 +3,7 @@ import type { Response } from 'express'
 import { z } from 'zod'
 import { withAdminAuth } from '../../middleware/auth.js'
 import { ApiError } from '../../middleware/error-handler.js'
-import { checkRateLimit } from '../../middleware/rate-limit.js'
+import { requireRateLimit } from '../../middleware/rate-limit.js'
 import type { AuthenticatedRequest } from '../../types.js'
 import { sendAdminAlert, type AlertLevel } from '../../../api/_lib/telegram/index.js'
 import {
@@ -25,15 +25,11 @@ const TestAlertSchema = z.object({
 })
 
 router.post('/test-alert', withAdminAuth(async (req: AuthenticatedRequest, res: Response) => {
-  const rateLimitResult = await checkRateLimit(req, {
+  await requireRateLimit(req, {
     maxRequests: 5,
     windowSeconds: 60,
     identifier: `admin:test-alert:${req.user.id}`,
   })
-  if (!rateLimitResult.success) {
-    const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000)
-    throw ApiError.tooManyRequests('Too many requests', retryAfter)
-  }
 
   const parse = TestAlertSchema.safeParse(req.body)
   if (!parse.success) {

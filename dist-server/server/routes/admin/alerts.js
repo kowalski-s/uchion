@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { withAdminAuth } from '../../middleware/auth.js';
 import { ApiError } from '../../middleware/error-handler.js';
-import { checkRateLimit } from '../../middleware/rate-limit.js';
+import { requireRateLimit } from '../../middleware/rate-limit.js';
 import { sendAdminAlert } from '../../../api/_lib/telegram/index.js';
 import { getAlertMetrics, simulateGenerations, resetAlertState, resetCooldowns, trackGeneration, trackAICall, checkValidationScore, } from '../../../api/_lib/alerts/generation-alerts.js';
 const router = Router();
@@ -12,15 +12,11 @@ const TestAlertSchema = z.object({
     message: z.string().min(1).max(500).optional(),
 });
 router.post('/test-alert', withAdminAuth(async (req, res) => {
-    const rateLimitResult = await checkRateLimit(req, {
+    await requireRateLimit(req, {
         maxRequests: 5,
         windowSeconds: 60,
         identifier: `admin:test-alert:${req.user.id}`,
     });
-    if (!rateLimitResult.success) {
-        const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000);
-        throw ApiError.tooManyRequests('Too many requests', retryAfter);
-    }
     const parse = TestAlertSchema.safeParse(req.body);
     if (!parse.success) {
         throw ApiError.validation(parse.error.flatten().fieldErrors);

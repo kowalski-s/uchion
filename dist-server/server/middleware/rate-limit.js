@@ -1,5 +1,6 @@
 import { RateLimiterRedis, RateLimiterMemory } from 'rate-limiter-flexible';
 import { getRedisClient, secondsUntilMidnightMSK } from '../lib/redis.js';
+import { ApiError } from './error-handler.js';
 // ==================== RATE LIMITER SETUP ====================
 // Cache created limiters to avoid recreating on every request
 const limiterCache = new Map();
@@ -75,6 +76,27 @@ export async function checkRateLimit(req, options = {}) {
     const limiter = createLimiter(prefix, maxRequests, windowSeconds);
     return consumeLimit(limiter, key);
 }
+/**
+ * Like checkRateLimit, but throws ApiError.tooManyRequests on failure.
+ * Eliminates the 5-line boilerplate pattern in every route handler.
+ */
+export async function requireRateLimit(req, options = {}) {
+    const result = await checkRateLimit(req, options);
+    if (!result.success) {
+        const retryAfter = Math.ceil((result.reset - Date.now()) / 1000);
+        throw ApiError.tooManyRequests('Too many requests', retryAfter);
+    }
+}
+/**
+ * Wraps a dedicated rate limit check function and throws on failure.
+ */
+async function requireDedicated(checkFn, message = 'Too many requests') {
+    const result = await checkFn();
+    if (!result.success) {
+        const retryAfter = Math.ceil((result.reset - Date.now()) / 1000);
+        throw ApiError.tooManyRequests(message, retryAfter);
+    }
+}
 // ==================== DEDICATED LIMITERS ====================
 export async function checkAuthRateLimit(req) {
     const limiter = createLimiter('rl:auth', 10, 5 * 60);
@@ -104,6 +126,28 @@ export async function checkBillingWebhookRateLimit(req) {
     const limiter = createLimiter('rl:bill:wh', 100, 60);
     return consumeLimit(limiter, getClientIp(req));
 }
+// ==================== THROWING VARIANTS OF DEDICATED LIMITERS ====================
+export async function requireAuthRateLimit(req) {
+    return requireDedicated(() => checkAuthRateLimit(req));
+}
+export async function requireOAuthRedirectRateLimit(req) {
+    return requireDedicated(() => checkOAuthRedirectRateLimit(req), 'Too many requests. Please try again later.');
+}
+export async function requireMeRateLimit(req) {
+    return requireDedicated(() => checkMeRateLimit(req));
+}
+export async function requireRefreshRateLimit(req) {
+    return requireDedicated(() => checkRefreshRateLimit(req), 'Too many refresh attempts');
+}
+export async function requireGenerateRateLimit(req, userId) {
+    return requireDedicated(() => checkGenerateRateLimit(req, userId));
+}
+export async function requireBillingCreateLinkRateLimit(req, userId) {
+    return requireDedicated(() => checkBillingCreateLinkRateLimit(req, userId));
+}
+export async function requireBillingWebhookRateLimit(req) {
+    return requireDedicated(() => checkBillingWebhookRateLimit(req));
+}
 /**
  * Middleware wrapper that applies rate limiting before the handler runs.
  * Eliminates boilerplate rate limit checks inside every handler.
@@ -126,10 +170,7 @@ export function withRateLimit(options, handler) {
         });
         if (!result.success) {
             const retryAfter = Math.ceil((result.reset - Date.now()) / 1000);
-            return res
-                .status(429)
-                .setHeader('Retry-After', retryAfter.toString())
-                .json({ error: 'Too many requests' });
+            throw ApiError.tooManyRequests('Too many requests', retryAfter);
         }
         return handler(req, res);
     };

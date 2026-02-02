@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express'
 import { RateLimiterRedis, RateLimiterMemory, RateLimiterAbstract } from 'rate-limiter-flexible'
 import { getRedisClient, secondsUntilMidnightMSK } from '../lib/redis.js'
+import { ApiError } from './error-handler.js'
 import type { AuthenticatedRequest } from '../types.js'
 
 // ==================== RATE LIMITER SETUP ====================
@@ -114,6 +115,35 @@ export async function checkRateLimit(
   return consumeLimit(limiter, key)
 }
 
+/**
+ * Like checkRateLimit, but throws ApiError.tooManyRequests on failure.
+ * Eliminates the 5-line boilerplate pattern in every route handler.
+ */
+export async function requireRateLimit(
+  req: Request,
+  options: RateLimitOptions = {}
+): Promise<void> {
+  const result = await checkRateLimit(req, options)
+  if (!result.success) {
+    const retryAfter = Math.ceil((result.reset - Date.now()) / 1000)
+    throw ApiError.tooManyRequests('Too many requests', retryAfter)
+  }
+}
+
+/**
+ * Wraps a dedicated rate limit check function and throws on failure.
+ */
+async function requireDedicated(
+  checkFn: () => Promise<RateLimitResult>,
+  message = 'Too many requests'
+): Promise<void> {
+  const result = await checkFn()
+  if (!result.success) {
+    const retryAfter = Math.ceil((result.reset - Date.now()) / 1000)
+    throw ApiError.tooManyRequests(message, retryAfter)
+  }
+}
+
 // ==================== DEDICATED LIMITERS ====================
 
 export async function checkAuthRateLimit(req: Request): Promise<RateLimitResult> {
@@ -157,6 +187,36 @@ export async function checkBillingWebhookRateLimit(req: Request): Promise<RateLi
   return consumeLimit(limiter, getClientIp(req))
 }
 
+// ==================== THROWING VARIANTS OF DEDICATED LIMITERS ====================
+
+export async function requireAuthRateLimit(req: Request): Promise<void> {
+  return requireDedicated(() => checkAuthRateLimit(req))
+}
+
+export async function requireOAuthRedirectRateLimit(req: Request): Promise<void> {
+  return requireDedicated(() => checkOAuthRedirectRateLimit(req), 'Too many requests. Please try again later.')
+}
+
+export async function requireMeRateLimit(req: Request): Promise<void> {
+  return requireDedicated(() => checkMeRateLimit(req))
+}
+
+export async function requireRefreshRateLimit(req: Request): Promise<void> {
+  return requireDedicated(() => checkRefreshRateLimit(req), 'Too many refresh attempts')
+}
+
+export async function requireGenerateRateLimit(req: Request, userId: string): Promise<void> {
+  return requireDedicated(() => checkGenerateRateLimit(req, userId))
+}
+
+export async function requireBillingCreateLinkRateLimit(req: Request, userId: string): Promise<void> {
+  return requireDedicated(() => checkBillingCreateLinkRateLimit(req, userId))
+}
+
+export async function requireBillingWebhookRateLimit(req: Request): Promise<void> {
+  return requireDedicated(() => checkBillingWebhookRateLimit(req))
+}
+
 // ==================== RATE LIMIT MIDDLEWARE WRAPPER ====================
 
 interface WithRateLimitOptions {
@@ -197,10 +257,7 @@ export function withRateLimit<T extends Request = AuthenticatedRequest>(
 
     if (!result.success) {
       const retryAfter = Math.ceil((result.reset - Date.now()) / 1000)
-      return res
-        .status(429)
-        .setHeader('Retry-After', retryAfter.toString())
-        .json({ error: 'Too many requests' })
+      throw ApiError.tooManyRequests('Too many requests', retryAfter)
     }
 
     return handler(req, res)

@@ -5,7 +5,7 @@ import { db } from '../../../db/index.js';
 import { users, payments } from '../../../db/schema.js';
 import { withAdminAuth } from '../../middleware/auth.js';
 import { ApiError } from '../../middleware/error-handler.js';
-import { checkRateLimit } from '../../middleware/rate-limit.js';
+import { requireRateLimit } from '../../middleware/rate-limit.js';
 /** Escape LIKE special characters to prevent wildcard injection */
 function escapeLike(input) {
     return input.replace(/[%_\\]/g, '\\$&');
@@ -19,15 +19,11 @@ const PaymentsQuerySchema = z.object({
     search: z.string().optional(),
 });
 router.get('/', withAdminAuth(async (req, res) => {
-    const rateLimitResult = await checkRateLimit(req, {
+    await requireRateLimit(req, {
         maxRequests: 30,
         windowSeconds: 60,
         identifier: `admin:payments:${req.user.id}`,
     });
-    if (!rateLimitResult.success) {
-        const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000);
-        throw ApiError.tooManyRequests('Too many requests', retryAfter);
-    }
     const parse = PaymentsQuerySchema.safeParse(req.query);
     if (!parse.success) {
         throw ApiError.validation(parse.error.flatten().fieldErrors);

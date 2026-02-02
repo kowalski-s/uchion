@@ -34,9 +34,9 @@ import {
 } from '../../api/_lib/auth/oauth.js'
 import {
   checkAuthRateLimit,
-  checkMeRateLimit,
-  checkRefreshRateLimit,
-  checkOAuthRedirectRateLimit,
+  requireMeRateLimit,
+  requireRefreshRateLimit,
+  requireOAuthRedirectRateLimit,
 } from '../middleware/rate-limit.js'
 import { ApiError } from '../middleware/error-handler.js'
 import {
@@ -52,11 +52,7 @@ const router = Router()
 
 // ==================== GET /api/auth/me ====================
 router.get('/me', async (req: Request, res: Response) => {
-  const rateLimitResult = await checkMeRateLimit(req)
-  if (!rateLimitResult.success) {
-    const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000)
-    throw ApiError.tooManyRequests('Too many requests', retryAfter)
-  }
+  await requireMeRateLimit(req)
 
   const token = getTokenFromCookie(req, ACCESS_TOKEN_COOKIE)
 
@@ -129,11 +125,7 @@ router.post('/logout', async (req: Request, res: Response) => {
 
 // ==================== POST /api/auth/refresh ====================
 router.post('/refresh', async (req: Request, res: Response) => {
-  const rateLimitResult = await checkRefreshRateLimit(req)
-  if (!rateLimitResult.success) {
-    const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000)
-    throw ApiError.tooManyRequests('Too many refresh attempts', retryAfter)
-  }
+  await requireRefreshRateLimit(req)
 
   try {
     const refreshToken = getTokenFromCookie(req, REFRESH_TOKEN_COOKIE)
@@ -181,21 +173,19 @@ router.post('/refresh', async (req: Request, res: Response) => {
 
     return res.status(200).json({ success: true })
   } catch (error) {
-    if (error instanceof ApiError) throw error
+    if (error instanceof ApiError) {
+      // clearAuthCookies already called before the throw in the cases above
+      throw error
+    }
     console.error('[Refresh] Error:', error)
     clearAuthCookies(res)
-    return res.status(401).json({ error: 'Token refresh failed' })
+    throw ApiError.unauthorized('Token refresh failed')
   }
 })
 
 // ==================== GET /api/auth/yandex/redirect ====================
 router.get('/yandex/redirect', async (req: Request, res: Response) => {
-  const rateLimitResult = await checkOAuthRedirectRateLimit(req)
-  if (!rateLimitResult.success) {
-    const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000)
-    console.warn('[Yandex OAuth] Rate limit exceeded on redirect')
-    throw ApiError.tooManyRequests('Too many requests. Please try again later.', retryAfter)
-  }
+  await requireOAuthRedirectRateLimit(req)
 
   const clientId = process.env.YANDEX_CLIENT_ID
   const appUrl = process.env.APP_URL
