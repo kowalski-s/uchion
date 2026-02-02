@@ -7,6 +7,7 @@ import { getTokenFromCookie, setAuthCookies, clearAuthCookies, clearOAuthCookies
 import { verifyAccessToken, verifyRefreshToken, createAccessToken, createRefreshToken, revokeRefreshToken, decodeRefreshToken, getTokenFamilyId, } from '../../api/_lib/auth/tokens.js';
 import { generateState, generatePKCE, buildYandexAuthUrl, exchangeYandexCode, validateState, } from '../../api/_lib/auth/oauth.js';
 import { checkAuthRateLimit, checkMeRateLimit, checkRefreshRateLimit, checkOAuthRedirectRateLimit, } from '../middleware/rate-limit.js';
+import { ApiError } from '../middleware/error-handler.js';
 import { logOAuthCallbackSuccess, logOAuthCallbackFailed, logRateLimitExceeded, logCsrfDetected, logInvalidSignature, logExpiredAuth, } from '../middleware/audit-log.js';
 const router = Router();
 // ==================== GET /api/auth/me ====================
@@ -14,55 +15,46 @@ router.get('/me', async (req, res) => {
     const rateLimitResult = await checkMeRateLimit(req);
     if (!rateLimitResult.success) {
         const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000);
-        return res
-            .status(429)
-            .setHeader('Retry-After', retryAfter.toString())
-            .json({ error: 'Too many requests' });
+        throw ApiError.tooManyRequests('Too many requests', retryAfter);
     }
-    try {
-        const token = getTokenFromCookie(req, ACCESS_TOKEN_COOKIE);
-        if (!token) {
-            return res.status(401).json({ error: 'Not authenticated' });
-        }
-        const payload = verifyAccessToken(token);
-        if (!payload) {
-            return res.status(401).json({ error: 'Invalid or expired token' });
-        }
-        const [user] = await db
-            .select({
-            id: users.id,
-            email: users.email,
-            name: users.name,
-            role: users.role,
-            generationsLeft: users.generationsLeft,
-            createdAt: users.createdAt,
-        })
-            .from(users)
-            .where(and(eq(users.id, payload.sub), isNull(users.deletedAt)))
-            .limit(1);
-        if (!user) {
-            return res.status(401).json({ error: 'User not found or deactivated' });
-        }
-        const [subscription] = await db
-            .select({
-            plan: subscriptions.plan,
-            status: subscriptions.status,
-            expiresAt: subscriptions.expiresAt,
-        })
-            .from(subscriptions)
-            .where(eq(subscriptions.userId, payload.sub))
-            .limit(1);
-        return res.status(200).json({
-            user: {
-                ...user,
-                subscription: subscription || { plan: 'free', status: 'active', expiresAt: null }
-            }
-        });
+    const token = getTokenFromCookie(req, ACCESS_TOKEN_COOKIE);
+    if (!token) {
+        throw ApiError.unauthorized('Not authenticated');
     }
-    catch (error) {
-        console.error('[Auth Me] Error:', error);
-        return res.status(500).json({ error: 'Internal server error' });
+    const payload = verifyAccessToken(token);
+    if (!payload) {
+        throw ApiError.unauthorized('Invalid or expired token');
     }
+    const [user] = await db
+        .select({
+        id: users.id,
+        email: users.email,
+        name: users.name,
+        role: users.role,
+        generationsLeft: users.generationsLeft,
+        createdAt: users.createdAt,
+    })
+        .from(users)
+        .where(and(eq(users.id, payload.sub), isNull(users.deletedAt)))
+        .limit(1);
+    if (!user) {
+        throw ApiError.unauthorized('User not found or deactivated');
+    }
+    const [subscription] = await db
+        .select({
+        plan: subscriptions.plan,
+        status: subscriptions.status,
+        expiresAt: subscriptions.expiresAt,
+    })
+        .from(subscriptions)
+        .where(eq(subscriptions.userId, payload.sub))
+        .limit(1);
+    return res.status(200).json({
+        user: {
+            ...user,
+            subscription: subscription || { plan: 'free', status: 'active', expiresAt: null }
+        }
+    });
 });
 // ==================== POST /api/auth/logout ====================
 router.post('/logout', async (req, res) => {
@@ -88,20 +80,17 @@ router.post('/refresh', async (req, res) => {
     const rateLimitResult = await checkRefreshRateLimit(req);
     if (!rateLimitResult.success) {
         const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000);
-        return res
-            .status(429)
-            .setHeader('Retry-After', retryAfter.toString())
-            .json({ error: 'Too many refresh attempts' });
+        throw ApiError.tooManyRequests('Too many refresh attempts', retryAfter);
     }
     try {
         const refreshToken = getTokenFromCookie(req, REFRESH_TOKEN_COOKIE);
         if (!refreshToken) {
-            return res.status(401).json({ error: 'No refresh token' });
+            throw ApiError.unauthorized('No refresh token');
         }
         const payload = await verifyRefreshToken(refreshToken);
         if (!payload) {
             clearAuthCookies(res);
-            return res.status(401).json({ error: 'Invalid or expired token' });
+            throw ApiError.unauthorized('Invalid or expired token');
         }
         const [user] = await db
             .select({
@@ -114,7 +103,7 @@ router.post('/refresh', async (req, res) => {
             .limit(1);
         if (!user) {
             clearAuthCookies(res);
-            return res.status(401).json({ error: 'User not found' });
+            throw ApiError.unauthorized('User not found');
         }
         // Get family ID before revoking, so the new token inherits it
         const familyId = await getTokenFamilyId(payload.jti);
@@ -131,6 +120,8 @@ router.post('/refresh', async (req, res) => {
         return res.status(200).json({ success: true });
     }
     catch (error) {
+        if (error instanceof ApiError)
+            throw error;
         console.error('[Refresh] Error:', error);
         clearAuthCookies(res);
         return res.status(401).json({ error: 'Token refresh failed' });
@@ -142,41 +133,33 @@ router.get('/yandex/redirect', async (req, res) => {
     if (!rateLimitResult.success) {
         const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000);
         console.warn('[Yandex OAuth] Rate limit exceeded on redirect');
-        return res
-            .status(429)
-            .setHeader('Retry-After', retryAfter.toString())
-            .json({ error: 'Too many requests. Please try again later.' });
+        throw ApiError.tooManyRequests('Too many requests. Please try again later.', retryAfter);
     }
-    try {
-        const clientId = process.env.YANDEX_CLIENT_ID;
-        const appUrl = process.env.APP_URL;
-        if (!clientId) {
-            console.error('[Yandex OAuth] YANDEX_CLIENT_ID not configured');
-            return res.status(500).json({ error: 'OAuth not configured' });
-        }
-        if (!appUrl) {
-            console.error('[Yandex OAuth] APP_URL not configured');
-            return res.status(500).json({ error: 'OAuth not configured' });
-        }
-        const state = generateState();
-        const { codeVerifier, codeChallenge } = generatePKCE();
-        setOAuthStateCookie(res, state);
-        setPKCECookie(res, codeVerifier);
-        const redirectUri = `${appUrl}/api/auth/yandex/callback`;
-        const authUrl = buildYandexAuthUrl({
-            clientId,
-            redirectUri,
-            state,
-            codeChallenge,
-        });
-        return res.redirect(302, authUrl);
+    const clientId = process.env.YANDEX_CLIENT_ID;
+    const appUrl = process.env.APP_URL;
+    if (!clientId) {
+        console.error('[Yandex OAuth] YANDEX_CLIENT_ID not configured');
+        throw ApiError.internal('OAuth not configured');
     }
-    catch (error) {
-        console.error('[Yandex OAuth] Redirect error:', error);
-        return res.status(500).json({ error: 'Authentication failed' });
+    if (!appUrl) {
+        console.error('[Yandex OAuth] APP_URL not configured');
+        throw ApiError.internal('OAuth not configured');
     }
+    const state = generateState();
+    const { codeVerifier, codeChallenge } = generatePKCE();
+    setOAuthStateCookie(res, state);
+    setPKCECookie(res, codeVerifier);
+    const redirectUri = `${appUrl}/api/auth/yandex/callback`;
+    const authUrl = buildYandexAuthUrl({
+        clientId,
+        redirectUri,
+        state,
+        codeChallenge,
+    });
+    return res.redirect(302, authUrl);
 });
 // ==================== GET /api/auth/yandex/callback ====================
+// OAuth callbacks use redirects, not JSON -- keep inline error handling
 router.get('/yandex/callback', async (req, res) => {
     const appUrl = process.env.APP_URL || '';
     const rateLimitResult = await checkAuthRateLimit(req);
@@ -293,6 +276,7 @@ router.get('/yandex/callback', async (req, res) => {
     }
 });
 // ==================== GET /api/auth/telegram/callback ====================
+// OAuth callbacks use redirects, not JSON -- keep inline error handling
 router.get('/telegram/callback', async (req, res) => {
     const appUrl = process.env.APP_URL || '';
     const rateLimitResult = await checkAuthRateLimit(req);

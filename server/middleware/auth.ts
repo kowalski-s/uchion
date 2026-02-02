@@ -4,6 +4,7 @@ import { db } from '../../db/index.js'
 import { users } from '../../db/schema.js'
 import { getTokenFromCookie, ACCESS_TOKEN_COOKIE } from './cookies.js'
 import { verifyAccessToken } from '../../api/_lib/auth/tokens.js'
+import { ApiError } from './error-handler.js'
 import type { AuthUser, AuthenticatedRequest } from '../types.js'
 
 export type { AuthUser }
@@ -53,6 +54,7 @@ export function withAuth(
 
       return await handler(req as AuthenticatedRequest, res)
     } catch (error) {
+      if (error instanceof ApiError) throw error
       console.error('[Auth Middleware] Error:', error)
       return res.status(500).json({ error: 'Internal server error' })
     }

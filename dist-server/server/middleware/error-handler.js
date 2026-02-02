@@ -2,21 +2,29 @@
  * Custom API error class for structured error responses.
  * Throw this in route handlers to trigger the global error handler.
  *
- * Response format: { error: 'message text' }
+ * Response format: { error: 'message text', details?: {...} }
  * This is compatible with the frontend error parsing (data.error as string).
  */
 export class ApiError extends Error {
     statusCode;
     code;
-    constructor(statusCode, message, code) {
+    details;
+    headers;
+    constructor(statusCode, message, code, details, headers) {
         super(message);
         this.statusCode = statusCode;
         this.code = code;
+        this.details = details;
+        this.headers = headers;
         this.name = 'ApiError';
     }
     /** 400 Bad Request */
     static badRequest(message, code) {
         return new ApiError(400, message, code);
+    }
+    /** 400 Validation Error (with field details) */
+    static validation(details, message = 'Validation error') {
+        return new ApiError(400, message, 'VALIDATION_ERROR', details);
     }
     /** 401 Unauthorized */
     static unauthorized(message = 'Unauthorized') {
@@ -31,8 +39,11 @@ export class ApiError extends Error {
         return new ApiError(404, message, 'NOT_FOUND');
     }
     /** 429 Too Many Requests */
-    static tooManyRequests(message = 'Too many requests') {
-        return new ApiError(429, message, 'RATE_LIMIT_EXCEEDED');
+    static tooManyRequests(message = 'Too many requests', retryAfterSeconds) {
+        const headers = retryAfterSeconds != null
+            ? { 'Retry-After': retryAfterSeconds.toString() }
+            : undefined;
+        return new ApiError(429, message, 'RATE_LIMIT_EXCEEDED', undefined, headers);
     }
     /** 500 Internal Server Error */
     static internal(message = 'Internal server error') {
@@ -52,7 +63,16 @@ export class ApiError extends Error {
  */
 export function errorHandler(err, _req, res, _next) {
     if (err instanceof ApiError) {
-        res.status(err.statusCode).json({ error: err.message });
+        if (err.headers) {
+            for (const [key, value] of Object.entries(err.headers)) {
+                res.setHeader(key, value);
+            }
+        }
+        const body = { error: err.message };
+        if (err.details) {
+            body.details = err.details;
+        }
+        res.status(err.statusCode).json(body);
         return;
     }
     // Unknown error

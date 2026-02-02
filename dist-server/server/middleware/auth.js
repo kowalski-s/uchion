@@ -3,6 +3,7 @@ import { db } from '../../db/index.js';
 import { users } from '../../db/schema.js';
 import { getTokenFromCookie, ACCESS_TOKEN_COOKIE } from './cookies.js';
 import { verifyAccessToken } from '../../api/_lib/auth/tokens.js';
+import { ApiError } from './error-handler.js';
 /**
  * Middleware that requires authentication
  * Returns 401 if user is not authenticated
@@ -38,6 +39,8 @@ export function withAuth(handler) {
             return await handler(req, res);
         }
         catch (error) {
+            if (error instanceof ApiError)
+                throw error;
             console.error('[Auth Middleware] Error:', error);
             return res.status(500).json({ error: 'Internal server error' });
         }

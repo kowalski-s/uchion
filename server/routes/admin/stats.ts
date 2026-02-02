@@ -4,6 +4,7 @@ import { isNull, gte, sql, count, eq, and } from 'drizzle-orm'
 import { db } from '../../../db/index.js'
 import { users, worksheets, generations, subscriptions } from '../../../db/schema.js'
 import { withAdminAuth } from '../../middleware/auth.js'
+import { ApiError } from '../../middleware/error-handler.js'
 import { checkRateLimit } from '../../middleware/rate-limit.js'
 import type { AuthenticatedRequest } from '../../types.js'
 
@@ -18,66 +19,58 @@ router.get('/', withAdminAuth(async (req: AuthenticatedRequest, res: Response) =
   })
   if (!rateLimitResult.success) {
     const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000)
-    return res
-      .status(429)
-      .setHeader('Retry-After', retryAfter.toString())
-      .json({ error: 'Too many requests' })
+    throw ApiError.tooManyRequests('Too many requests', retryAfter)
   }
 
-  try {
-    const [totalUsersResult] = await db
-      .select({ count: count() })
-      .from(users)
-      .where(isNull(users.deletedAt))
+  const [totalUsersResult] = await db
+    .select({ count: count() })
+    .from(users)
+    .where(isNull(users.deletedAt))
 
-    const todayStart = new Date()
-    todayStart.setHours(0, 0, 0, 0)
+  const todayStart = new Date()
+  todayStart.setHours(0, 0, 0, 0)
 
-    const [todayWorksheetsResult] = await db
-      .select({ count: count() })
-      .from(worksheets)
-      .where(and(
-        gte(worksheets.createdAt, todayStart),
-        isNull(worksheets.deletedAt)
-      ))
+  const [todayWorksheetsResult] = await db
+    .select({ count: count() })
+    .from(worksheets)
+    .where(and(
+      gte(worksheets.createdAt, todayStart),
+      isNull(worksheets.deletedAt)
+    ))
 
-    const [todayGenerationsResult] = await db
-      .select({ count: count() })
-      .from(generations)
-      .where(gte(generations.createdAt, todayStart))
+  const [todayGenerationsResult] = await db
+    .select({ count: count() })
+    .from(generations)
+    .where(gte(generations.createdAt, todayStart))
 
-    const [activeSubscriptionsResult] = await db
-      .select({ count: count() })
-      .from(subscriptions)
-      .where(and(
-        eq(subscriptions.status, 'active'),
-        sql`${subscriptions.plan} != 'free'`
-      ))
+  const [activeSubscriptionsResult] = await db
+    .select({ count: count() })
+    .from(subscriptions)
+    .where(and(
+      eq(subscriptions.status, 'active'),
+      sql`${subscriptions.plan} != 'free'`
+    ))
 
-    const [totalWorksheetsResult] = await db
-      .select({ count: count() })
-      .from(worksheets)
-      .where(isNull(worksheets.deletedAt))
+  const [totalWorksheetsResult] = await db
+    .select({ count: count() })
+    .from(worksheets)
+    .where(isNull(worksheets.deletedAt))
 
-    const [totalGenerationsResult] = await db
-      .select({ count: count() })
-      .from(generations)
+  const [totalGenerationsResult] = await db
+    .select({ count: count() })
+    .from(generations)
 
-    const todayCount = Math.max(todayWorksheetsResult.count, todayGenerationsResult.count)
-    const totalCount = Math.max(totalWorksheetsResult.count, totalGenerationsResult.count)
+  const todayCount = Math.max(todayWorksheetsResult.count, todayGenerationsResult.count)
+  const totalCount = Math.max(totalWorksheetsResult.count, totalGenerationsResult.count)
 
-    return res.status(200).json({
-      stats: {
-        totalUsers: totalUsersResult.count,
-        todayGenerations: todayCount,
-        activeSubscriptions: activeSubscriptionsResult.count,
-        totalGenerations: totalCount,
-      }
-    })
-  } catch (error) {
-    console.error('[Admin Stats] Error:', error)
-    return res.status(500).json({ error: 'Internal server error' })
-  }
+  return res.status(200).json({
+    stats: {
+      totalUsers: totalUsersResult.count,
+      todayGenerations: todayCount,
+      activeSubscriptions: activeSubscriptionsResult.count,
+      totalGenerations: totalCount,
+    }
+  })
 }))
 
 export default router

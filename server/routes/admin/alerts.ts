@@ -2,6 +2,7 @@ import { Router } from 'express'
 import type { Response } from 'express'
 import { z } from 'zod'
 import { withAdminAuth } from '../../middleware/auth.js'
+import { ApiError } from '../../middleware/error-handler.js'
 import { checkRateLimit } from '../../middleware/rate-limit.js'
 import type { AuthenticatedRequest } from '../../types.js'
 import { sendAdminAlert, type AlertLevel } from '../../../api/_lib/telegram/index.js'
@@ -31,18 +32,12 @@ router.post('/test-alert', withAdminAuth(async (req: AuthenticatedRequest, res: 
   })
   if (!rateLimitResult.success) {
     const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000)
-    return res
-      .status(429)
-      .setHeader('Retry-After', retryAfter.toString())
-      .json({ error: 'Too many requests' })
+    throw ApiError.tooManyRequests('Too many requests', retryAfter)
   }
 
   const parse = TestAlertSchema.safeParse(req.body)
   if (!parse.success) {
-    return res.status(400).json({
-      error: 'Validation error',
-      details: parse.error.flatten().fieldErrors,
-    })
+    throw ApiError.validation(parse.error.flatten().fieldErrors)
   }
 
   const { level, message } = parse.data
@@ -50,27 +45,22 @@ router.post('/test-alert', withAdminAuth(async (req: AuthenticatedRequest, res: 
 
   const testMessage = message || `Тестовый алерт от ${req.user.email}\n\nВремя: ${new Date().toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}`
 
-  try {
-    console.log(`[Admin Test Alert] Sending ${alertLevel} alert from ${req.user.email}`)
+  console.log(`[Admin Test Alert] Sending ${alertLevel} alert from ${req.user.email}`)
 
-    const result = await sendAdminAlert({
-      message: testMessage,
-      level: alertLevel,
-    })
+  const result = await sendAdminAlert({
+    message: testMessage,
+    level: alertLevel,
+  })
 
-    console.log(`[Admin Test Alert] Result: sent to ${result.sentCount} admins, success: ${result.success}`)
+  console.log(`[Admin Test Alert] Result: sent to ${result.sentCount} admins, success: ${result.success}`)
 
-    return res.status(200).json({
-      success: result.success,
-      sentCount: result.sentCount,
-      message: result.sentCount > 0
-        ? `Алерт отправлен ${result.sentCount} админам`
-        : 'Нет подписанных админов для отправки',
-    })
-  } catch (error) {
-    console.error('[Admin Test Alert] Error:', error)
-    return res.status(500).json({ error: 'Failed to send test alert' })
-  }
+  return res.status(200).json({
+    success: result.success,
+    sentCount: result.sentCount,
+    message: result.sentCount > 0
+      ? `Алерт отправлен ${result.sentCount} админам`
+      : 'Нет подписанных админов для отправки',
+  })
 }))
 
 // ==================== GET /api/admin/alerts/metrics ====================
@@ -102,32 +92,24 @@ const TestErrorRateSchema = z.object({
 router.post('/test/error-rate', withAdminAuth(async (req: AuthenticatedRequest, res: Response) => {
   const parse = TestErrorRateSchema.safeParse(req.body)
   if (!parse.success) {
-    return res.status(400).json({
-      error: 'Validation error',
-      details: parse.error.flatten().fieldErrors,
-    })
+    throw ApiError.validation(parse.error.flatten().fieldErrors)
   }
 
   const { totalGenerations, failRate } = parse.data
 
-  try {
-    resetAlertState()
-    simulateGenerations(totalGenerations, failRate)
-    await trackGeneration(false)
+  resetAlertState()
+  simulateGenerations(totalGenerations, failRate)
+  await trackGeneration(false)
 
-    const metrics = getAlertMetrics()
+  const metrics = getAlertMetrics()
 
-    console.log(`[Admin Alerts Test] Error rate test by ${req.user.email}: ${totalGenerations} generations, ${failRate * 100}% fail rate`)
+  console.log(`[Admin Alerts Test] Error rate test by ${req.user.email}: ${totalGenerations} generations, ${failRate * 100}% fail rate`)
 
-    return res.status(200).json({
-      success: true,
-      message: `Симулировано ${totalGenerations} генераций с ${(failRate * 100).toFixed(1)}% ошибок`,
-      metrics,
-    })
-  } catch (error) {
-    console.error('[Admin Alerts Test] Error:', error)
-    return res.status(500).json({ error: 'Failed to test error rate alert' })
-  }
+  return res.status(200).json({
+    success: true,
+    message: `Симулировано ${totalGenerations} генераций с ${(failRate * 100).toFixed(1)}% ошибок`,
+    metrics,
+  })
 }))
 
 // ==================== POST /api/admin/alerts/test/timeout ====================
@@ -138,34 +120,26 @@ const TestTimeoutSchema = z.object({
 router.post('/test/timeout', withAdminAuth(async (req: AuthenticatedRequest, res: Response) => {
   const parse = TestTimeoutSchema.safeParse(req.body)
   if (!parse.success) {
-    return res.status(400).json({
-      error: 'Validation error',
-      details: parse.error.flatten().fieldErrors,
-    })
+    throw ApiError.validation(parse.error.flatten().fieldErrors)
   }
 
   const { consecutiveTimeouts } = parse.data
 
-  try {
-    resetAlertState()
+  resetAlertState()
 
-    for (let i = 0; i < consecutiveTimeouts; i++) {
-      await trackAICall({ success: false, isTimeout: true })
-    }
-
-    const metrics = getAlertMetrics()
-
-    console.log(`[Admin Alerts Test] Timeout test by ${req.user.email}: ${consecutiveTimeouts} consecutive timeouts`)
-
-    return res.status(200).json({
-      success: true,
-      message: `Симулировано ${consecutiveTimeouts} таймаутов подряд`,
-      metrics,
-    })
-  } catch (error) {
-    console.error('[Admin Alerts Test] Error:', error)
-    return res.status(500).json({ error: 'Failed to test timeout alert' })
+  for (let i = 0; i < consecutiveTimeouts; i++) {
+    await trackAICall({ success: false, isTimeout: true })
   }
+
+  const metrics = getAlertMetrics()
+
+  console.log(`[Admin Alerts Test] Timeout test by ${req.user.email}: ${consecutiveTimeouts} consecutive timeouts`)
+
+  return res.status(200).json({
+    success: true,
+    message: `Симулировано ${consecutiveTimeouts} таймаутов подряд`,
+    metrics,
+  })
 }))
 
 // ==================== POST /api/admin/alerts/test/low-quality ====================
@@ -179,30 +153,22 @@ const TestLowQualitySchema = z.object({
 router.post('/test/low-quality', withAdminAuth(async (req: AuthenticatedRequest, res: Response) => {
   const parse = TestLowQualitySchema.safeParse(req.body)
   if (!parse.success) {
-    return res.status(400).json({
-      error: 'Validation error',
-      details: parse.error.flatten().fieldErrors,
-    })
+    throw ApiError.validation(parse.error.flatten().fieldErrors)
   }
 
   const { score, topic, subject, grade } = parse.data
 
-  try {
-    await checkValidationScore({ score, topic, subject, grade })
+  await checkValidationScore({ score, topic, subject, grade })
 
-    console.log(`[Admin Alerts Test] Low quality test by ${req.user.email}: score=${score}, topic=${topic}`)
+  console.log(`[Admin Alerts Test] Low quality test by ${req.user.email}: score=${score}, topic=${topic}`)
 
-    return res.status(200).json({
-      success: true,
-      message: score < 8
-        ? `Отправлен алерт о низком качестве (score: ${score}/10)`
-        : `Score ${score}/10 выше порога (8), алерт не отправлен`,
-      params: { score, topic, subject, grade },
-    })
-  } catch (error) {
-    console.error('[Admin Alerts Test] Error:', error)
-    return res.status(500).json({ error: 'Failed to test low quality alert' })
-  }
+  return res.status(200).json({
+    success: true,
+    message: score < 8
+      ? `Отправлен алерт о низком качестве (score: ${score}/10)`
+      : `Score ${score}/10 выше порога (8), алерт не отправлен`,
+    params: { score, topic, subject, grade },
+  })
 }))
 
 export default router
