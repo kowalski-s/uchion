@@ -8,12 +8,7 @@ import type { GeneratePresentationParams } from '../ai-provider.js'
 /**
  * Claude Provider for Presentation Generation
  *
- * Uses Anthropic's Claude model (via polza.ai aggregator) for high-quality
- * educational presentation generation. Claude excels at:
- * - Structured content creation
- * - Educational material formatting
- * - Following complex instructions
- * - Consistent JSON output
+ * Minimal constraints - let Claude decide structure and content flow.
  */
 export class ClaudeProvider {
   private client: OpenAI
@@ -23,117 +18,71 @@ export class ClaudeProvider {
       apiKey,
       ...(baseURL && { baseURL })
     })
-    console.log('[УчиОн] ClaudeProvider initialized for presentations', {
-      baseURL: baseURL || 'default',
-      model: getPresentationModel()
-    })
+    console.log('[УчиОн] ClaudeProvider initialized', { model: getPresentationModel() })
   }
 
-  /**
-   * Generate a presentation structure using Claude
-   * Claude works best with clear, structured prompts and minimal constraints
-   */
   async generatePresentation(
     params: GeneratePresentationParams,
     onProgress?: (percent: number) => void
   ): Promise<PresentationStructure> {
-    console.log('[УчиОн] ClaudeProvider.generatePresentation called', params)
+    console.log('[УчиОн] ClaudeProvider.generatePresentation', params)
     onProgress?.(5)
 
     const subjectConfig = getPresentationSubjectConfig(params.subject)
     const slideCount = params.slideCount || 18
 
-    // Claude-optimized system prompt - more conversational, less rigid
-    const systemPrompt = `Ты опытный методист и преподаватель ${subjectConfig.name.toLowerCase()}.
-Твоя задача — создавать увлекательные учебные презентации для школьников ${params.grade} класса.
+    // Minimal system prompt - just role and style
+    const systemPrompt = `Ты создаёшь учебные презентации. Отвечай только валидным JSON.`
 
-Твой стиль:
-- Контент соответствует ФГОС и возрасту учеников
-- Теория подается просто и понятно
-- Примеры наглядные и запоминающиеся
-- Структура логичная: от простого к сложному
-
-Ты всегда отвечаешь валидным JSON без markdown-обертки.`
-
-    // Build style instruction
-    let styleDescription: string
+    // Style from user or default
+    let style = 'минимализм'
     if (params.themeType === 'custom' && params.themeCustom) {
-      styleDescription = sanitizeUserInput(params.themeCustom)
-    } else {
-      styleDescription = 'минимализм: чистый дизайн, много воздуха, акцент на содержании'
+      style = sanitizeUserInput(params.themeCustom)
     }
 
-    // Claude-optimized user prompt - clear structure, examples
-    const userPrompt = `Создай учебную презентацию.
+    // Simplified prompt - let Claude be creative
+    const userPrompt = `Создай презентацию для урока.
 
-**Тема:** ${params.topic}
-**Предмет:** ${subjectConfig.name}
-**Класс:** ${params.grade}
-**Количество слайдов:** ${slideCount}
-**Визуальный стиль:** ${styleDescription}
+Тема: ${params.topic}
+Предмет: ${subjectConfig.name}
+Класс: ${params.grade}
+Слайдов: ${slideCount}
+Стиль: ${style}
 
-## Доступные типы слайдов
-
-Используй разнообразные типы для интересной подачи материала:
-
-| Тип | Назначение | Обязательные поля |
-|-----|-----------|-------------------|
-| title | Титульный слайд | content: [категория, подзаголовок, класс] |
-| content | Теория с буллетами | content: [5-7 пунктов] |
-| twoColumn | Сравнение/определения | leftColumn, rightColumn |
-| table | Таблица данных | tableData: {headers, rows} |
-| example | Задача + решение | content: [задача, шаги, ответ] |
-| formula | Ключевая формула | content: [формула, пояснение] |
-| diagram | Схема/классификация | content: [элементы схемы] |
-| practice | Задания для учеников | content: [3-5 заданий] |
-| conclusion | Итоги/вопросы | content: [выводы] |
-
-## Требования к содержанию
-
-1. **Первый слайд** (type: "title"):
-   - content[0]: название предмета заглавными буквами
-   - content[1]: подзаголовок темы
-   - content[2]: "${params.grade} класс"
-
-2. **Теоретические слайды**:
-   - Обязательно включи определения и правила
-   - Используй формулы где уместно
-   - Приводи примеры
-
-3. **Практические слайды**:
-   - Задания без ответов (ответы на отдельном слайде)
-   - 3-5 заданий разной сложности
-
-4. **Последний слайд** (type: "conclusion"):
-   - title: "Вопросы?"
-   - Краткие итоги урока
-
-## Формат ответа
-
-Верни ТОЛЬКО JSON (без \`\`\`json обертки):
-
+Структура JSON:
 {
   "title": "Название презентации",
   "slides": [
     {
-      "type": "title",
-      "title": "Тема урока",
-      "content": ["ПРЕДМЕТ", "Подзаголовок", "${params.grade} класс"]
-    },
-    {
-      "type": "content",
-      "title": "Заголовок слайда",
-      "content": ["Пункт 1", "Пункт 2", "Пункт 3", "Пункт 4", "Пункт 5"]
+      "type": "тип слайда",
+      "title": "Заголовок",
+      "content": ["текст", "текст"],
+      // опционально для таблиц:
+      "tableData": {"headers": [...], "rows": [[...], ...]},
+      // опционально для двух колонок:
+      "leftColumn": [...], "rightColumn": [...]
     }
   ]
 }
 
-Создай ровно ${slideCount} слайдов. Каждый слайд ОБЯЗАТЕЛЬНО имеет поля type, title, content.`
+Типы слайдов (выбирай подходящие):
+- title — титульный
+- content — текст с пунктами
+- twoColumn — две колонки
+- table — таблица
+- example — пример/задача с решением
+- formula — формула крупно
+- diagram — схема/структура
+- practice — задания для учеников
+- conclusion — итоги
+
+Создай интересную, содержательную презентацию. Теория, примеры, практика — на твоё усмотрение.
+Пиши подробно, это для школьников ${params.grade} класса.`
 
     onProgress?.(15)
 
     const model = getPresentationModel()
-    console.log(`[УчиОн] Claude presentation model: ${model}`)
+    console.log(`[УчиОн] Model: ${model}`)
 
     let completion
     try {
@@ -143,21 +92,13 @@ export class ClaudeProvider {
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
         ],
-        max_tokens: 10000,
-        temperature: 0.7 // Claude works well with slightly higher temperature for creativity
+        max_tokens: 12000,
+        temperature: 0.8
       })
     } catch (error: unknown) {
-      console.error('[УчиОн] Claude API Error (generatePresentation):', error)
-      // Log more details for debugging
+      console.error('[УчиОн] Claude API Error:', error)
       if (error instanceof Error) {
-        console.error('[УчиОн] Error message:', error.message)
-        console.error('[УчиОн] Error name:', error.name)
-        if ('response' in error) {
-          console.error('[УчиОн] API response:', (error as { response?: unknown }).response)
-        }
-        if ('status' in error) {
-          console.error('[УчиОн] HTTP status:', (error as { status?: number }).status)
-        }
+        console.error('[УчиОн] Message:', error.message)
       }
       throw new Error('AI_ERROR')
     }
@@ -165,43 +106,31 @@ export class ClaudeProvider {
     onProgress?.(65)
 
     const content = completion.choices[0]?.message?.content || ''
-    console.log('[УчиОн] Claude presentation response length:', content.length)
+    console.log('[УчиОн] Response length:', content.length)
 
     let structure: PresentationStructure
     try {
-      // Claude usually returns clean JSON, but let's be safe
-      let jsonContent = content.trim()
+      // Clean up response
+      let json = content.trim()
+      if (json.startsWith('```json')) json = json.slice(7)
+      if (json.startsWith('```')) json = json.slice(3)
+      if (json.endsWith('```')) json = json.slice(0, -3)
+      json = json.trim()
 
-      // Remove markdown code block if present
-      if (jsonContent.startsWith('```json')) {
-        jsonContent = jsonContent.slice(7)
-      } else if (jsonContent.startsWith('```')) {
-        jsonContent = jsonContent.slice(3)
-      }
-      if (jsonContent.endsWith('```')) {
-        jsonContent = jsonContent.slice(0, -3)
-      }
-      jsonContent = jsonContent.trim()
-
-      // Try to extract JSON object
-      const jsonMatch = jsonContent.match(/\{[\s\S]*\}/)
-      if (!jsonMatch) {
-        console.error('[УчиОн] No JSON found in Claude response')
-        console.error('[УчиОн] Raw response:', content.substring(0, 500))
+      const match = json.match(/\{[\s\S]*\}/)
+      if (!match) {
+        console.error('[УчиОн] No JSON in response')
         throw new Error('AI_ERROR')
       }
 
-      const parsed = JSON.parse(jsonMatch[0])
+      const parsed = JSON.parse(match[0])
 
-      if (!parsed.title || !Array.isArray(parsed.slides) || parsed.slides.length === 0) {
-        console.error('[УчиОн] Invalid presentation structure from Claude:', {
-          hasTitle: !!parsed.title,
-          slidesCount: parsed.slides?.length
-        })
+      if (!parsed.title || !Array.isArray(parsed.slides)) {
+        console.error('[УчиОн] Invalid structure')
         throw new Error('AI_ERROR')
       }
 
-      // Validate and fix slides
+      // Light validation - just ensure required fields exist
       const validTypes = new Set([
         'title', 'content', 'twoColumn', 'table', 'example',
         'formula', 'diagram', 'chart', 'practice', 'conclusion'
@@ -210,38 +139,16 @@ export class ClaudeProvider {
       for (let i = 0; i < parsed.slides.length; i++) {
         const slide = parsed.slides[i]
 
-        // Ensure required fields
+        // Default type if missing or invalid
         if (!slide.type || !validTypes.has(slide.type)) {
-          console.warn(`[УчиОн] Claude slide ${i}: invalid type "${slide.type}", using "content"`)
           slide.type = 'content'
         }
 
-        if (!slide.title) {
-          slide.title = `Слайд ${i + 1}`
-        }
-
-        if (!Array.isArray(slide.content)) {
-          slide.content = slide.content ? [String(slide.content)] : []
-        }
-
-        // Convert all content items to strings
-        slide.content = slide.content.map((item: unknown) => String(item))
-
-        // Validate type-specific fields
-        if (slide.type === 'table' && slide.tableData) {
-          if (!Array.isArray(slide.tableData.headers)) slide.tableData.headers = []
-          if (!Array.isArray(slide.tableData.rows)) slide.tableData.rows = []
-        }
-
-        if (slide.type === 'twoColumn') {
-          if (!Array.isArray(slide.leftColumn)) slide.leftColumn = []
-          if (!Array.isArray(slide.rightColumn)) slide.rightColumn = []
-        }
-
-        if (slide.type === 'chart' && slide.chartData) {
-          if (!Array.isArray(slide.chartData.labels)) slide.chartData.labels = []
-          if (!Array.isArray(slide.chartData.values)) slide.chartData.values = []
-        }
+        // Ensure title and content exist
+        slide.title = slide.title || ''
+        slide.content = Array.isArray(slide.content)
+          ? slide.content.map(String)
+          : (slide.content ? [String(slide.content)] : [])
       }
 
       structure = {
@@ -250,19 +157,12 @@ export class ClaudeProvider {
       }
     } catch (e) {
       if (e instanceof Error && e.message === 'AI_ERROR') throw e
-      console.error('[УчиОн] JSON parse error (Claude presentation):', e)
+      console.error('[УчиОн] Parse error:', e)
       throw new Error('AI_ERROR')
     }
 
     onProgress?.(80)
-    console.log(`[УчиОн] Claude presentation generated: "${structure.title}", ${structure.slides.length} slides`)
-
-    // Log slide type distribution for debugging
-    const typeCount: Record<string, number> = {}
-    for (const slide of structure.slides) {
-      typeCount[slide.type] = (typeCount[slide.type] || 0) + 1
-    }
-    console.log('[УчиОн] Claude slide types:', typeCount)
+    console.log(`[УчиОн] Generated: "${structure.title}", ${structure.slides.length} slides`)
 
     return structure
   }
