@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { db } from '../../db/index.js'
 import { users, presentations, subscriptions } from '../../db/schema.js'
 import { eq, sql, and, gt } from 'drizzle-orm'
-import { getAIProvider } from '../../api/_lib/ai-provider.js'
+import { getAIProvider, getClaudeProvider } from '../../api/_lib/ai-provider.js'
 import { generatePptx } from '../../api/_lib/presentations/generator.js'
 import { generatePresentationPdf } from '../../api/_lib/presentations/pdf-generator.js'
 import { withAuth } from '../middleware/auth.js'
@@ -115,7 +115,9 @@ router.post('/generate', withAuth(async (req: AuthenticatedRequest, res: Respons
   }
 
   try {
-    const ai = getAIProvider()
+    // Try Claude provider first (for presentations), fall back to OpenAI
+    const claudeProvider = getClaudeProvider()
+    const fallbackProvider = getAIProvider()
 
     // Determine if user has paid subscription (use better model)
     const [subscription] = await db
@@ -126,8 +128,11 @@ router.post('/generate', withAuth(async (req: AuthenticatedRequest, res: Respons
 
     const isPaid = (subscription && subscription.plan !== 'free' && subscription.status === 'active') || req.user.role === 'admin'
 
-    // 6. Call ai.generatePresentation(params, onProgress)
-    const structure = await ai.generatePresentation({
+    // 6. Call generatePresentation - prefer Claude for presentations
+    const provider = claudeProvider || fallbackProvider
+    console.log(`[API] Using ${claudeProvider ? 'Claude' : 'OpenAI'} provider for presentation generation`)
+
+    const structure = await provider.generatePresentation({
       subject: input.subject,
       grade: input.grade,
       topic: input.topic,

@@ -13,3 +13,11 @@ export function getGenerationModel(isPaid: boolean): string {
 export function getAgentsModel(): string {
   return process.env.AI_MODEL_AGENTS || 'openai/gpt-4.1-mini'
 }
+
+/**
+ * Model for presentation generation.
+ * Claude excels at structured content and creative writing.
+ */
+export function getPresentationModel(): string {
+  return process.env.AI_MODEL_PRESENTATION || 'anthropic/claude-sonnet-4-5-20241022'
+}

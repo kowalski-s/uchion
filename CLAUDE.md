@@ -147,6 +147,7 @@ AI_BASE_URL=https://api.polza.ai/api/v1    # polza.ai endpoint
 # Models (default: gpt-4.1-mini / gpt-4.1-nano)
 AI_MODEL_GENERATION=openai/gpt-4.1-mini
 AI_MODEL_VALIDATION=openai/gpt-4.1-nano
+AI_MODEL_PRESENTATION=anthropic/claude-sonnet-4-5-20241022  # Claude для презентаций
 
 # Auth
 AUTH_SECRET=your-dev-secret-min-32-chars

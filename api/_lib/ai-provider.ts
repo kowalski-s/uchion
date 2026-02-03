@@ -1,12 +1,13 @@
 import type { Worksheet, Subject, TestQuestion, Assignment, PresentationStructure } from '../../shared/types.js'
 import type { TaskTypeId, DifficultyLevel, WorksheetFormatId } from './generation/config/index.js'
 
-import { getGenerationModel, getAgentsModel } from './ai-models.js'
+import { getGenerationModel, getAgentsModel, getPresentationModel } from './ai-models.js'
 import { DummyProvider } from './providers/dummy-provider.js'
 import { OpenAIProvider } from './providers/openai-provider.js'
+import { ClaudeProvider } from './providers/claude-provider.js'
 
 // Re-export for convenience
-export { getGenerationModel, getAgentsModel }
+export { getGenerationModel, getAgentsModel, getPresentationModel }
 
 // =============================================================================
 // Types
@@ -108,4 +109,35 @@ export function getAIProvider(): AIProvider {
   }
 
   return new DummyProvider()
+}
+
+/**
+ * Get Claude provider for presentation generation.
+ * Returns null if Claude is not configured (falls back to OpenAI in route handler).
+ */
+export function getClaudeProvider(): ClaudeProvider | null {
+  const aiProvider = process.env.AI_PROVIDER
+  const apiKey = process.env.OPENAI_API_KEY
+  const baseURL = process.env.AI_BASE_URL
+  const presentationModel = getPresentationModel()
+
+  // Use Claude for presentations if:
+  // 1. AI provider is configured (polza/neuroapi support Claude)
+  // 2. Presentation model is Claude
+  const useClaude =
+    apiKey &&
+    (aiProvider === 'polza' || aiProvider === 'neuroapi') &&
+    presentationModel.includes('claude')
+
+  console.log('[УчиОн] getClaudeProvider:', {
+    AI_PROVIDER: aiProvider,
+    presentationModel,
+    useClaude: !!useClaude,
+  })
+
+  if (useClaude) {
+    return new ClaudeProvider(apiKey, baseURL)
+  }
+
+  return null
 }
