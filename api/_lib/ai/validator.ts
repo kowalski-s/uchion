@@ -15,8 +15,8 @@ interface ChatCompletionResponse {
 
 type OpenAIClient = Pick<OpenAI, 'chat'>
 
-// Timeout for OpenAI calls (2 minutes)
-const AI_CALL_TIMEOUT_MS = 120_000
+// Timeout for OpenAI calls (5 minutes - for gpt-5.1 reasoning model)
+const AI_CALL_TIMEOUT_MS = 300_000
 
 export async function timedLLMCall<T extends ChatCompletionResponse>(label: string, call: () => Promise<T>): Promise<T> {
   const start = Date.now()
