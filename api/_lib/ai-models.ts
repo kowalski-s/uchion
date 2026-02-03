@@ -19,5 +19,5 @@ export function getAgentsModel(): string {
  * Claude excels at structured content and creative writing.
  */
 export function getPresentationModel(): string {
-  return process.env.AI_MODEL_PRESENTATION || 'anthropic/claude-sonnet-4-5-20241022'
+  return process.env.AI_MODEL_PRESENTATION || 'anthropic/claude-sonnet-4.5'
 }

@@ -146,8 +146,19 @@ export class ClaudeProvider {
         max_tokens: 10000,
         temperature: 0.7 // Claude works well with slightly higher temperature for creativity
       })
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('[УчиОн] Claude API Error (generatePresentation):', error)
+      // Log more details for debugging
+      if (error instanceof Error) {
+        console.error('[УчиОн] Error message:', error.message)
+        console.error('[УчиОн] Error name:', error.name)
+        if ('response' in error) {
+          console.error('[УчиОн] API response:', (error as { response?: unknown }).response)
+        }
+        if ('status' in error) {
+          console.error('[УчиОн] HTTP status:', (error as { status?: number }).status)
+        }
+      }
       throw new Error('AI_ERROR')
     }
 
