@@ -301,27 +301,22 @@ export default function GeneratePage() {
         {/* Generations counter -- only for authenticated users */}
         {user && (
           <div className="w-full flex justify-end mb-4">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 bg-white rounded-full px-5 py-2.5 shadow-sm border border-purple-100">
+              <svg className="w-5 h-5 text-[#8C52FF]" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" />
+              </svg>
+              <span className="font-semibold text-slate-700">
+                {generationsLeft}
+              </span>
               {generationsLeft === 0 && (
                 <button
                   type="button"
                   onClick={() => setShowBuyModal(true)}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-medium transition-colors shadow-sm"
+                  className="ml-1 text-emerald-600 hover:text-emerald-700 text-sm font-medium transition-colors"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                  </svg>
-                  Пополнить генерации
+                  Пополнить
                 </button>
               )}
-              <div className="flex items-center gap-2 bg-white rounded-full px-5 py-2.5 shadow-sm border border-purple-100">
-                <svg className="w-5 h-5 text-[#8C52FF]" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" />
-                </svg>
-                <span className="font-semibold text-slate-700">
-                  {generationsLeft}
-                </span>
-              </div>
             </div>
           </div>
         )}
