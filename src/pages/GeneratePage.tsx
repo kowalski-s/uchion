@@ -10,6 +10,7 @@ import CustomSelect from '../components/ui/CustomSelect'
 import { useAuth } from '../lib/auth'
 import { getGenerationsLeft, canGenerate } from '../lib/limits'
 import Header from '../components/Header'
+import BuyGenerationsModal from '../components/BuyGenerationsModal'
 import { fetchFolders } from '../lib/dashboard-api'
 
 // =============================================================================
@@ -120,6 +121,7 @@ export default function GeneratePage() {
   const [progress, setProgress] = useState(0)
   const generationsLeft = getGenerationsLeft(user)
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const [showBuyModal, setShowBuyModal] = useState(false)
   const greeting = getGreeting()
 
   // Fetch folders only for authenticated users
@@ -267,17 +269,9 @@ export default function GeneratePage() {
       return
     }
 
-    // Check limits
-    if (!canGenerate(user)) {
-      setErrorCode('LIMIT_EXCEEDED')
-      setErrorText('Лимит генераций исчерпан. Приобретите дополнительные генерации.')
-      return
-    }
-
-    // Check if user has enough generations
-    if (generationsLeft < generationCost) {
-      setErrorCode('LIMIT_EXCEEDED')
-      setErrorText(`Недостаточно генераций. Требуется: ${generationCost}, доступно: ${generationsLeft}`)
+    // Check limits - open buy modal instead of showing error
+    if (!canGenerate(user) || generationsLeft < generationCost) {
+      setShowBuyModal(true)
       return
     }
 
@@ -307,13 +301,27 @@ export default function GeneratePage() {
         {/* Generations counter -- only for authenticated users */}
         {user && (
           <div className="w-full flex justify-end mb-4">
-            <div className="flex items-center gap-2 bg-white rounded-full px-5 py-2.5 shadow-sm border border-purple-100">
-              <svg className="w-5 h-5 text-[#8C52FF]" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" />
-              </svg>
-              <span className="font-semibold text-slate-700">
-                {generationsLeft}
-              </span>
+            <div className="flex items-center gap-3">
+              {generationsLeft === 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowBuyModal(true)}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-medium transition-colors shadow-sm"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  </svg>
+                  Пополнить генерации
+                </button>
+              )}
+              <div className="flex items-center gap-2 bg-white rounded-full px-5 py-2.5 shadow-sm border border-purple-100">
+                <svg className="w-5 h-5 text-[#8C52FF]" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" />
+                </svg>
+                <span className="font-semibold text-slate-700">
+                  {generationsLeft}
+                </span>
+              </div>
             </div>
           </div>
         )}
@@ -626,6 +634,12 @@ export default function GeneratePage() {
           </div>
         </div>
       )}
+
+      {/* Buy Generations Modal */}
+      <BuyGenerationsModal
+        isOpen={showBuyModal}
+        onClose={() => setShowBuyModal(false)}
+      />
     </div>
   )
 }

@@ -19,13 +19,6 @@ const PRICE_PER_GENERATION = 20  // rubles
 const MIN_GENERATIONS = 5
 const MAX_GENERATIONS = 200
 
-// Popular options for quick selection
-const POPULAR_OPTIONS = [
-  { count: 10, discount: 0 },
-  { count: 30, discount: 1 },   // -1%
-  { count: 100, discount: 4 },  // -4%
-]
-
 export default function BuyGenerationsModal({ isOpen, onClose }: BuyGenerationsModalProps) {
   const [generationsCount, setGenerationsCount] = useState(MIN_GENERATIONS)
   const [purchasing, setPurchasing] = useState(false)
@@ -34,19 +27,8 @@ export default function BuyGenerationsModal({ isOpen, onClose }: BuyGenerationsM
   const { user } = useAuth()
   const currentBalance = user?.generationsLeft ?? 0
 
-  // Calculate price with potential discount
-  const calculatePrice = (count: number) => {
-    const option = POPULAR_OPTIONS.find(o => o.count === count)
-    const basePrice = count * PRICE_PER_GENERATION
-    if (option && option.discount > 0) {
-      return Math.round(basePrice * (1 - option.discount / 100))
-    }
-    return basePrice
-  }
-
-  const totalPrice = calculatePrice(generationsCount)
-  const hasDiscount = POPULAR_OPTIONS.some(o => o.count === generationsCount && o.discount > 0)
-  const currentDiscount = POPULAR_OPTIONS.find(o => o.count === generationsCount)?.discount || 0
+  // Calculate price
+  const totalPrice = generationsCount * PRICE_PER_GENERATION
 
   async function handlePurchase() {
     try {
@@ -154,42 +136,10 @@ export default function BuyGenerationsModal({ isOpen, onClose }: BuyGenerationsM
             </div>
           </div>
 
-          {/* Popular options */}
-          <div className="mb-6">
-            <p className="text-center text-slate-500 text-sm mb-3">Популярные варианты:</p>
-            <div className="grid grid-cols-3 gap-3">
-              {POPULAR_OPTIONS.map((option) => (
-                <button
-                  key={option.count}
-                  onClick={() => setGenerationsCount(option.count)}
-                  className={`relative p-3 rounded-xl border-2 transition-all ${
-                    generationsCount === option.count
-                      ? 'border-[#8C52FF] bg-purple-50'
-                      : 'border-slate-200 hover:border-[#8C52FF]/50 bg-white'
-                  }`}
-                >
-                  {option.discount > 0 && (
-                    <span className="absolute -top-2 -right-2 px-2 py-0.5 bg-pink-500 text-white text-xs font-bold rounded-full">
-                      -{option.discount}%
-                    </span>
-                  )}
-                  <div className="text-xl font-bold text-slate-900">{option.count}</div>
-                  <div className="text-xs text-slate-500">генераций</div>
-                  <div className="text-sm font-semibold text-slate-600 mt-1">
-                    {calculatePrice(option.count)} ₽
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-
           {/* Price info */}
           <div className="mb-4 text-center">
             <p className="text-slate-500 text-sm">
               Цена за генерацию: <span className="font-semibold text-slate-700">{PRICE_PER_GENERATION} ₽</span>
-              {hasDiscount && (
-                <span className="ml-2 text-pink-500 font-semibold">(-{currentDiscount}%)</span>
-              )}
             </p>
           </div>
 
