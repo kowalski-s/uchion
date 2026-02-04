@@ -1,2 +1,0 @@
-export { mathPresentationConfig, algebraPresentationConfig, geometryPresentationConfig, russianPresentationConfig, getPresentationSubjectConfig, } from './subjects/index.js';
-//# sourceMappingURL=index.js.map

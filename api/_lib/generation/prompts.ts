@@ -224,11 +224,114 @@ ${allDist.map((d) => `  ✓ ${d.type}: РОВНО ${d.count} шт.`).join('\n')}
 }
 
 // =============================================================================
-// Block 6: Difficulty
+// Block 6: Difficulty (усиленный, идёт сразу после темы)
 // =============================================================================
 
 function getDifficultyBlock(level: DifficultyLevel, subject: string, grade: number): string {
-  return getDifficultyPrompt(level, subject, grade)
+  const difficultyContent = getDifficultyPrompt(level, subject, grade)
+
+  // Определяем название уровня для сообщений
+  const levelNames: Record<DifficultyLevel, string> = {
+    easy: 'БАЗОВЫЙ',
+    medium: 'СРЕДНИЙ',
+    hard: 'ПОВЫШЕННЫЙ'
+  }
+  const levelName = levelNames[level]
+
+  // Инструкции по соблюдению уровня
+  let enforcementRules = ''
+  if (level === 'easy') {
+    enforcementRules = `
+СТРОГИЕ ОГРАНИЧЕНИЯ (БАЗОВЫЙ уровень):
+✗ ЗАПРЕЩЕНЫ сложные многоступенчатые задачи (более 2 шагов)
+✗ ЗАПРЕЩЕНЫ нестандартные формулировки и подвохи
+✗ ЗАПРЕЩЕНЫ задания олимпиадного типа
+✓ Только прямое применение правил и формул
+✓ Простые числа и примеры из учебника
+✓ Однозначные формулировки`
+  } else if (level === 'medium') {
+    enforcementRules = `
+СТРОГИЕ ОГРАНИЧЕНИЯ (СРЕДНИЙ уровень):
+✗ ЗАПРЕЩЕНЫ слишком простые задания в 1 шаг
+✗ ЗАПРЕЩЕНЫ олимпиадные и нестандартные задачи
+✓ Стандартные ситуации из учебника
+✓ Решение в 2-3 шага
+✓ Требуется понимание темы, но без подвохов`
+  } else {
+    enforcementRules = `
+СТРОГИЕ ОГРАНИЧЕНИЯ (ПОВЫШЕННЫЙ уровень):
+✗ ЗАПРЕЩЕНЫ простые задачи в 1-2 действия
+✗ ЗАПРЕЩЕНЫ задания с очевидным ответом
+✓ Нестандартные формулировки и контексты
+✓ Решение в 3-5 шагов
+✓ Комбинирование нескольких тем или правил
+✓ Задания олимпиадного типа`
+  }
+
+  return `
+═══════════════════════════════════════════════════════════════
+⚠️ УРОВЕНЬ СЛОЖНОСТИ — КРИТИЧЕСКИ ВАЖНО ⚠️
+═══════════════════════════════════════════════════════════════
+
+${difficultyContent}
+
+${enforcementRules}
+
+Каждое задание ДОЛЖНО соответствовать уровню ${levelName}.
+Перед добавлением задания проверь: "Соответствует ли это уровню ${levelName}?"
+`.trim()
+}
+
+// =============================================================================
+// Block 6.5: Diversity (разнообразие заданий)
+// =============================================================================
+
+function getSubjectDiversityHints(subject: string): string {
+  switch (subject) {
+    case 'math':
+    case 'algebra':
+    case 'geometry':
+      return `
+Для математических предметов обязательно включи:
+• Задания на знание ФОРМУЛ (запиши формулу, выбери правильную формулу)
+• Задания на ПОНИМАНИЕ (что изменится если..., верно ли что..., объясни)
+• Задания на ВЫЧИСЛЕНИЕ (реши, найди, вычисли)
+• Задания на АНАЛИЗ (найди ошибку, сравни способы решения, верно ли утверждение)`
+
+    case 'russian':
+      return `
+Для русского языка обязательно включи:
+• Задания на знание ПРАВИЛ (сформулируй правило, выбери правильное объяснение)
+• Задания на ОПРЕДЕЛЕНИЕ (найди подлежащее, определи часть речи, укажи тип)
+• Задания на ПРИМЕНЕНИЕ (вставь букву, расставь знаки, исправь ошибку)
+• Задания на АНАЛИЗ (объясни написание, сравни предложения, найди ошибку)`
+
+    default:
+      return ''
+  }
+}
+
+function getDiversityBlock(subject: string): string {
+  const subjectHints = getSubjectDiversityHints(subject)
+
+  return `
+═══════════════════════════════════════════════════════════════
+РАЗНООБРАЗИЕ ЗАДАНИЙ — ОБЯЗАТЕЛЬНОЕ ТРЕБОВАНИЕ
+═══════════════════════════════════════════════════════════════
+
+Задания ОБЯЗАНЫ покрывать РАЗНЫЕ аспекты темы.
+ЗАПРЕЩЕНО делать все задания одного вида (например, все на вычисления).
+
+Распредели задания по категориям:
+1. ТЕОРИЯ (20-30%): знание формул, правил, определений, свойств
+2. ПОНИМАНИЕ (20-30%): объяснение, сравнение, "что будет если..."
+3. ПРИМЕНЕНИЕ (30-40%): решение, вычисление, практическое применение
+4. АНАЛИЗ (10-20%): найди ошибку, сравни способы, верно ли утверждение
+${subjectHints}
+
+НИКОГДА не генерируй все задания только на один аспект!
+Тестовые вопросы тоже должны быть разнообразны: на теорию, понимание, применение.
+`.trim()
 }
 
 // =============================================================================
@@ -309,6 +412,15 @@ const ANTI_PATTERNS_PROMPT = `
 
 /**
  * Собрать финальный промпт из всех блоков
+ *
+ * Порядок блоков оптимизирован для качества генерации:
+ * 1. Роль + предмет (контекст)
+ * 2. Класс + тема (что генерируем)
+ * 3. СЛОЖНОСТЬ (сразу после темы — критически важно!)
+ * 4. Типы заданий (сколько и каких)
+ * 5. РАЗНООБРАЗИЕ (после типов — как разнообразить)
+ * 6. Формат ответа (JSON)
+ * 7. Антипаттерны (запреты)
  */
 export function buildPrompt(params: PromptParams): string {
   const blocks = [
@@ -316,8 +428,9 @@ export function buildPrompt(params: PromptParams): string {
     getSubjectBlock(params.subject),
     getGradeBlock(params.subject, params.grade),
     getTopicBlock(params.topic),
+    getDifficultyBlock(params.difficulty, params.subject, params.grade), // Сложность сразу после темы!
     getTaskTypesBlock(params.taskTypes, params.format, params.variantIndex),
-    getDifficultyBlock(params.difficulty, params.subject, params.grade),
+    getDiversityBlock(params.subject), // Разнообразие после типов
     getFormatBlock(),
     ANTI_PATTERNS_PROMPT,
   ]
@@ -334,6 +447,13 @@ export function buildSystemPrompt(subjectId: string): string {
 
 /**
  * Получить user prompt (остальные блоки)
+ *
+ * Порядок блоков оптимизирован:
+ * 1. Класс + тема
+ * 2. СЛОЖНОСТЬ (сразу после темы!)
+ * 3. Типы заданий
+ * 4. РАЗНООБРАЗИЕ
+ * 5. Формат + антипаттерны
  */
 export function buildUserPrompt(
   params: Omit<PromptParams, 'subject'> & { subject: string }
@@ -341,8 +461,9 @@ export function buildUserPrompt(
   const blocks = [
     getGradeBlock(params.subject, params.grade),
     getTopicBlock(params.topic),
+    getDifficultyBlock(params.difficulty, params.subject, params.grade), // Сложность сразу после темы!
     getTaskTypesBlock(params.taskTypes, params.format, params.variantIndex),
-    getDifficultyBlock(params.difficulty, params.subject, params.grade),
+    getDiversityBlock(params.subject), // Разнообразие после типов
     getFormatBlock(),
     ANTI_PATTERNS_PROMPT,
   ]

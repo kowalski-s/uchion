@@ -668,10 +668,10 @@ export default function GeneratePage() {
                   <div className="flex gap-4 flex-wrap">
                     {currentFormat.variants.map((variant, idx) => {
                       const description = variant.openTasks > 0 && variant.testQuestions > 0
-                        ? `${variant.openTasks} заданий + ${variant.testQuestions} тестов`
+                        ? `${variant.openTasks} заданий + ${variant.testQuestions} тест. вопросов`
                         : variant.openTasks > 0
                         ? `${variant.openTasks} заданий`
-                        : `${variant.testQuestions} тестов`
+                        : `${variant.testQuestions} тест. вопросов`
 
                       return (
                         <button
