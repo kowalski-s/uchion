@@ -1,19 +1,10 @@
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
-import { getGenerationsLeft } from '../lib/limits'
 
 function UserIcon({ className = "w-4 h-4" }: { className?: string }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
-    </svg>
-  )
-}
-
-function PlusIcon({ className = "w-4 h-4" }: { className?: string }) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={className}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
     </svg>
   )
 }
@@ -26,17 +17,8 @@ function ShieldIcon({ className = "w-4 h-4" }: { className?: string }) {
   )
 }
 
-function PresentationIcon({ className = "w-4 h-4" }: { className?: string }) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5M9 11.25v1.5M12 9v3.75m3-6v6" />
-    </svg>
-  )
-}
-
 export default function Header() {
   const { user } = useAuth()
-  const generationsLeft = getGenerationsLeft(user)
   const location = useLocation()
   const isDashboard = location.pathname === '/dashboard'
 
@@ -49,25 +31,6 @@ export default function Header() {
             <span className="text-[#8C52FF] drop-shadow-[0_0_12px_rgba(140,82,255,0.4)]">Он</span>
           </Link>
 
-          {/* Create button - glass style */}
-          {user && (
-            <>
-              <Link
-                to="/"
-                className="glass-btn-neon flex items-center gap-1.5 px-4 py-2 text-sm font-semibold"
-              >
-                <PlusIcon className="w-4 h-4" />
-                <span>Создать</span>
-              </Link>
-              <Link
-                to="/presentations/generate"
-                className="glass-btn-neon flex items-center gap-1.5 px-4 py-2 text-sm font-semibold"
-              >
-                <PresentationIcon className="w-4 h-4" />
-                <span>Презентация</span>
-              </Link>
-            </>
-          )}
         </div>
 
         <div className="flex items-center gap-4">
