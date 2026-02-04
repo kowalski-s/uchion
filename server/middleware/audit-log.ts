@@ -167,7 +167,7 @@ export function logInvalidSignature(
 
 export function logCsrfDetected(
   req: Request,
-  provider: 'yandex',
+  provider: 'yandex' | 'telegram',
   metadata?: Record<string, unknown>
 ): void {
   logAuditEvent(AuditEventType.SECURITY_CSRF_DETECTED, req, {
