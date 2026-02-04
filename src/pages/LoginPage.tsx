@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
-import TelegramLoginButton from '../components/TelegramLoginButton'
 
 export default function LoginPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const { signInWithYandex, status } = useAuth()
+  const { signInWithYandex, signInWithTelegram, status } = useAuth()
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [consentAccepted, setConsentAccepted] = useState(false)
@@ -115,17 +114,24 @@ export default function LoginPage() {
               Войти через Яндекс
             </button>
 
-            {/* Telegram Login Widget */}
-            {import.meta.env.VITE_TELEGRAM_BOT_USERNAME && (
-              <div className={`relative ${!consentAccepted ? 'opacity-50 pointer-events-none' : ''}`}>
-                <TelegramLoginButton
-                  botUsername={import.meta.env.VITE_TELEGRAM_BOT_USERNAME}
-                  authCallbackUrl={`${window.location.origin}/api/auth/telegram/callback`}
-                  buttonSize="large"
-                  onAuthError={(error) => setError(error)}
-                />
-              </div>
-            )}
+            {/* Telegram Login Button */}
+            <button
+              type="button"
+              onClick={() => {
+                if (!consentAccepted) return
+                setError(null)
+                setIsLoading(true)
+                signInWithTelegram()
+              }}
+              disabled={!consentAccepted || isLoading || status === 'loading'}
+              className="flex h-14 w-full items-center justify-center gap-3 rounded-xl border-2 border-slate-200 bg-white text-base font-semibold text-slate-700 transition-all hover:border-slate-300 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none">
+                <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0z" fill="#0088CC"/>
+                <path d="M17.563 7.15l-2.037 9.596c-.153.682-.553.849-1.122.528l-3.1-2.284-1.495 1.439c-.166.166-.305.305-.625.305l.223-3.16 5.747-5.193c.25-.222-.055-.346-.388-.124l-7.102 4.473-3.059-.955c-.665-.208-.678-.665.139-.984l11.958-4.61c.554-.2 1.04.134.86.969z" fill="white"/>
+              </svg>
+              Войти через Telegram
+            </button>
           </div>
 
           {/* Loading indicator */}

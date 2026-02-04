@@ -353,65 +353,148 @@ router.get('/yandex/callback', async (req: Request, res: Response) => {
   }
 })
 
-// ==================== GET /api/auth/telegram/callback ====================
-// OAuth callbacks use redirects, not JSON -- keep inline error handling
-router.get('/telegram/callback', async (req: Request, res: Response) => {
-  const appUrl = process.env.APP_URL || ''
+// ==================== GET /api/auth/telegram/redirect ====================
+// Redirects user to oauth.telegram.org for authentication
+router.get('/telegram/redirect', async (req: Request, res: Response) => {
+  await requireOAuthRedirectRateLimit(req)
 
+  const botToken = process.env.TELEGRAM_BOT_TOKEN
+  const appUrl = process.env.APP_URL
+
+  if (!botToken) {
+    console.error('[Telegram OAuth] TELEGRAM_BOT_TOKEN not configured')
+    throw ApiError.internal('OAuth not configured')
+  }
+
+  if (!appUrl) {
+    console.error('[Telegram OAuth] APP_URL not configured')
+    throw ApiError.internal('OAuth not configured')
+  }
+
+  // Extract bot_id from token (first part before colon)
+  const botId = botToken.split(':')[0]
+  if (!botId || !/^\d+$/.test(botId)) {
+    console.error('[Telegram OAuth] Invalid bot token format')
+    throw ApiError.internal('OAuth not configured')
+  }
+
+  // Generate state for CSRF protection (same mechanism as Yandex)
+  const state = generateState()
+  setOAuthStateCookie(res, state)
+
+  // Build oauth.telegram.org URL
+  // return_to includes state in query param for validation
+  const returnTo = `${appUrl}/auth/telegram/callback?state=${encodeURIComponent(state)}`
+  const authUrl = new URL('https://oauth.telegram.org/auth')
+  authUrl.searchParams.set('bot_id', botId)
+  authUrl.searchParams.set('origin', appUrl)
+  authUrl.searchParams.set('return_to', returnTo)
+  authUrl.searchParams.set('request_access', 'write')
+  authUrl.searchParams.set('embed', '0')
+
+  return res.redirect(302, authUrl.toString())
+})
+
+// ==================== POST /api/auth/telegram/callback ====================
+// Receives auth data from client after parsing hash fragment from oauth.telegram.org
+router.post('/telegram/callback', async (req: Request, res: Response) => {
   const rateLimitResult = await checkAuthRateLimit(req)
   if (!rateLimitResult.success) {
-    const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000)
     logRateLimitExceeded(req, '/api/auth/telegram/callback')
-    return res.redirect(302, `${appUrl}/login?error=rate_limit_exceeded`)
+    throw ApiError.tooManyRequests('Rate limit exceeded')
   }
 
   try {
     const botToken = process.env.TELEGRAM_BOT_TOKEN
+    const appUrl = process.env.APP_URL
+
     if (!botToken) {
-      console.error('[Telegram Login] TELEGRAM_BOT_TOKEN not configured')
-      return res.redirect(302, `${appUrl}/login?error=configuration_error`)
+      console.error('[Telegram OAuth] TELEGRAM_BOT_TOKEN not configured')
+      throw ApiError.internal('OAuth not configured')
     }
 
-    const { hash, auth_date, id, first_name, last_name, username, photo_url } = req.query
+    // Validate Origin header for CSRF protection
+    const origin = req.headers.origin
+    if (appUrl && origin) {
+      const expectedOrigin = new URL(appUrl).origin
+      if (origin !== expectedOrigin) {
+        console.error('[Telegram OAuth] Origin mismatch:', { origin, expected: expectedOrigin })
+        throw ApiError.forbidden('Invalid origin')
+      }
+    }
+
+    // Validate state from cookie (CSRF protection)
+    const { state: providedState } = req.body
+    const storedState = getStateCookie(req)
+
+    if (!storedState || !providedState) {
+      logCsrfDetected(req, 'telegram', { provided_state: providedState, expected_state: storedState })
+      throw ApiError.badRequest('Invalid state')
+    }
+
+    const stateBuffer = Buffer.from(String(providedState), 'utf8')
+    const storedBuffer = Buffer.from(storedState, 'utf8')
+    const statesMatch = stateBuffer.length === storedBuffer.length &&
+      crypto.timingSafeEqual(stateBuffer, storedBuffer)
+
+    if (!statesMatch) {
+      logCsrfDetected(req, 'telegram', { provided_state: providedState, expected_state: storedState })
+      throw ApiError.badRequest('Invalid state')
+    }
+
+    if (!validateState(storedState)) {
+      console.error('[Telegram OAuth] State expired or invalid format')
+      logCsrfDetected(req, 'telegram', { state: storedState, reason: 'expired_or_invalid' })
+      throw ApiError.badRequest('State expired')
+    }
+
+    // Clear OAuth cookies after validation
+    clearOAuthCookies(res)
+
+    // Extract and validate auth data from request body
+    const { hash, auth_date, id, first_name, last_name, username, photo_url } = req.body
 
     if (!hash || typeof hash !== 'string') {
-      console.error('[Telegram Login] Missing hash parameter')
-      return res.redirect(302, `${appUrl}/login?error=invalid_request`)
+      console.error('[Telegram OAuth] Missing hash parameter')
+      throw ApiError.badRequest('Missing hash')
     }
 
-    if (!auth_date || typeof auth_date !== 'string') {
-      console.error('[Telegram Login] Missing auth_date parameter')
-      return res.redirect(302, `${appUrl}/login?error=invalid_request`)
+    if (!auth_date) {
+      console.error('[Telegram OAuth] Missing auth_date parameter')
+      throw ApiError.badRequest('Missing auth_date')
     }
 
-    if (!id || typeof id !== 'string') {
-      console.error('[Telegram Login] Missing id parameter')
-      return res.redirect(302, `${appUrl}/login?error=invalid_request`)
+    if (!id) {
+      console.error('[Telegram OAuth] Missing id parameter')
+      throw ApiError.badRequest('Missing id')
     }
 
-    const authTimestamp = parseInt(auth_date, 10)
+    // Validate auth_date (not older than 5 minutes)
+    const authTimestamp = parseInt(String(auth_date), 10)
     const currentTimestamp = Math.floor(Date.now() / 1000)
     const MAX_AGE_SECONDS = 5 * 60
 
-    if (currentTimestamp - authTimestamp > MAX_AGE_SECONDS) {
+    if (isNaN(authTimestamp) || currentTimestamp - authTimestamp > MAX_AGE_SECONDS) {
       logExpiredAuth(req, 'telegram', { auth_date: authTimestamp, current_time: currentTimestamp })
-      return res.redirect(302, `${appUrl}/login?error=authentication_expired`)
+      throw ApiError.badRequest('Authentication expired')
     }
 
+    // Build data check string for hash verification
     const dataCheckParams: Record<string, string> = {}
 
-    if (auth_date) dataCheckParams.auth_date = String(auth_date)
-    if (first_name && typeof first_name === 'string') dataCheckParams.first_name = first_name
-    if (id) dataCheckParams.id = String(id)
-    if (last_name && typeof last_name === 'string') dataCheckParams.last_name = last_name
-    if (photo_url && typeof photo_url === 'string') dataCheckParams.photo_url = photo_url
-    if (username && typeof username === 'string') dataCheckParams.username = username
+    dataCheckParams.auth_date = String(auth_date)
+    if (first_name) dataCheckParams.first_name = String(first_name)
+    dataCheckParams.id = String(id)
+    if (last_name) dataCheckParams.last_name = String(last_name)
+    if (photo_url) dataCheckParams.photo_url = String(photo_url)
+    if (username) dataCheckParams.username = String(username)
 
     const dataCheckString = Object.keys(dataCheckParams)
       .sort()
       .map(key => `${key}=${dataCheckParams[key]}`)
       .join('\n')
 
+    // Compute expected hash: HMAC-SHA256(SHA256(bot_token), data_check_string)
     const secretKey = crypto
       .createHash('sha256')
       .update(botToken)
@@ -422,15 +505,17 @@ router.get('/telegram/callback', async (req: Request, res: Response) => {
       .update(dataCheckString)
       .digest('hex')
 
+    // Timing-safe comparison to prevent timing attacks
     const hashBuffer = Buffer.from(hash, 'hex')
     const calculatedBuffer = Buffer.from(calculatedHash, 'hex')
 
     if (hashBuffer.length !== calculatedBuffer.length ||
         !crypto.timingSafeEqual(hashBuffer, calculatedBuffer)) {
       logInvalidSignature(req, 'telegram', { telegram_id: String(id) })
-      return res.redirect(302, `${appUrl}/login?error=invalid_signature`)
+      throw ApiError.badRequest('Invalid signature')
     }
 
+    // Create or find user
     const telegramId = String(id)
     const name = [first_name || '', last_name || ''].filter(Boolean).join(' ') || null
     const photoUrl = typeof photo_url === 'string' ? photo_url : null
@@ -481,6 +566,7 @@ router.get('/telegram/callback', async (req: Request, res: Response) => {
         .where(eq(users.id, user.id))
     }
 
+    // Create JWT tokens
     const accessToken = createAccessToken({
       userId: user.id,
       role: user.role,
@@ -491,12 +577,15 @@ router.get('/telegram/callback', async (req: Request, res: Response) => {
 
     logOAuthCallbackSuccess(req, user.id, user.email, 'telegram')
 
-    return res.redirect(302, appUrl || '/')
+    return res.status(200).json({ success: true })
   } catch (error) {
+    if (error instanceof ApiError) {
+      throw error
+    }
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     logOAuthCallbackFailed(req, errorMessage, 'telegram')
-    console.error('[Telegram Login] Callback error:', error)
-    return res.redirect(302, `${appUrl}/login?error=authentication_failed`)
+    console.error('[Telegram OAuth] Callback error:', error)
+    throw ApiError.internal('Authentication failed')
   }
 })
 

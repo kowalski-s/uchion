@@ -21,6 +21,7 @@ interface AuthContextType {
   user: User | null
   status: 'loading' | 'authenticated' | 'unauthenticated'
   signInWithYandex: () => void
+  signInWithTelegram: () => void
   signOut: () => Promise<void>
   refreshAuth: () => Promise<void>
 }
@@ -93,6 +94,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.location.href = '/api/auth/yandex/redirect'
   }
 
+  const signInWithTelegram = () => {
+    window.location.href = '/api/auth/telegram/redirect'
+  }
+
   // Logout
   const signOut = async () => {
     try {
@@ -117,6 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         status,
         signInWithYandex,
+        signInWithTelegram,
         signOut,
         refreshAuth,
       }}

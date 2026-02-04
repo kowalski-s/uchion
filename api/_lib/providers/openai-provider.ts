@@ -85,7 +85,7 @@ export class OpenAIProvider implements AIProvider {
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userPrompt }
           ],
-          max_tokens: 8000,
+          max_tokens: 16000,
           temperature: 0.5
         })
       )
@@ -106,7 +106,30 @@ export class OpenAIProvider implements AIProvider {
         console.error('[УчиОн] No JSON found in response')
         throw new Error('AI_ERROR')
       }
-      generatedJson = JSON.parse(jsonMatch[0])
+      let jsonStr = jsonMatch[0]
+
+      // Try to fix truncated JSON (common with reasoning models)
+      try {
+        generatedJson = JSON.parse(jsonStr)
+      } catch {
+        console.warn('[УчиОн] JSON parse failed, attempting to fix truncated JSON...')
+        // Try to close unclosed arrays and objects
+        let fixed = jsonStr
+        const openBrackets = (fixed.match(/\[/g) || []).length
+        const closeBrackets = (fixed.match(/\]/g) || []).length
+        const openBraces = (fixed.match(/\{/g) || []).length
+        const closeBraces = (fixed.match(/\}/g) || []).length
+
+        // Remove trailing comma if present
+        fixed = fixed.replace(/,\s*$/, '')
+
+        // Close arrays and objects
+        for (let i = 0; i < openBrackets - closeBrackets; i++) fixed += ']'
+        for (let i = 0; i < openBraces - closeBraces; i++) fixed += '}'
+
+        console.log('[УчиОн] Fixed JSON, attempting parse again...')
+        generatedJson = JSON.parse(fixed)
+      }
     } catch (e) {
       console.error('[УчиОн] JSON parse error:', e)
       throw new Error('AI_ERROR')
