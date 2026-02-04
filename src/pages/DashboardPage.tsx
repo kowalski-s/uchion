@@ -143,7 +143,7 @@ export default function DashboardPage() {
                 <p className="text-sm font-bold text-slate-900">{user.generationsLeft} осталось</p>
               </div>
               <div className="text-xs text-purple-600 font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
-                + Купить
+                + Пополнить
               </div>
             </div>
             {/* Progress bar */}
@@ -152,7 +152,7 @@ export default function DashboardPage() {
             </div>
             {isLimitExhausted && (
               <span className="text-xs font-semibold text-[#8C52FF]">
-                Нажмите чтобы купить ещё →
+                Нажмите чтобы пополнить →
               </span>
             )}
           </div>
