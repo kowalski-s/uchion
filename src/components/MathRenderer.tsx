@@ -279,8 +279,11 @@ function processCaretsAndSubscripts(text: string): string {
  * Parses text and renders LaTeX formulas
  */
 function renderMathInText(text: string): string {
+  // Decode HTML entities that AI may produce (e.g. &gt; → >)
+  let processedText = decodeHtmlEntities(text)
+
   // Normalize text: handle double-escaped backslashes from JSON parsing
-  let processedText = text.replace(/\\\\/g, '\\')
+  processedText = processedText.replace(/\\\\/g, '\\')
 
   // Pre-process: convert plain ^ and _ notation to rendered math
   processedText = preprocessCaretNotation(processedText)
@@ -424,14 +427,31 @@ function escapeHtml(text: string): string {
 }
 
 /**
+ * Decode HTML entities that AI models sometimes produce in text
+ * (e.g. &gt; instead of >, &lt; instead of <)
+ */
+function decodeHtmlEntities(text: string): string {
+  return text
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#0?39;/g, "'")
+    .replace(/&#x27;/g, "'")
+}
+
+/**
  * Converts LaTeX to plain Unicode text for PDF generation.
  * Handles both delimited \(...\) and raw LaTeX commands.
  */
 export function latexToUnicode(text: string): string {
   if (!text) return ''
 
+  // Decode HTML entities that AI may produce (e.g. &gt; → >)
+  let result = decodeHtmlEntities(text)
+
   // Normalize double-escaped backslashes from JSON parsing
-  let result = text.replace(/\\\\/g, '\\')
+  result = result.replace(/\\\\/g, '\\')
 
   // Process \(...\) and \[...\] blocks first
   result = result.replace(/\\\(([^]*?)\\\)|\\\[([^]*?)\\\]/g, (match, inline, display) => {

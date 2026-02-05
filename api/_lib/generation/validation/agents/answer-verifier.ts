@@ -1,5 +1,6 @@
 import OpenAI from 'openai'
 import { getVerifierModelConfig } from '../../../ai-models.js'
+import { safeJsonParse } from './safe-json-parse.js'
 import type { TaskTypeId } from '../../config/task-types.js'
 import type { AgentResult, AgentTaskResult, AgentIssue } from './index.js'
 
@@ -148,7 +149,10 @@ ${tasksText}
       return emptyResult(agentName, 'NO_JSON_RESPONSE')
     }
 
-    const parsed = JSON.parse(jsonMatch[0]) as { tasks: LLMTaskResult[] }
+    const parsed = safeJsonParse<{ tasks: LLMTaskResult[] }>(jsonMatch[0], agentName)
+    if (!parsed) {
+      return emptyResult(agentName, 'JSON_PARSE_ERROR')
+    }
     const llmTasks = parsed.tasks || []
 
     const taskResults: AgentTaskResult[] = llmTasks.map((t) => {

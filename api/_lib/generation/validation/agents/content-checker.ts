@@ -1,5 +1,6 @@
 import OpenAI from 'openai'
 import { getAgentsModel } from '../../../ai-models.js'
+import { safeJsonParse } from './safe-json-parse.js'
 import { getGradeConfig } from '../../config/index.js'
 import type { TaskTypeId } from '../../config/task-types.js'
 import type { AgentResult, AgentTaskResult, AgentIssue } from './index.js'
@@ -134,7 +135,10 @@ ${tasksText}
       return emptyResult(agentName, 'NO_JSON_RESPONSE')
     }
 
-    const parsed = JSON.parse(jsonMatch[0]) as { tasks: LLMContentResult[] }
+    const parsed = safeJsonParse<{ tasks: LLMContentResult[] }>(jsonMatch[0], agentName)
+    if (!parsed) {
+      return emptyResult(agentName, 'JSON_PARSE_ERROR')
+    }
     const llmTasks = parsed.tasks || []
 
     const taskResults: AgentTaskResult[] = llmTasks.map((t) => {

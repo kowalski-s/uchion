@@ -1,5 +1,6 @@
 import OpenAI from 'openai'
 import { getAgentsModel } from '../../../ai-models.js'
+import { safeJsonParse } from './safe-json-parse.js'
 import type { TaskTypeId } from '../../config/task-types.js'
 import type { AgentIssue } from './index.js'
 
@@ -94,7 +95,12 @@ ${issue.message}${suggestionLine}
       return { success: false, originalTask: task, error: 'No JSON in LLM response' }
     }
 
-    const fixedTask = JSON.parse(jsonMatch[0]) as GeneratedTask
+    const fixedTask = safeJsonParse<GeneratedTask>(jsonMatch[0], 'task-fixer')
+
+    if (!fixedTask) {
+      const duration = Date.now() - start
+      return { success: false, originalTask: task, error: `JSON parse failed after ${duration}ms` }
+    }
 
     // Ensure type is preserved
     if (fixedTask.type !== task.type) {
