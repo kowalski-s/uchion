@@ -53,6 +53,12 @@ export interface UseWorksheetEditorReturn {
   replaceAssignment: (index: number, assignment: { title: string; text: string }, answer: string) => void
   /** Replace a test question and its answer (for regeneration, works on base worksheet) */
   replaceTestQuestion: (index: number, question: { question: string; options: string[]; answer: string }, answer: string) => void
+  /** Update matching task instruction */
+  updateMatchingInstruction: (assignmentIndex: number, value: string) => void
+  /** Update matching task left column item */
+  updateMatchingLeftItem: (assignmentIndex: number, itemIndex: number, value: string) => void
+  /** Update matching task right column item */
+  updateMatchingRightItem: (assignmentIndex: number, itemIndex: number, value: string) => void
 }
 
 function deepClone<T>(obj: T): T {
@@ -67,6 +73,22 @@ function isValidUUID(str: string): boolean {
 function areWorksheetsEqual(a: Worksheet | null, b: Worksheet | null): boolean {
   if (!a || !b) return a === b
   return JSON.stringify(a) === JSON.stringify(b)
+}
+
+/** Update matching data embedded in assignment text as <!--MATCHING:{...}--> */
+function updateMatchingField(
+  text: string,
+  updater: (data: Record<string, unknown>) => void,
+): string {
+  const match = text.match(/<!--MATCHING:(.*?)-->/)
+  if (!match) return text
+  try {
+    const data = JSON.parse(match[1])
+    updater(data)
+    return `<!--MATCHING:${JSON.stringify(data)}-->`
+  } catch {
+    return text
+  }
 }
 
 export function useWorksheetEditor(options: UseWorksheetEditorOptions): UseWorksheetEditorReturn {
@@ -176,6 +198,51 @@ export function useWorksheetEditor(options: UseWorksheetEditorOptions): UseWorks
     })
   }, [])
 
+  // Update matching task instruction
+  const updateMatchingInstruction = useCallback((assignmentIndex: number, value: string) => {
+    setEditedWorksheet(prev => {
+      if (!prev) return prev
+      const newAssignments = [...prev.assignments]
+      newAssignments[assignmentIndex] = {
+        ...newAssignments[assignmentIndex],
+        text: updateMatchingField(newAssignments[assignmentIndex].text, (d) => { d.instruction = value }),
+      }
+      return { ...prev, assignments: newAssignments }
+    })
+  }, [])
+
+  // Update matching task left column item
+  const updateMatchingLeftItem = useCallback((assignmentIndex: number, itemIndex: number, value: string) => {
+    setEditedWorksheet(prev => {
+      if (!prev) return prev
+      const newAssignments = [...prev.assignments]
+      newAssignments[assignmentIndex] = {
+        ...newAssignments[assignmentIndex],
+        text: updateMatchingField(newAssignments[assignmentIndex].text, (d) => {
+          const col = d.leftColumn as string[]
+          col[itemIndex] = value
+        }),
+      }
+      return { ...prev, assignments: newAssignments }
+    })
+  }, [])
+
+  // Update matching task right column item
+  const updateMatchingRightItem = useCallback((assignmentIndex: number, itemIndex: number, value: string) => {
+    setEditedWorksheet(prev => {
+      if (!prev) return prev
+      const newAssignments = [...prev.assignments]
+      newAssignments[assignmentIndex] = {
+        ...newAssignments[assignmentIndex],
+        text: updateMatchingField(newAssignments[assignmentIndex].text, (d) => {
+          const col = d.rightColumn as string[]
+          col[itemIndex] = value
+        }),
+      }
+      return { ...prev, assignments: newAssignments }
+    })
+  }, [])
+
   // Replace assignment (regeneration - updates base worksheet directly)
   const replaceAssignment = useCallback((index: number, assignment: { title: string; text: string }, answer: string) => {
     setWorksheet(prev => {
@@ -184,7 +251,8 @@ export function useWorksheetEditor(options: UseWorksheetEditorOptions): UseWorks
       newAssignments[index] = assignment
       const newAnswers = [...prev.answers.assignments]
       newAnswers[index] = answer
-      return { ...prev, assignments: newAssignments, answers: { ...prev.answers, assignments: newAnswers } }
+      // Clear stale server-generated PDF so client-side PDF is used on next download
+      return { ...prev, pdfBase64: '', assignments: newAssignments, answers: { ...prev.answers, assignments: newAnswers } }
     })
     // Also update editedWorksheet if in edit mode
     setEditedWorksheet(prev => {
@@ -193,7 +261,7 @@ export function useWorksheetEditor(options: UseWorksheetEditorOptions): UseWorks
       newAssignments[index] = assignment
       const newAnswers = [...prev.answers.assignments]
       newAnswers[index] = answer
-      return { ...prev, assignments: newAssignments, answers: { ...prev.answers, assignments: newAnswers } }
+      return { ...prev, pdfBase64: '', assignments: newAssignments, answers: { ...prev.answers, assignments: newAnswers } }
     })
   }, [])
 
@@ -205,7 +273,8 @@ export function useWorksheetEditor(options: UseWorksheetEditorOptions): UseWorks
       newTest[index] = question
       const newAnswers = [...prev.answers.test]
       newAnswers[index] = answer
-      return { ...prev, test: newTest, answers: { ...prev.answers, test: newAnswers } }
+      // Clear stale server-generated PDF so client-side PDF is used on next download
+      return { ...prev, pdfBase64: '', test: newTest, answers: { ...prev.answers, test: newAnswers } }
     })
     // Also update editedWorksheet if in edit mode
     setEditedWorksheet(prev => {
@@ -214,7 +283,7 @@ export function useWorksheetEditor(options: UseWorksheetEditorOptions): UseWorks
       newTest[index] = question
       const newAnswers = [...prev.answers.test]
       newAnswers[index] = answer
-      return { ...prev, test: newTest, answers: { ...prev.answers, test: newAnswers } }
+      return { ...prev, pdfBase64: '', test: newTest, answers: { ...prev.answers, test: newAnswers } }
     })
   }, [])
 
@@ -229,10 +298,13 @@ export function useWorksheetEditor(options: UseWorksheetEditorOptions): UseWorks
     setError(null)
 
     try {
+      // Clear stale server-generated PDF so client-side PDF reflects edits
+      const worksheetToSave = { ...editedWorksheet, pdfBase64: '' }
+
       // For DB-backed worksheets (SavedWorksheetPage)
       if (worksheetId) {
         await updateWorksheet(worksheetId, {
-          content: JSON.stringify(editedWorksheet),
+          content: JSON.stringify(worksheetToSave),
         })
       }
 
@@ -242,23 +314,23 @@ export function useWorksheetEditor(options: UseWorksheetEditorOptions): UseWorks
         if (session) {
           sessionStore.saveSession(sessionId, {
             ...session,
-            worksheet: editedWorksheet,
+            worksheet: worksheetToSave,
           })
         }
 
         // Also update localStorage
         try {
-          localStorage.setItem('uchion_cached_worksheet', JSON.stringify(editedWorksheet))
+          localStorage.setItem('uchion_cached_worksheet', JSON.stringify(worksheetToSave))
         } catch (e) {
           void e
         }
 
         // Also save to DB if worksheet has a valid UUID (authenticated user)
         // The worksheet.id from generation is the DB record ID for authenticated users
-        if (editedWorksheet.id && isValidUUID(editedWorksheet.id)) {
+        if (worksheetToSave.id && isValidUUID(worksheetToSave.id)) {
           try {
-            await updateWorksheet(editedWorksheet.id, {
-              content: JSON.stringify(editedWorksheet),
+            await updateWorksheet(worksheetToSave.id, {
+              content: JSON.stringify(worksheetToSave),
             })
           } catch (e) {
             // Don't fail if DB update fails - localStorage is updated
@@ -268,7 +340,7 @@ export function useWorksheetEditor(options: UseWorksheetEditorOptions): UseWorks
       }
 
       // Update local state
-      setWorksheet(editedWorksheet)
+      setWorksheet(worksheetToSave)
       setIsEditMode(false)
       setEditedWorksheet(null)
 
@@ -303,5 +375,8 @@ export function useWorksheetEditor(options: UseWorksheetEditorOptions): UseWorks
     updateTestAnswer,
     replaceAssignment,
     replaceTestQuestion,
+    updateMatchingInstruction,
+    updateMatchingLeftItem,
+    updateMatchingRightItem,
   }
 }

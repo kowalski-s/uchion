@@ -189,14 +189,16 @@ export default function SavedWorksheetPage() {
           newTest[index] = result.data.testQuestion
           const newTestAnswers = [...current.answers.test]
           newTestAnswers[index] = result.data.answer
-          updated = { ...current, test: newTest, answers: { ...current.answers, test: newTestAnswers } }
+          // Clear stale pdfBase64 so next download uses client-side PDF with current content
+          updated = { ...current, pdfBase64: '', test: newTest, answers: { ...current.answers, test: newTestAnswers } }
           editor.replaceTestQuestion(index, result.data.testQuestion, result.data.answer)
         } else if (!isTest && result.data.assignment) {
           const newAssignments = [...current.assignments]
           newAssignments[index] = result.data.assignment
           const newAssignmentAnswers = [...current.answers.assignments]
           newAssignmentAnswers[index] = result.data.answer
-          updated = { ...current, assignments: newAssignments, answers: { ...current.answers, assignments: newAssignmentAnswers } }
+          // Clear stale pdfBase64 so next download uses client-side PDF with current content
+          updated = { ...current, pdfBase64: '', assignments: newAssignments, answers: { ...current.answers, assignments: newAssignmentAnswers } }
           editor.replaceAssignment(index, result.data.assignment, result.data.answer)
         }
 
@@ -421,6 +423,9 @@ export default function SavedWorksheetPage() {
             onUpdateTestOption={editor.updateTestOption}
             onUpdateAssignmentAnswer={editor.updateAssignmentAnswer}
             onUpdateTestAnswer={editor.updateTestAnswer}
+            onUpdateMatchingInstruction={editor.updateMatchingInstruction}
+            onUpdateMatchingLeftItem={editor.updateMatchingLeftItem}
+            onUpdateMatchingRightItem={editor.updateMatchingRightItem}
             onRegenerateTask={handleRegenerateTask}
             regeneratingIndex={regeneratingIndex}
           />
