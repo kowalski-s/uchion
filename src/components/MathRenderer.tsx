@@ -145,6 +145,15 @@ function extractLatexExpression(text: string, start: number): { latex: string; e
 
   latex += text.slice(cmdStart, i)
 
+  // Extract optional bracket argument [n] (e.g. \sqrt[3]{x} for cube root)
+  if (i < text.length && text[i] === '[') {
+    const bracketEnd = text.indexOf(']', i)
+    if (bracketEnd !== -1) {
+      latex += text.slice(i, bracketEnd + 1)
+      i = bracketEnd + 1
+    }
+  }
+
   // Extract brace groups (for commands like \frac{}{}, \sqrt{})
   while (i < text.length && text[i] === '{') {
     const group = extractBraceGroup(text, i)
@@ -495,7 +504,15 @@ function convertLatexToUnicode(latex: string): string {
     result = result.replace(/\\frac\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}/g, '($1/$2)')
   }
 
-  // Square root: \sqrt{x} → √x (handle nested)
+  // Nth root: \sqrt[n]{x} → ⁿ√(x)
+  const rootSuperscripts: Record<string, string> = {
+    '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶',
+    '7': '⁷', '8': '⁸', '9': '⁹', '10': '¹⁰', '12': '¹²',
+  }
+  result = result.replace(/\\sqrt\[([^\]]+)\]\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}/g,
+    (_, n, content) => `${rootSuperscripts[n] || n}√(${content})`)
+
+  // Square root: \sqrt{x} → √(x) (handle nested)
   prevResult = ''
   while (prevResult !== result) {
     prevResult = result
