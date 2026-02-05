@@ -279,11 +279,8 @@ function processCaretsAndSubscripts(text: string): string {
  * Parses text and renders LaTeX formulas
  */
 function renderMathInText(text: string): string {
-  // Decode HTML entities that AI may produce (e.g. &gt; → >)
-  let processedText = decodeHtmlEntities(text)
-
   // Normalize text: handle double-escaped backslashes from JSON parsing
-  processedText = processedText.replace(/\\\\/g, '\\')
+  let processedText = text.replace(/\\\\/g, '\\')
 
   // Pre-process: convert plain ^ and _ notation to rendered math
   processedText = preprocessCaretNotation(processedText)
@@ -404,6 +401,20 @@ function renderMathInText(text: string): string {
         if (tagEnd !== -1) {
           result += processedText.slice(i, tagEnd + 1)
           i = tagEnd + 1
+          continue
+        }
+      }
+      // Handle HTML entities from AI output (e.g. &gt; → >, &lt; → <)
+      if (char === '&') {
+        const rest = processedText.slice(i)
+        const entityMatch = rest.match(/^&(gt|lt|amp|quot|#0?39|#x27);/)
+        if (entityMatch) {
+          const entityMap: Record<string, string> = {
+            gt: '>', lt: '<', amp: '&', quot: '"',
+            '#39': "'", '#039': "'", '#x27': "'",
+          }
+          result += escapeHtml(entityMap[entityMatch[1]])
+          i += entityMatch[0].length
           continue
         }
       }
