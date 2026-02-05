@@ -5,7 +5,7 @@
 
 export function getGenerationModel(isPaid: boolean): string {
   if (isPaid) {
-    return process.env.AI_MODEL_PAID || 'openai/gpt-5.1'
+    return process.env.AI_MODEL_PAID || 'openai/gpt-4.1'
   }
   return process.env.AI_MODEL_FREE || 'deepseek/deepseek-chat'
 }
