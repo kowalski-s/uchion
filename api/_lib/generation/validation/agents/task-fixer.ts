@@ -2,6 +2,8 @@ import OpenAI from 'openai'
 import { getAgentsModel } from '../../../ai-models.js'
 import { safeJsonParse } from './safe-json-parse.js'
 import type { TaskTypeId } from '../../config/task-types.js'
+import type { DifficultyLevel } from '../../config/difficulty.js'
+import { difficultyLevels } from '../../config/difficulty.js'
 import type { AgentIssue } from './index.js'
 
 interface GeneratedTask {
@@ -41,7 +43,7 @@ const MAX_FIXES_PER_GENERATION = 10
 export async function fixTask(
   task: GeneratedTask,
   issue: AgentIssue,
-  context: { subject: string; grade: number; topic: string }
+  context: { subject: string; grade: number; topic: string; difficulty?: DifficultyLevel }
 ): Promise<FixResult> {
   const start = Date.now()
   const apiKey = process.env.OPENAI_API_KEY
@@ -59,7 +61,32 @@ export async function fixTask(
     ? `\nРЕКОМЕНДАЦИЯ: ${issue.suggestion}`
     : ''
 
-  const userPrompt = `Ты — редактор учебных материалов. Исправь ошибку в задании.
+  const isDifficultyMismatch = issue.code === 'DIFFICULTY_MISMATCH'
+  const difficultyName = context.difficulty
+    ? difficultyLevels[context.difficulty]?.nameRu || context.difficulty
+    : ''
+
+  const userPrompt = isDifficultyMismatch && context.difficulty
+    ? `Ты — редактор учебных материалов. Пересоздай задание целиком под нужный уровень сложности.
+Предмет: ${subjectName}
+Класс: ${context.grade}
+Тема: "${context.topic}"
+Требуемый уровень сложности: ${difficultyName}
+
+ТЕКУЩЕЕ ЗАДАНИЕ (не соответствует уровню сложности):
+${JSON.stringify(task, null, 2)}
+
+ПРОБЛЕМА:
+${issue.message}${suggestionLine}
+
+ЗАДАЧА:
+1. Создай НОВОЕ задание по той же теме, но строго уровня "${difficultyName}"
+2. Убедись что ответ правильный
+3. Сохрани тип и формат задания (type: "${task.type}")
+
+Верни новое задание в том же JSON формате.
+Только JSON, без пояснений.`
+    : `Ты — редактор учебных материалов. Исправь ошибку в задании.
 Предмет: ${subjectName}
 Класс: ${context.grade}
 Тема: "${context.topic}"

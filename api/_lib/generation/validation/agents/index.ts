@@ -76,9 +76,17 @@ function collectTasksWithErrors(
   for (const agentResult of agentResults) {
     for (const taskResult of agentResult.tasks) {
       if (taskResult.taskIndex < 0) continue
-      if (taskResult.status !== 'error') continue
+
+      // Include errors + DIFFICULTY_MISMATCH warnings
+      const shouldFix = taskResult.status === 'error' ||
+        (taskResult.status === 'warning' && taskResult.issues.some(i => i.code === 'DIFFICULTY_MISMATCH'))
+
+      if (!shouldFix) continue
 
       for (const issue of taskResult.issues) {
+        // For warnings, only include DIFFICULTY_MISMATCH issues
+        if (taskResult.status === 'warning' && issue.code !== 'DIFFICULTY_MISMATCH') continue
+
         const existing = errorMap.get(taskResult.taskIndex) || []
         existing.push(issue)
         errorMap.set(taskResult.taskIndex, existing)
@@ -140,8 +148,10 @@ export async function runMultiAgentValidation(
   let fixedTasks = [...tasks]
   const fixResults: FixResult[] = []
 
-  if (options.autoFix && problemTasks.length > 0) {
-    const tasksWithErrors = collectTasksWithErrors(answerResult, contentResult, qualityResult)
+  // Also collect tasks with DIFFICULTY_MISMATCH warnings for fixing
+  const tasksWithErrors = collectTasksWithErrors(answerResult, contentResult, qualityResult)
+
+  if (options.autoFix && tasksWithErrors.length > 0) {
     const toFix = tasksWithErrors.slice(0, MAX_FIXES_PER_GENERATION)
 
     if (tasksWithErrors.length > MAX_FIXES_PER_GENERATION) {
@@ -149,6 +159,9 @@ export async function runMultiAgentValidation(
     } else {
       console.log(`[УчиОн] Fixing ${toFix.length} tasks with errors...`)
     }
+
+    let reVerifyPassed = 0
+    let reVerifyReverted = 0
 
     // Fix sequentially to avoid overloading the API
     for (const { taskIndex, issues } of toFix) {
@@ -159,14 +172,31 @@ export async function runMultiAgentValidation(
       )
 
       if (result.success && result.fixedTask) {
-        fixedTasks[taskIndex] = result.fixedTask
-        console.log(`[УчиОн] Task ${taskIndex} fixed: ${result.fixDescription}`)
+        // Re-verify the fixed task
+        const reVerification = await verifyAnswers([result.fixedTask], params.subject)
+        const hasErrors = reVerification.tasks.some(t => t.status === 'error')
+
+        if (hasErrors) {
+          // Revert to original — fix introduced new errors
+          result.success = false
+          result.error = 're-verification failed, reverted to original'
+          reVerifyReverted++
+          console.log(`[task-fixer] Task ${taskIndex} re-verification FAILED, reverted`)
+        } else {
+          fixedTasks[taskIndex] = result.fixedTask
+          reVerifyPassed++
+          console.log(`[УчиОн] Task ${taskIndex} fixed: ${result.fixDescription}`)
+        }
       } else {
         console.log(`[УчиОн] Task ${taskIndex} fix failed: ${result.error}`)
       }
 
       fixResults.push(result)
     }
+
+    // Summary log
+    const totalAttempted = toFix.length
+    console.log(`[task-fixer] Re-verification: ${reVerifyPassed}/${totalAttempted} passed, ${reVerifyReverted} reverted`)
   }
 
   const valid = problemTasks.length === 0
