@@ -1,5 +1,5 @@
 import OpenAI from 'openai'
-import { getAgentsModel } from '../../../ai-models.js'
+import { getVerifierModelConfig } from '../../../ai-models.js'
 import type { TaskTypeId } from '../../config/task-types.js'
 import type { AgentResult, AgentTaskResult, AgentIssue } from './index.js'
 
@@ -102,8 +102,8 @@ export async function verifyAnswers(
 
   const apiKey = process.env.OPENAI_API_KEY
   const baseURL = process.env.AI_BASE_URL
-  const model = getAgentsModel()
-  console.log(`[${agentName}] Agent model: ${model}`)
+  const { model, reasoning } = getVerifierModelConfig(subject)
+  console.log(`[${agentName}] Verifier model: ${model}, reasoning:`, JSON.stringify(reasoning))
 
   if (!apiKey) {
     console.warn(`[${agentName}] No API key, skipping`)
@@ -137,6 +137,7 @@ ${tasksText}
       messages: [{ role: 'user', content: userPrompt }],
       max_tokens: 4000,
       temperature: 0.1,
+      ...({ reasoning } as Record<string, unknown>),
     })
 
     const content = completion.choices[0]?.message?.content || ''
