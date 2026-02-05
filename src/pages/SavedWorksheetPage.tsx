@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../lib/auth'
 import { fetchWorksheet, formatSubjectName, updateWorksheet as updateWorksheetApi } from '../lib/dashboard-api'
-import { regenerateTask } from '../lib/api'
+import { regenerateTask, rebuildPdf } from '../lib/api'
 import { buildWorksheetPdf } from '../lib/pdf-client'
 import type { Worksheet } from '../../shared/types'
 import { useWorksheetEditor } from '../hooks/useWorksheetEditor'
@@ -129,20 +129,33 @@ export default function SavedWorksheetPage() {
     if (!currentWorksheet) return
 
     try {
-      let blob: Blob
+      let base64 = currentWorksheet.pdfBase64
 
-      // If we have server-generated PDF, use it directly
-      if (currentWorksheet.pdfBase64 && currentWorksheet.pdfBase64.length > 0) {
-        const binaryString = atob(currentWorksheet.pdfBase64)
-        const bytes = new Uint8Array(binaryString.length)
-        for (let i = 0; i < binaryString.length; i++) {
-          bytes[i] = binaryString.charCodeAt(i)
-        }
-        blob = new Blob([bytes], { type: 'application/pdf' })
-      } else {
-        // Fallback to client-side generation (for edited worksheets or if server PDF missing)
-        blob = await buildWorksheetPdf(currentWorksheet)
+      // If no cached PDF (cleared after edit/regeneration), rebuild on server
+      if (!base64 || base64.length === 0) {
+        base64 = await rebuildPdf(currentWorksheet)
       }
+
+      // Fallback to client-side if server rebuild fails
+      if (!base64) {
+        const blob = await buildWorksheetPdf(currentWorksheet)
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `${(currentWorksheet.topic || 'worksheet').replace(/\s+/g, '-')}.pdf`
+        document.body.appendChild(a)
+        a.click()
+        a.remove()
+        URL.revokeObjectURL(url)
+        return
+      }
+
+      const binaryString = atob(base64)
+      const bytes = new Uint8Array(binaryString.length)
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i)
+      }
+      const blob = new Blob([bytes], { type: 'application/pdf' })
 
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')

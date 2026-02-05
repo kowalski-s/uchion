@@ -11,7 +11,7 @@ import { checkGenerateRateLimit, checkDailyGenerationLimit, checkRateLimit } fro
 import { trackGeneration } from '../../api/_lib/alerts/generation-alerts.js'
 import type { AuthenticatedRequest } from '../types.js'
 import type { GeneratePayload, Worksheet } from '../../shared/types.js'
-import { GenerateSchema, TaskTypeIdSchema, DifficultyLevelSchema } from '../../shared/worksheet.js'
+import { GenerateSchema, TaskTypeIdSchema, DifficultyLevelSchema, WorksheetSchema } from '../../shared/worksheet.js'
 
 const router = Router()
 
@@ -327,5 +327,30 @@ router.post('/regenerate-task', withAuth(async (req: AuthenticatedRequest, res: 
     })
   }
 }))
+
+// ==================== POST /api/generate/rebuild-pdf ====================
+// Regenerate PDF from edited worksheet content (no AI cost, just Puppeteer)
+router.post('/rebuild-pdf', async (req, res) => {
+  try {
+    // Rate limit by IP: 10 requests per minute
+    const rl = await checkRateLimit(req, { maxRequests: 10, windowSeconds: 60 })
+    if (!rl.success) {
+      return res.status(429).json({ status: 'error', code: 'RATE_LIMIT', message: 'Слишком много запросов.' })
+    }
+
+    const parse = WorksheetSchema.safeParse(req.body)
+    if (!parse.success) {
+      return res.status(400).json({ status: 'error', code: 'INVALID_INPUT', message: 'Некорректные данные листа.' })
+    }
+
+    const worksheet = parse.data as Worksheet
+    const pdfBase64 = await buildPdf(worksheet, {} as GeneratePayload)
+
+    return res.json({ status: 'ok', pdfBase64 })
+  } catch (err) {
+    console.error('[rebuild-pdf] Error:', err)
+    return res.status(500).json({ status: 'error', code: 'PDF_ERROR', message: 'Не удалось сгенерировать PDF.' })
+  }
+})
 
 export default router
