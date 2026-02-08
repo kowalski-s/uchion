@@ -1,5 +1,5 @@
 import OpenAI from 'openai'
-import { getVerifierModelConfig } from '../../../ai-models.js'
+import { getFixerModelConfig } from '../../../ai-models.js'
 import { safeJsonParse } from './safe-json-parse.js'
 import type { TaskTypeId } from '../../config/task-types.js'
 import type { DifficultyLevel } from '../../config/difficulty.js'
@@ -48,7 +48,7 @@ export async function fixTask(
   const start = Date.now()
   const apiKey = process.env.OPENAI_API_KEY
   const baseURL = process.env.AI_BASE_URL
-  const { model, reasoning } = getVerifierModelConfig(context.subject)
+  const { model, reasoning } = getFixerModelConfig(context.subject)
   console.log(`[task-fixer] Model: ${model}, reasoning:`, JSON.stringify(reasoning))
 
   if (!apiKey) {
@@ -110,24 +110,29 @@ ${issue.message}${suggestionLine}
     const completion = await client.chat.completions.create({
       model,
       messages: [{ role: 'user', content: userPrompt }],
-      max_tokens: 2000,
+      max_tokens: 1500,
       temperature: 0.2,
       ...({ reasoning } as Record<string, unknown>),
     })
 
     const content = completion.choices[0]?.message?.content || ''
-    const jsonMatch = content.match(/\{[\s\S]*\}/)
 
-    if (!jsonMatch) {
+    // Try markdown code block first, then raw JSON
+    const mdMatch = content.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/)
+    const rawMatch = content.match(/\{[\s\S]*\}/)
+    const jsonStr = mdMatch?.[1] || rawMatch?.[0]
+
+    if (!jsonStr) {
       const duration = Date.now() - start
-      console.warn(`[task-fixer] No JSON in response (${duration}ms)`)
+      console.warn(`[task-fixer] No JSON in response (${duration}ms), keeping original task`)
       return { success: false, originalTask: task, error: 'No JSON in LLM response' }
     }
 
-    const fixedTask = safeJsonParse<GeneratedTask>(jsonMatch[0], 'task-fixer')
+    const fixedTask = safeJsonParse<GeneratedTask>(jsonStr, 'task-fixer')
 
     if (!fixedTask) {
       const duration = Date.now() - start
+      console.warn(`[task-fixer] JSON parse failed (${duration}ms), keeping original task`)
       return { success: false, originalTask: task, error: `JSON parse failed after ${duration}ms` }
     }
 

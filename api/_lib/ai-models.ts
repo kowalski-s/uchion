@@ -25,9 +25,13 @@ export function getPresentationModel(): string {
 /** Subjects that require mathematical reasoning */
 const STEM_SUBJECTS = new Set(['math', 'algebra', 'geometry'])
 
+export function isStemSubject(subject: string): boolean {
+  return STEM_SUBJECTS.has(subject)
+}
+
 export interface VerifierModelConfig {
   model: string
-  reasoning: { effort: 'low' } | { enabled: false }
+  reasoning: { effort: 'low' | 'minimal' } | { enabled: false }
 }
 
 /**
@@ -39,6 +43,20 @@ export function getVerifierModelConfig(subject: string): VerifierModelConfig {
   if (STEM_SUBJECTS.has(subject)) {
     const model = process.env.AI_MODEL_VERIFIER_STEM || 'google/gemini-3-flash-preview'
     return { model, reasoning: { effort: 'low' } }
+  }
+  const model = process.env.AI_MODEL_VERIFIER_HUMANITIES || 'google/gemini-2.5-flash-lite'
+  return { model, reasoning: { enabled: false } }
+}
+
+/**
+ * Model config for task-fixer agent (cheaper than verifier).
+ * - STEM: same model as verifier but reasoning effort=minimal (saves tokens)
+ * - Humanities: same as verifier (flash-lite, no reasoning)
+ */
+export function getFixerModelConfig(subject: string): VerifierModelConfig {
+  if (STEM_SUBJECTS.has(subject)) {
+    const model = process.env.AI_MODEL_VERIFIER_STEM || 'google/gemini-3-flash-preview'
+    return { model, reasoning: { effort: 'minimal' } }
   }
   const model = process.env.AI_MODEL_VERIFIER_HUMANITIES || 'google/gemini-2.5-flash-lite'
   return { model, reasoning: { enabled: false } }

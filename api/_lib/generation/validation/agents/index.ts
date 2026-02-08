@@ -2,6 +2,7 @@ import { verifyAnswers } from './answer-verifier.js'
 import { checkContent } from './content-checker.js'
 import { checkQuality } from './quality-checker.js'
 import { fixTask, MAX_FIXES_PER_GENERATION, type FixResult } from './task-fixer.js'
+import { isStemSubject } from '../../../ai-models.js'
 import type { TaskTypeId } from '../../config/task-types.js'
 import type { DifficultyLevel } from '../../config/difficulty.js'
 
@@ -151,52 +152,62 @@ export async function runMultiAgentValidation(
   // Also collect tasks with DIFFICULTY_MISMATCH warnings for fixing
   const tasksWithErrors = collectTasksWithErrors(answerResult, contentResult, qualityResult)
 
+  const stem = isStemSubject(params.subject)
+
   if (options.autoFix && tasksWithErrors.length > 0) {
-    const toFix = tasksWithErrors.slice(0, MAX_FIXES_PER_GENERATION)
-
-    if (tasksWithErrors.length > MAX_FIXES_PER_GENERATION) {
-      console.log(`[УчиОн] Fixing ${toFix.length} of ${tasksWithErrors.length} tasks (limit: ${MAX_FIXES_PER_GENERATION})`)
+    // Non-STEM (russian etc.): skip fixer entirely — flash-lite creates false positives
+    if (!stem) {
+      console.log(`[УчиОн] Skipping task-fixer for non-STEM subject "${params.subject}", logging ${tasksWithErrors.length} issues only`)
+      for (const { taskIndex, issues } of tasksWithErrors) {
+        console.log(`[УчиОн] Task ${taskIndex} issue (not fixed): ${issues[0].code} — ${issues[0].message}`)
+      }
     } else {
-      console.log(`[УчиОн] Fixing ${toFix.length} tasks with errors...`)
-    }
+      const toFix = tasksWithErrors.slice(0, MAX_FIXES_PER_GENERATION)
 
-    let reVerifyPassed = 0
-    let reVerifyReverted = 0
-
-    // Fix sequentially to avoid overloading the API
-    for (const { taskIndex, issues } of toFix) {
-      const result = await fixTask(
-        tasks[taskIndex],
-        issues[0], // Use the first (most critical) issue
-        params
-      )
-
-      if (result.success && result.fixedTask) {
-        // Re-verify the fixed task
-        const reVerification = await verifyAnswers([result.fixedTask], params.subject)
-        const hasErrors = reVerification.tasks.some(t => t.status === 'error')
-
-        if (hasErrors) {
-          // Revert to original — fix introduced new errors
-          result.success = false
-          result.error = 're-verification failed, reverted to original'
-          reVerifyReverted++
-          console.log(`[task-fixer] Task ${taskIndex} re-verification FAILED, reverted`)
-        } else {
-          fixedTasks[taskIndex] = result.fixedTask
-          reVerifyPassed++
-          console.log(`[УчиОн] Task ${taskIndex} fixed: ${result.fixDescription}`)
-        }
+      if (tasksWithErrors.length > MAX_FIXES_PER_GENERATION) {
+        console.log(`[УчиОн] Fixing ${toFix.length} of ${tasksWithErrors.length} tasks (limit: ${MAX_FIXES_PER_GENERATION})`)
       } else {
-        console.log(`[УчиОн] Task ${taskIndex} fix failed: ${result.error}`)
+        console.log(`[УчиОн] Fixing ${toFix.length} tasks with errors...`)
       }
 
-      fixResults.push(result)
-    }
+      let reVerifyPassed = 0
+      let reVerifyReverted = 0
 
-    // Summary log
-    const totalAttempted = toFix.length
-    console.log(`[task-fixer] Re-verification: ${reVerifyPassed}/${totalAttempted} passed, ${reVerifyReverted} reverted`)
+      // Fix sequentially to avoid overloading the API
+      for (const { taskIndex, issues } of toFix) {
+        const result = await fixTask(
+          tasks[taskIndex],
+          issues[0], // Use the first (most critical) issue
+          params
+        )
+
+        if (result.success && result.fixedTask) {
+          // Re-verify the fixed task (STEM only — reasoning model is reliable)
+          const reVerification = await verifyAnswers([result.fixedTask], params.subject)
+          const hasErrors = reVerification.tasks.some(t => t.status === 'error')
+
+          if (hasErrors) {
+            // Revert to original — fix introduced new errors
+            result.success = false
+            result.error = 're-verification failed, reverted to original'
+            reVerifyReverted++
+            console.log(`[task-fixer] Task ${taskIndex} re-verification FAILED, reverted`)
+          } else {
+            fixedTasks[taskIndex] = result.fixedTask
+            reVerifyPassed++
+            console.log(`[УчиОн] Task ${taskIndex} fixed: ${result.fixDescription}`)
+          }
+        } else {
+          console.log(`[УчиОн] Task ${taskIndex} fix failed: ${result.error}`)
+        }
+
+        fixResults.push(result)
+      }
+
+      // Summary log
+      const totalAttempted = toFix.length
+      console.log(`[task-fixer] Re-verification: ${reVerifyPassed}/${totalAttempted} passed, ${reVerifyReverted} reverted`)
+    }
   }
 
   const valid = problemTasks.length === 0
