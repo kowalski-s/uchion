@@ -1074,6 +1074,7 @@ export default function GeneratePage() {
             <h3 className="mb-6 text-2xl font-bold text-slate-800">
               {mode === 'worksheet' ? 'Создаем материалы...' : 'Создаем презентацию...'}
             </h3>
+            <div className="mx-auto mb-6 h-14 w-14 animate-spin rounded-full border-4 border-slate-200 border-t-[#8C52FF]" />
 
             <div className="w-full text-left">
               <div className="mb-2 flex justify-between items-end text-sm font-medium">
