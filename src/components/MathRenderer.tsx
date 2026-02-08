@@ -243,7 +243,11 @@ function preprocessLatex(latex: string): string {
 function preprocessCaretNotation(text: string): string {
   const parts: string[] = []
   let lastEnd = 0
-  const delimRegex = /\\\([\s\S]*?\\\)|\\\[[\s\S]*?\\\]/g
+  // Skip: \(...\), \[...\], and \command[opt]{arg}{arg}... patterns
+  // The third alternative prevents processing ^/_ inside LaTeX command arguments
+  // (e.g. \sqrt{x^2}, \frac{a^2}{b}, \sqrt[4]{x^2})
+  // Brace group regex supports up to 3 levels of nesting
+  const delimRegex = /\\\([\s\S]*?\\\)|\\\[[\s\S]*?\\\]|\\[a-zA-Z]+(?:\[[^\]]*\])?(?:\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\})+/g
   let m: RegExpExecArray | null
 
   while ((m = delimRegex.exec(text)) !== null) {
@@ -268,9 +272,14 @@ function processCaretsAndSubscripts(text: string): string {
   // Exponent/subscript: braced group or single alphanumeric char
   return text.replace(
     /((?:\([^)]*\)|[a-zA-Z0-9]+)(?:[\^_](?:\{[^}]*\}|[a-zA-Z0-9]))+)/g,
-    (match) => {
+    (match, _group, offset) => {
       // Skip if contains backslash (already LaTeX like ^\circ)
       if (match.includes('\\')) return match
+      // Skip if the matched base is part of a \command (e.g. \pi^2, \sin^2, \alpha_1)
+      // Walk backwards from match start through letters; if we hit \, it's a LaTeX command
+      let lookback = offset - 1
+      while (lookback >= 0 && /[a-zA-Z]/.test(text[lookback])) lookback--
+      if (lookback >= 0 && text[lookback] === '\\') return match
       try {
         return katex.renderToString(match, {
           throwOnError: false,
