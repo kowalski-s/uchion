@@ -73,7 +73,7 @@ export default function SavedWorksheetPage() {
   }, [status, navigate])
 
   // Fetch worksheet from DB
-  const { data: worksheetData, isLoading, error } = useQuery({
+  const { data: worksheetData, isLoading, isPending, error } = useQuery({
     queryKey: ['worksheet', id],
     queryFn: async () => {
       const result = await fetchWorksheet(id!)
@@ -276,7 +276,7 @@ export default function SavedWorksheetPage() {
     setPendingNavigation(null)
   }
 
-  if (status === 'loading' || isLoading) {
+  if (status === 'loading' || isLoading || (status === 'authenticated' && isPending)) {
     return <LoadingSpinner />
   }
 
