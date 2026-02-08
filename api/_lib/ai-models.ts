@@ -31,15 +31,15 @@ export interface VerifierModelConfig {
 }
 
 /**
- * Model config for answer-verifier agent.
- * - STEM subjects (math, algebra, geometry): Gemini with reasoning effort=low
- * - Humanities (russian, etc.): Gemini with reasoning disabled
+ * Model config for answer-verifier and task-fixer agents.
+ * - STEM subjects (math, algebra, geometry): Gemini 3 Flash with reasoning effort=low
+ * - Humanities (russian, etc.): Gemini 2.5 Flash Lite with reasoning disabled
  */
 export function getVerifierModelConfig(subject: string): VerifierModelConfig {
-  const model = process.env.AI_MODEL_VERIFIER || 'google/gemini-2.5-flash-preview-09-2025'
-
   if (STEM_SUBJECTS.has(subject)) {
+    const model = process.env.AI_MODEL_VERIFIER_STEM || 'google/gemini-3-flash-preview'
     return { model, reasoning: { effort: 'low' } }
   }
+  const model = process.env.AI_MODEL_VERIFIER_HUMANITIES || 'google/gemini-2.5-flash-lite'
   return { model, reasoning: { enabled: false } }
 }

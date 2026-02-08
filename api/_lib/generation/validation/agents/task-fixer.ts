@@ -1,5 +1,5 @@
 import OpenAI from 'openai'
-import { getAgentsModel } from '../../../ai-models.js'
+import { getVerifierModelConfig } from '../../../ai-models.js'
 import { safeJsonParse } from './safe-json-parse.js'
 import type { TaskTypeId } from '../../config/task-types.js'
 import type { DifficultyLevel } from '../../config/difficulty.js'
@@ -48,7 +48,8 @@ export async function fixTask(
   const start = Date.now()
   const apiKey = process.env.OPENAI_API_KEY
   const baseURL = process.env.AI_BASE_URL
-  const model = getAgentsModel()
+  const { model, reasoning } = getVerifierModelConfig(context.subject)
+  console.log(`[task-fixer] Model: ${model}, reasoning:`, JSON.stringify(reasoning))
 
   if (!apiKey) {
     return { success: false, originalTask: task, error: 'No API key' }
@@ -111,6 +112,7 @@ ${issue.message}${suggestionLine}
       messages: [{ role: 'user', content: userPrompt }],
       max_tokens: 2000,
       temperature: 0.2,
+      ...({ reasoning } as Record<string, unknown>),
     })
 
     const content = completion.choices[0]?.message?.content || ''
