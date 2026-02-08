@@ -175,6 +175,21 @@ router.post('/', withAuth(async (req: AuthenticatedRequest, res: Response) => {
       }).returning({ id: worksheets.id })
 
       dbId = inserted?.id || null
+
+      // Enforce 20-worksheet limit per user: soft-delete oldest beyond the cap
+      const MAX_WORKSHEETS = 20
+      await db.execute(sql`
+        UPDATE worksheets
+        SET deleted_at = NOW(), updated_at = NOW()
+        WHERE user_id = ${userId}
+          AND deleted_at IS NULL
+          AND id NOT IN (
+            SELECT id FROM worksheets
+            WHERE user_id = ${userId} AND deleted_at IS NULL
+            ORDER BY created_at DESC
+            LIMIT ${MAX_WORKSHEETS}
+          )
+      `)
     } catch (dbError) {
       console.error('[API] Failed to save worksheet to database:', dbError)
     }
