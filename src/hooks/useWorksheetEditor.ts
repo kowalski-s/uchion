@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
 import type { Worksheet } from '../../shared/types'
 import { updateWorksheet } from '../lib/dashboard-api'
 import { useSessionStore } from '../store/session'
@@ -104,6 +104,14 @@ export function useWorksheetEditor(options: UseWorksheetEditorOptions): UseWorks
 
   // Current worksheet state (after edits are saved)
   const [worksheet, setWorksheet] = useState<Worksheet | null>(initialWorksheet)
+
+  // Sync when initialWorksheet arrives asynchronously (e.g. from React Query)
+  // useState only captures the value on first render; this keeps it in sync
+  useEffect(() => {
+    if (initialWorksheet) {
+      setWorksheet(initialWorksheet)
+    }
+  }, [initialWorksheet])
 
   // Worksheet being edited
   const [editedWorksheet, setEditedWorksheet] = useState<Worksheet | null>(null)
