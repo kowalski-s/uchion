@@ -21,7 +21,13 @@ export default function MathRenderer({ text, className = '' }: MathRendererProps
       return renderMathInText(text)
     } catch (e) {
       void e
-      return escapeHtml(text)
+      // Fallback: escape HTML but still render fill-blank markers as underlines
+      let fallback = escapeHtml(text)
+      fallback = fallback.replace(
+        /_{2,}\((\d+)\)_{2,}/g,
+        '<span style="display:inline-block;min-width:5em;border-bottom:1.5px solid #9ca3af;margin:0 2px;">\u00a0</span>'
+      )
+      return fallback
     }
   }, [text])
 
@@ -443,6 +449,12 @@ function renderMathInText(text: string): string {
     i++
   }
 
+  // Post-process: convert fill-blank markers ___(N)___ or __(N)__ to visual underlines
+  result = result.replace(
+    /_{2,}\((\d+)\)_{2,}/g,
+    '<span style="display:inline-block;min-width:5em;border-bottom:1.5px solid #9ca3af;margin:0 2px;">\u00a0</span>'
+  )
+
   return result
 }
 
@@ -490,6 +502,9 @@ export function latexToUnicode(text: string): string {
 
   // Then process raw LaTeX commands
   result = convertLatexToUnicode(result)
+
+  // Convert fill-blank markers to underlines for PDF
+  result = result.replace(/_{2,}\((\d+)\)_{2,}/g, '_________')
 
   return result
 }

@@ -27,6 +27,8 @@ interface EditableWorksheetContentProps {
 const shouldShowAnswerField = (text: string) => {
   // Don't show answer field for matching tasks
   if (text.startsWith('<!--MATCHING:')) return false
+  // Don't show answer field for fill-blank tasks (students write in the blanks)
+  if (/_{2,}\(\d+\)_{2,}/.test(text)) return false
   const lower = text.toLowerCase()
   const hiddenKeywords = ['подчеркни', 'обведи', 'зачеркни', 'раскрась', 'соедини']
   return !hiddenKeywords.some(k => lower.includes(k))
