@@ -136,7 +136,7 @@ function addContentSlide(
     const bulletRows = slide.content.map((text) => ({
       text,
       options: {
-        fontSize: 16, fontFace: BODY_FONT, color: COLORS.text,
+        fontSize: 18, fontFace: BODY_FONT, color: COLORS.text,
         bullet: { code: '2022' as const, color: COLORS.accent },
         paraSpaceAfter: 8,
       },
@@ -205,7 +205,7 @@ function addTwoColumnSlide(
       // Card text
       s.addText(item, {
         x: 5.2, y: cardY + 0.15, w: 4.1, h: 0.6,
-        fontSize: 13, fontFace: BODY_FONT, color: COLORS.text,
+        fontSize: 14, fontFace: BODY_FONT, color: COLORS.text,
         valign: 'middle' as const,
       })
       cardY += 1.0
@@ -267,7 +267,7 @@ function addTableSlide(
       row.map(cell => ({
         text: cell,
         options: {
-          fontSize: 12, fontFace: BODY_FONT, color: COLORS.text,
+          fontSize: 13, fontFace: BODY_FONT, color: COLORS.text,
           fill: { color: ri % 2 === 0 ? COLORS.lightGray : COLORS.white },
           align: 'center' as const, valign: 'middle' as const,
         },
@@ -394,7 +394,7 @@ function addExampleSlide(
     const rows = slide.content.map((text, idx) => ({
       text,
       options: {
-        fontSize: idx === 0 ? 16 : 14,
+        fontSize: idx === 0 ? 18 : 15,
         fontFace: BODY_FONT,
         color: idx === 0 ? COLORS.primary : COLORS.text,
         bold: idx === 0,
@@ -444,7 +444,7 @@ function addPracticeSlide(
     const rows = slide.content.map((text) => ({
       text,
       options: {
-        fontSize: 16, fontFace: BODY_FONT, color: COLORS.text,
+        fontSize: 18, fontFace: BODY_FONT, color: COLORS.text,
         paraSpaceAfter: 10,
       },
     }))

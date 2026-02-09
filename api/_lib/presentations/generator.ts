@@ -24,7 +24,7 @@ const THEMES: Record<PresentationThemePreset, ThemeConfig> = {
     textColor: '333333',
     accentColor: '2E5090',
     fontFace: 'Arial',
-    titleFontFace: 'Arial',
+    titleFontFace: 'Georgia',
   },
   educational: {
     name: 'Educational',
@@ -33,7 +33,7 @@ const THEMES: Record<PresentationThemePreset, ThemeConfig> = {
     textColor: '2D2D2D',
     accentColor: 'FF6B35',
     fontFace: 'Arial',
-    titleFontFace: 'Arial',
+    titleFontFace: 'Georgia',
   },
   minimal: {
     name: 'Minimal',
@@ -69,14 +69,20 @@ function addSlideHeader(
 
   // Top accent bar
   slide.addShape(pres.ShapeType.rect, {
-    x: 0, y: 0, w: '100%', h: 0.06,
+    x: 0, y: 0, w: '100%', h: 0.08,
+    fill: { color: theme.accentColor },
+  })
+
+  // Vertical accent bar left of title
+  slide.addShape(pres.ShapeType.rect, {
+    x: 0.6, y: 0.35, w: 0.04, h: 0.7,
     fill: { color: theme.accentColor },
   })
 
   // Slide title
   slide.addText(title, {
-    x: 0.6, y: 0.3, w: 11.8, h: 0.9,
-    fontSize: 26,
+    x: 0.75, y: 0.3, w: 11.65, h: 0.9,
+    fontSize: 30,
     fontFace: theme.titleFontFace,
     color: theme.titleColor,
     bold: true,
@@ -85,7 +91,7 @@ function addSlideHeader(
 
   // Separator line
   slide.addShape(pres.ShapeType.rect, {
-    x: 0.6, y: 1.25, w: 3, h: 0.03,
+    x: 0.75, y: 1.25, w: 3, h: 0.03,
     fill: { color: theme.accentColor },
   })
 }
@@ -127,10 +133,16 @@ function addTitleSlide(
     fill: { color: theme.accentColor },
   })
 
+  // Decorative vertical accent bar on the left
+  slide.addShape(pres.ShapeType.rect, {
+    x: 0.8, y: 1.2, w: 0.05, h: 3.5,
+    fill: { color: theme.accentColor },
+  })
+
   // Big centered title
   slide.addText(title, {
     x: 0.8, y: 1.5, w: 11.5, h: 1.8,
-    fontSize: 36, fontFace: theme.titleFontFace, color: theme.titleColor,
+    fontSize: 44, fontFace: theme.titleFontFace, color: theme.titleColor,
     bold: true, align: 'center', valign: 'middle',
   })
 
@@ -139,7 +151,7 @@ function addTitleSlide(
   if (subtitle) {
     slide.addText(subtitle, {
       x: 1.5, y: 3.5, w: 10, h: 1.2,
-      fontSize: 20, fontFace: theme.fontFace, color: theme.textColor,
+      fontSize: 22, fontFace: theme.fontFace, color: theme.textColor,
       align: 'center', valign: 'top',
     })
   }
@@ -164,17 +176,24 @@ function addContentSlide(
   addSlideHeader(pres, slide, title, theme)
 
   if (content.length > 0) {
+    // Light background card
+    slide.addShape(pres.ShapeType.roundRect, {
+      x: 0.5, y: 1.4, w: 12.3, h: 5.2,
+      fill: { color: 'F8F9FA' },
+      rectRadius: 0.08,
+    })
+
     const bulletRows = content.map((text) => ({
       text,
       options: {
-        fontSize: 18, fontFace: theme.fontFace, color: theme.textColor,
+        fontSize: 22, fontFace: theme.fontFace, color: theme.textColor,
         bullet: { code: '2022', color: theme.accentColor },
-        paraSpaceAfter: 8,
+        paraSpaceAfter: 12,
       },
     }))
     slide.addText(bulletRows, {
       x: 0.8, y: 1.5, w: 11.4, h: 4.8,
-      valign: 'top', lineSpacingMultiple: 1.2,
+      valign: 'top', lineSpacingMultiple: 1.3,
     })
   }
 
@@ -194,12 +213,24 @@ function addTwoColumnSlide(
   const leftItems = slideData.leftColumn || []
   const rightItems = slideData.rightColumn || []
 
+  // Light background cards for each column
+  slide.addShape(pres.ShapeType.roundRect, {
+    x: 0.5, y: 1.4, w: 5.7, h: 5.0,
+    fill: { color: 'F8F9FA' },
+    rectRadius: 0.08,
+  })
+  slide.addShape(pres.ShapeType.roundRect, {
+    x: 6.5, y: 1.4, w: 5.7, h: 5.0,
+    fill: { color: 'F8F9FA' },
+    rectRadius: 0.08,
+  })
+
   // Left column
   if (leftItems.length > 0) {
     const leftRows = leftItems.map((text) => ({
       text,
       options: {
-        fontSize: 16, fontFace: theme.fontFace, color: theme.textColor,
+        fontSize: 19, fontFace: theme.fontFace, color: theme.textColor,
         bullet: { code: '2022', color: theme.accentColor },
         paraSpaceAfter: 6,
       },
@@ -221,7 +252,7 @@ function addTwoColumnSlide(
     const rightRows = rightItems.map((text) => ({
       text,
       options: {
-        fontSize: 16, fontFace: theme.fontFace, color: theme.textColor,
+        fontSize: 19, fontFace: theme.fontFace, color: theme.textColor,
         bullet: { code: '2022', color: theme.accentColor },
         paraSpaceAfter: 6,
       },
@@ -250,7 +281,7 @@ function addTableSlide(
     const headerRow: PptxGenJS.TableCell[] = tableData.headers.map(h => ({
       text: h,
       options: {
-        bold: true, fontSize: 14, fontFace: theme.fontFace,
+        bold: true, fontSize: 16, fontFace: theme.fontFace,
         color: 'FFFFFF', fill: { color: theme.accentColor },
         align: 'center' as const, valign: 'middle' as const,
       },
@@ -260,7 +291,7 @@ function addTableSlide(
       row.map(cell => ({
         text: cell,
         options: {
-          fontSize: 13, fontFace: theme.fontFace, color: theme.textColor,
+          fontSize: 14, fontFace: theme.fontFace, color: theme.textColor,
           fill: { color: rowIdx % 2 === 0 ? 'F8F8F8' : 'FFFFFF' },
           align: 'center' as const, valign: 'middle' as const,
         },
@@ -309,11 +340,17 @@ function addExampleSlide(
     rectRadius: 0.1,
   })
 
+  // Accent top border on the card
+  slide.addShape(pres.ShapeType.rect, {
+    x: 0.6, y: 1.5, w: 11.8, h: 0.05,
+    fill: { color: theme.accentColor },
+  })
+
   if (slideData.content.length > 0) {
     const rows = slideData.content.map((text, idx) => ({
       text,
       options: {
-        fontSize: idx === 0 ? 18 : 16,
+        fontSize: idx === 0 ? 20 : 17,
         fontFace: theme.fontFace,
         color: idx === 0 ? theme.titleColor : theme.textColor,
         bold: idx === 0,
@@ -346,7 +383,7 @@ function addFormulaSlide(
   // Large centered formula
   slide.addText(formula, {
     x: 1.0, y: 1.8, w: 11.0, h: 1.5,
-    fontSize: 32, fontFace: theme.titleFontFace, color: theme.accentColor,
+    fontSize: 40, fontFace: theme.titleFontFace, color: theme.accentColor,
     bold: true, align: 'center', valign: 'middle',
   })
 
@@ -355,7 +392,7 @@ function addFormulaSlide(
     const rows = explanation.map((text) => ({
       text,
       options: {
-        fontSize: 16, fontFace: theme.fontFace, color: theme.textColor,
+        fontSize: 18, fontFace: theme.fontFace, color: theme.textColor,
         paraSpaceAfter: 6,
       },
     }))
@@ -405,7 +442,7 @@ function addDiagramSlide(
     // Text inside box
     slide.addText(items[i], {
       x, y, w: boxW, h: boxH,
-      fontSize: 13, fontFace: theme.fontFace,
+      fontSize: 14, fontFace: theme.fontFace,
       color: i === 0 ? 'FFFFFF' : theme.textColor,
       align: 'center', valign: 'middle',
     })
@@ -467,7 +504,20 @@ function addPracticeSlide(
   const slide = pres.addSlide()
   addSlideHeader(pres, slide, slideData.title, theme)
 
-  // Practice icon indicator
+  // Light background card
+  slide.addShape(pres.ShapeType.roundRect, {
+    x: 0.5, y: 1.4, w: 12.3, h: 5.2,
+    fill: { color: 'F8F9FA' },
+    rectRadius: 0.08,
+  })
+
+  // Vertical accent bar on the left of the card
+  slide.addShape(pres.ShapeType.rect, {
+    x: 0.5, y: 1.4, w: 0.05, h: 5.2,
+    fill: { color: theme.accentColor },
+  })
+
+  // Practice separator
   slide.addShape(pres.ShapeType.rect, {
     x: 0.6, y: 1.5, w: 11.8, h: 0.04,
     fill: { color: theme.accentColor },
@@ -477,7 +527,7 @@ function addPracticeSlide(
     const rows = slideData.content.map((text) => ({
       text,
       options: {
-        fontSize: 17, fontFace: theme.fontFace, color: theme.textColor,
+        fontSize: 20, fontFace: theme.fontFace, color: theme.textColor,
         paraSpaceAfter: 10,
       },
     }))
@@ -510,7 +560,7 @@ function addConclusionSlide(
   // Conclusion title
   slide.addText(title, {
     x: 0.8, y: 0.8, w: 11.5, h: 1.0,
-    fontSize: 30, fontFace: theme.titleFontFace, color: theme.titleColor,
+    fontSize: 34, fontFace: theme.titleFontFace, color: theme.titleColor,
     bold: true, align: 'center', valign: 'middle',
   })
 
@@ -519,7 +569,7 @@ function addConclusionSlide(
     const summaryRows = content.map((text) => ({
       text,
       options: {
-        fontSize: 18, fontFace: theme.fontFace, color: theme.textColor,
+        fontSize: 20, fontFace: theme.fontFace, color: theme.textColor,
         bullet: { code: '2713', color: theme.accentColor },
         paraSpaceAfter: 10,
       },

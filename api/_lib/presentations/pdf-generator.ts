@@ -127,12 +127,18 @@ function drawSlideNumber(page: any, num: number, total: number, font: any, theme
 function drawSlideHeader(page: any, title: string, font: any, boldFont: any, theme: PdfTheme): number {
   drawAccentBar(page, theme)
 
+  // Vertical accent bar left of title
+  page.drawRectangle({
+    x: MARGIN, y: H - 55, width: 3, height: 25,
+    color: rgb(...theme.accent),
+  })
+
   // Title
-  const titleLines = wrapText(title, boldFont, 22, CONTENT_W)
+  const titleLines = wrapText(title, boldFont, 26, CONTENT_W - 16)
   let y = H - 45
   for (const line of titleLines) {
-    page.drawText(line, { x: MARGIN, y, size: 22, font: boldFont, color: rgb(...theme.title) })
-    y -= 28
+    page.drawText(line, { x: MARGIN + 12, y, size: 26, font: boldFont, color: rgb(...theme.title) })
+    y -= 32
   }
 
   // Separator line
@@ -154,23 +160,23 @@ async function renderTitleSlide(
   drawAccentBar(page, theme)
 
   // Centered title
-  const titleLines = wrapText(slide.title, boldFont, 30, CONTENT_W - 60)
+  const titleLines = wrapText(slide.title, boldFont, 34, CONTENT_W - 60)
   let y = H / 2 + 40
   for (const line of titleLines) {
-    const tw = boldFont.widthOfTextAtSize(line, 30)
-    page.drawText(line, { x: (W - tw) / 2, y, size: 30, font: boldFont, color: rgb(...theme.title) })
-    y -= 38
+    const tw = boldFont.widthOfTextAtSize(line, 34)
+    page.drawText(line, { x: (W - tw) / 2, y, size: 34, font: boldFont, color: rgb(...theme.title) })
+    y -= 42
   }
 
   // Subtitle
   if (slide.content.length > 0) {
     y -= 10
     const subtitle = slide.content.join(' ')
-    const subLines = wrapText(subtitle, font, 16, CONTENT_W - 100)
+    const subLines = wrapText(subtitle, font, 18, CONTENT_W - 100)
     for (const line of subLines) {
-      const tw = font.widthOfTextAtSize(line, 16)
-      page.drawText(line, { x: (W - tw) / 2, y, size: 16, font, color: rgb(...theme.text) })
-      y -= 22
+      const tw = font.widthOfTextAtSize(line, 18)
+      page.drawText(line, { x: (W - tw) / 2, y, size: 18, font, color: rgb(...theme.text) })
+      y -= 24
     }
   }
 
@@ -188,11 +194,17 @@ async function renderContentSlide(
   page.drawRectangle({ x: 0, y: 0, width: W, height: H, color: rgb(...theme.bg) })
   let y = drawSlideHeader(page, slide.title, font, boldFont, theme)
 
+  // Light background card
+  page.drawRectangle({
+    x: MARGIN - 5, y: MARGIN + 25, width: CONTENT_W + 10, height: y - MARGIN - 20,
+    color: rgb(0.973, 0.976, 0.98),
+  })
+
   for (const item of slide.content) {
     if (y < MARGIN + 30) break
     // Bullet
-    page.drawText('\u2022', { x: MARGIN + 4, y: y + 1, size: 14, font, color: rgb(...theme.accent) })
-    y = drawWrappedText(page, item, MARGIN + 22, y, font, 14, theme.text, CONTENT_W - 22, 19)
+    page.drawText('\u2022', { x: MARGIN + 4, y: y + 1, size: 17, font, color: rgb(...theme.accent) })
+    y = drawWrappedText(page, item, MARGIN + 22, y, font, 17, theme.text, CONTENT_W - 22, 23)
     y -= 6
   }
 
@@ -221,8 +233,8 @@ async function renderTwoColumnSlide(
   let y = startY
   for (const item of leftItems) {
     if (y < MARGIN + 30) break
-    page.drawText('\u2022', { x: MARGIN + 4, y: y + 1, size: 12, font, color: rgb(...theme.accent) })
-    y = drawWrappedText(page, item, MARGIN + 18, y, font, 12, theme.text, colW - 18, 17)
+    page.drawText('\u2022', { x: MARGIN + 4, y: y + 1, size: 14, font, color: rgb(...theme.accent) })
+    y = drawWrappedText(page, item, MARGIN + 18, y, font, 14, theme.text, colW - 18, 19)
     y -= 5
   }
 
@@ -231,8 +243,8 @@ async function renderTwoColumnSlide(
   const rightX = MARGIN + colW + 20
   for (const item of rightItems) {
     if (y < MARGIN + 30) break
-    page.drawText('\u2022', { x: rightX, y: y + 1, size: 12, font, color: rgb(...theme.accent) })
-    y = drawWrappedText(page, item, rightX + 14, y, font, 12, theme.text, colW - 14, 17)
+    page.drawText('\u2022', { x: rightX, y: y + 1, size: 14, font, color: rgb(...theme.accent) })
+    y = drawWrappedText(page, item, rightX + 14, y, font, 14, theme.text, colW - 14, 19)
     y -= 5
   }
 
@@ -264,7 +276,7 @@ async function renderTableSlide(
       const truncated = text.length > 30 ? text.slice(0, 27) + '...' : text
       page.drawText(truncated, {
         x: MARGIN + c * colWidth + 6, y: y - rowH + 8,
-        size: 11, font: boldFont, color: rgb(1, 1, 1),
+        size: 13, font: boldFont, color: rgb(1, 1, 1),
       })
     }
     y -= rowH
@@ -285,7 +297,7 @@ async function renderTableSlide(
         const truncated = text.length > 35 ? text.slice(0, 32) + '...' : text
         page.drawText(truncated, {
           x: MARGIN + c * colWidth + 6, y: y - rowH + 8,
-          size: 10, font, color: rgb(...theme.text),
+          size: 12, font, color: rgb(...theme.text),
         })
       }
       y -= rowH
@@ -318,10 +330,16 @@ async function renderExampleSlide(
     color: rgb(0.96, 0.96, 1),
   })
 
+  // Accent top border
+  page.drawRectangle({
+    x: MARGIN, y: startY + 8, width: CONTENT_W, height: 3,
+    color: rgb(...theme.accent),
+  })
+
   let y = startY - 10
   for (let i = 0; i < slide.content.length; i++) {
     if (y < MARGIN + 40) break
-    const sz = i === 0 ? 15 : 13
+    const sz = i === 0 ? 17 : 15
     const clr = i === 0 ? theme.title : theme.text
     const f = i === 0 ? boldFont : font
     y = drawWrappedText(page, slide.content[i], MARGIN + 14, y, f, sz, clr, CONTENT_W - 28, sz + 5)
@@ -341,19 +359,19 @@ async function renderFormulaSlide(
 
   // Large centered formula
   const formula = slide.content[0] || ''
-  const fLines = wrapText(formula, boldFont, 24, CONTENT_W - 60)
+  const fLines = wrapText(formula, boldFont, 30, CONTENT_W - 60)
   let y = startY - 20
   for (const line of fLines) {
-    const tw = boldFont.widthOfTextAtSize(line, 24)
-    page.drawText(line, { x: (W - tw) / 2, y, size: 24, font: boldFont, color: rgb(...theme.accent) })
-    y -= 32
+    const tw = boldFont.widthOfTextAtSize(line, 30)
+    page.drawText(line, { x: (W - tw) / 2, y, size: 30, font: boldFont, color: rgb(...theme.accent) })
+    y -= 38
   }
 
   // Explanation
   y -= 10
   for (let i = 1; i < slide.content.length; i++) {
     if (y < MARGIN + 30) break
-    y = drawWrappedText(page, slide.content[i], MARGIN + 40, y, font, 13, theme.text, CONTENT_W - 80, 18)
+    y = drawWrappedText(page, slide.content[i], MARGIN + 40, y, font, 15, theme.text, CONTENT_W - 80, 20)
     y -= 5
   }
 
@@ -463,6 +481,18 @@ async function renderPracticeSlide(
   page.drawRectangle({ x: 0, y: 0, width: W, height: H, color: rgb(...theme.bg) })
   let startY = drawSlideHeader(page, slide.title, font, boldFont, theme)
 
+  // Background card
+  page.drawRectangle({
+    x: MARGIN - 5, y: MARGIN + 25, width: CONTENT_W + 10, height: startY - MARGIN - 10,
+    color: rgb(0.973, 0.976, 0.98),
+  })
+
+  // Vertical accent bar left
+  page.drawRectangle({
+    x: MARGIN - 5, y: MARGIN + 25, width: 3, height: startY - MARGIN - 10,
+    color: rgb(...theme.accent),
+  })
+
   // Separator line
   page.drawRectangle({
     x: MARGIN, y: startY + 10, width: CONTENT_W, height: 2,
@@ -472,7 +502,7 @@ async function renderPracticeSlide(
   let y = startY - 5
   for (const item of slide.content) {
     if (y < MARGIN + 30) break
-    y = drawWrappedText(page, item, MARGIN + 10, y, font, 13, theme.text, CONTENT_W - 20, 18)
+    y = drawWrappedText(page, item, MARGIN + 10, y, font, 16, theme.text, CONTENT_W - 20, 22)
     y -= 8
   }
 
@@ -490,20 +520,20 @@ async function renderConclusionSlide(
   page.drawRectangle({ x: 0, y: H - 10, width: W, height: 10, color: rgb(...theme.accent) })
 
   // Centered title
-  const titleLines = wrapText(slide.title, boldFont, 24, CONTENT_W - 40)
+  const titleLines = wrapText(slide.title, boldFont, 28, CONTENT_W - 40)
   let y = H - 60
   for (const line of titleLines) {
-    const tw = boldFont.widthOfTextAtSize(line, 24)
-    page.drawText(line, { x: (W - tw) / 2, y, size: 24, font: boldFont, color: rgb(...theme.title) })
-    y -= 32
+    const tw = boldFont.widthOfTextAtSize(line, 28)
+    page.drawText(line, { x: (W - tw) / 2, y, size: 28, font: boldFont, color: rgb(...theme.title) })
+    y -= 36
   }
 
   y -= 10
   for (const item of slide.content) {
     if (y < MARGIN + 30) break
     // Checkmark
-    page.drawText('\u2713', { x: MARGIN + 30, y: y + 1, size: 14, font, color: rgb(...theme.accent) })
-    y = drawWrappedText(page, item, MARGIN + 50, y, font, 14, theme.text, CONTENT_W - 80, 19)
+    page.drawText('\u2713', { x: MARGIN + 30, y: y + 1, size: 16, font, color: rgb(...theme.accent) })
+    y = drawWrappedText(page, item, MARGIN + 50, y, font, 16, theme.text, CONTENT_W - 80, 22)
     y -= 8
   }
 

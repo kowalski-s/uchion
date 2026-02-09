@@ -7,6 +7,7 @@ import { eq, sql, and, gt } from 'drizzle-orm'
 import { getAIProvider, getClaudeProvider } from '../../api/_lib/ai-provider.js'
 import { generatePptx } from '../../api/_lib/presentations/generator.js'
 import { generatePresentationPdf } from '../../api/_lib/presentations/pdf-generator.js'
+import { sanitizePresentationStructure } from '../../api/_lib/presentations/sanitize.js'
 import { withAuth } from '../middleware/auth.js'
 import { checkGenerateRateLimit } from '../middleware/rate-limit.js'
 import type { AuthenticatedRequest } from '../types.js'
@@ -147,13 +148,17 @@ router.post('/generate', withAuth(async (req: AuthenticatedRequest, res: Respons
 
     sendEvent({ type: 'progress', percent: 80 })
 
+    // 6b. Sanitize structure (filter empty slides, split practice/answers, etc.)
+    const sanitizedStructure = sanitizePresentationStructure(structure)
+    console.log(`[API] Sanitized: ${structure.slides.length} -> ${sanitizedStructure.slides.length} slides`)
+
     // 7. Call generatePptx(structure, themePreset || 'custom', themeCustom)
     let pptxBase64: string
     try {
       const effectiveTheme = input.themeType === 'preset' && input.themePreset
         ? input.themePreset
         : 'custom' as const
-      pptxBase64 = await generatePptx(structure, effectiveTheme, input.themeCustom)
+      pptxBase64 = await generatePptx(sanitizedStructure, effectiveTheme, input.themeCustom)
     } catch (e) {
       console.error('[API] PPTX generation error:', e)
       sendEvent({ type: 'error', code: 'PDF_ERROR', message: '\u041e\u0448\u0438\u0431\u043a\u0430 \u0433\u0435\u043d\u0435\u0440\u0430\u0446\u0438\u0438 \u043f\u0440\u0435\u0437\u0435\u043d\u0442\u0430\u0446\u0438\u0438.' })
@@ -169,7 +174,7 @@ router.post('/generate', withAuth(async (req: AuthenticatedRequest, res: Respons
       const effectiveThemePdf = input.themeType === 'preset' && input.themePreset
         ? input.themePreset
         : 'custom' as const
-      pdfBase64 = await generatePresentationPdf(structure, effectiveThemePdf)
+      pdfBase64 = await generatePresentationPdf(sanitizedStructure, effectiveThemePdf)
     } catch (e) {
       console.error('[API] PDF generation error:', e)
       // Non-fatal: PDF is optional, proceed with empty string
@@ -185,15 +190,15 @@ router.post('/generate', withAuth(async (req: AuthenticatedRequest, res: Respons
     try {
       const [inserted] = await db.insert(presentations).values({
         userId,
-        title: structure.title,
+        title: sanitizedStructure.title,
         subject: input.subject,
         grade: input.grade,
         topic: input.topic,
         themeType: input.themeType,
         themePreset: input.themeType === 'preset' ? input.themePreset : null,
         themeCustom: input.themeType === 'custom' ? input.themeCustom : null,
-        slideCount: structure.slides.length,
-        structure: JSON.stringify(structure),
+        slideCount: sanitizedStructure.slides.length,
+        structure: JSON.stringify(sanitizedStructure),
         pptxBase64,
       }).returning({ id: presentations.id })
 
@@ -207,11 +212,11 @@ router.post('/generate', withAuth(async (req: AuthenticatedRequest, res: Respons
       type: 'result',
       data: {
         id: dbId || id,
-        title: structure.title,
+        title: sanitizedStructure.title,
         pptxBase64,
         pdfBase64,
-        slideCount: structure.slides.length,
-        structure,
+        slideCount: sanitizedStructure.slides.length,
+        structure: sanitizedStructure,
       },
     })
     res.end()

@@ -328,11 +328,13 @@ function TitleSlide({ slide, theme }: { slide: PresentationSlide; theme: ThemeCo
   return (
     <div className="flex flex-col items-center justify-center h-full px-12" style={{ background: theme.bg }}>
       <div className="absolute top-0 left-0 right-0 h-2" style={{ background: theme.accent }} />
-      <h2 className="text-3xl sm:text-4xl font-bold text-center leading-tight mb-4" style={{ color: theme.title }}>
+      {/* Decorative vertical accent */}
+      <div className="absolute left-8 top-[20%] bottom-[20%] w-0.5" style={{ background: theme.accent }} />
+      <h2 className="text-4xl sm:text-5xl font-bold text-center leading-tight mb-4" style={{ color: theme.title, fontFamily: 'Georgia, serif' }}>
         {slide.title}
       </h2>
       {slide.content.length > 0 && (
-        <p className="text-base text-center opacity-80 max-w-lg" style={{ color: theme.text }}>
+        <p className="text-lg text-center opacity-80 max-w-lg" style={{ color: theme.text }}>
           {slide.content.join(' ')}
         </p>
       )}
@@ -344,14 +346,16 @@ function ContentSlide({ slide, theme }: { slide: PresentationSlide; theme: Theme
   return (
     <div className="flex flex-col h-full px-10 pt-8" style={{ background: theme.bg }}>
       <SlideHeader title={slide.title} theme={theme} />
-      <ul className="mt-5 space-y-3 flex-1 overflow-hidden">
-        {slide.content.map((item, i) => (
-          <li key={i} className="flex items-start gap-3 text-base leading-relaxed">
-            <span className="mt-1.5 flex-shrink-0 w-2.5 h-2.5 rounded-full" style={{ background: theme.accent }} />
-            <span style={{ color: theme.text }}>{item}</span>
-          </li>
-        ))}
-      </ul>
+      <div className="mt-5 bg-gray-50 rounded-xl p-5 flex-1 overflow-hidden">
+        <ul className="space-y-3">
+          {slide.content.map((item, i) => (
+            <li key={i} className="flex items-start gap-3 text-lg leading-relaxed">
+              <span className="mt-1.5 flex-shrink-0 w-2.5 h-2.5 rounded-full" style={{ background: theme.accent }} />
+              <span style={{ color: theme.text }}>{item}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   )
 }
@@ -363,18 +367,18 @@ function TwoColumnSlide({ slide, theme }: { slide: PresentationSlide; theme: The
     <div className="flex flex-col h-full px-10 pt-8" style={{ background: theme.bg }}>
       <SlideHeader title={slide.title} theme={theme} />
       <div className="flex gap-6 mt-5 flex-1 overflow-hidden">
-        <div className="flex-1 space-y-3">
+        <div className="flex-1 space-y-3 bg-gray-50 rounded-xl p-4">
           {left.map((item, i) => (
-            <div key={i} className="flex items-start gap-2.5 text-base leading-relaxed">
+            <div key={i} className="flex items-start gap-2.5 text-[17px] leading-relaxed">
               <span className="mt-1.5 flex-shrink-0 w-2.5 h-2.5 rounded-full" style={{ background: theme.accent }} />
               <span style={{ color: theme.text }}>{item}</span>
             </div>
           ))}
         </div>
         <div className="w-px self-stretch" style={{ background: theme.accent, opacity: 0.3 }} />
-        <div className="flex-1 space-y-3">
+        <div className="flex-1 space-y-3 bg-gray-50 rounded-xl p-4">
           {right.map((item, i) => (
-            <div key={i} className="flex items-start gap-2.5 text-base leading-relaxed">
+            <div key={i} className="flex items-start gap-2.5 text-[17px] leading-relaxed">
               <span className="mt-1.5 flex-shrink-0 w-2.5 h-2.5 rounded-full" style={{ background: theme.accent }} />
               <span style={{ color: theme.text }}>{item}</span>
             </div>
@@ -426,9 +430,9 @@ function ExampleSlide({ slide, theme }: { slide: PresentationSlide; theme: Theme
   return (
     <div className="flex flex-col h-full px-10 pt-8" style={{ background: theme.bg }}>
       <SlideHeader title={slide.title} theme={theme} />
-      <div className="mt-5 rounded-xl p-6 flex-1 overflow-hidden" style={{ background: theme.accentLight }}>
+      <div className="mt-5 rounded-xl p-6 flex-1 overflow-hidden" style={{ background: theme.accentLight, borderTop: `3px solid ${theme.accent}` }}>
         {slide.content.map((item, i) => (
-          <p key={i} className={`text-base leading-relaxed mb-2 ${i === 0 ? 'font-semibold' : ''}`}
+          <p key={i} className={`leading-relaxed mb-2 ${i === 0 ? 'text-lg font-bold' : 'text-base'}`}
             style={{ color: i === 0 ? theme.title : theme.text }}>
             {item}
           </p>
@@ -445,7 +449,7 @@ function FormulaSlide({ slide, theme }: { slide: PresentationSlide; theme: Theme
     <div className="flex flex-col h-full px-10 pt-8" style={{ background: theme.bg }}>
       <SlideHeader title={slide.title} theme={theme} />
       <div className="flex-1 flex flex-col items-center justify-center gap-5">
-        <p className="text-2xl font-bold text-center" style={{ color: theme.accent }}>{formula}</p>
+        <p className="text-3xl font-bold text-center" style={{ color: theme.accent }}>{formula}</p>
         {explanation.length > 0 && (
           <div className="space-y-2 text-center">
             {explanation.map((line, i) => (
@@ -521,10 +525,12 @@ function PracticeSlide({ slide, theme }: { slide: PresentationSlide; theme: Them
     <div className="flex flex-col h-full px-10 pt-8" style={{ background: theme.bg }}>
       <SlideHeader title={slide.title} theme={theme} />
       <div className="w-full h-px mt-2" style={{ background: theme.accent }} />
-      <div className="mt-5 space-y-3 flex-1 overflow-hidden">
-        {slide.content.map((item, i) => (
-          <p key={i} className="text-base leading-relaxed pl-3" style={{ color: theme.text }}>{item}</p>
-        ))}
+      <div className="mt-5 bg-gray-50 rounded-xl p-5 flex-1 overflow-hidden" style={{ borderLeft: `3px solid ${theme.accent}` }}>
+        <div className="space-y-3">
+          {slide.content.map((item, i) => (
+            <p key={i} className="text-lg leading-relaxed pl-3" style={{ color: theme.text }}>{item}</p>
+          ))}
+        </div>
       </div>
     </div>
   )
@@ -534,10 +540,10 @@ function ConclusionSlide({ slide, theme }: { slide: PresentationSlide; theme: Th
   return (
     <div className="flex flex-col h-full px-10 pt-10" style={{ background: theme.bg }}>
       <div className="absolute top-0 left-0 right-0 h-3" style={{ background: theme.accent }} />
-      <h3 className="text-2xl font-bold text-center mb-6" style={{ color: theme.title }}>{slide.title}</h3>
+      <h3 className="text-3xl font-bold text-center mb-6" style={{ color: theme.title, fontFamily: 'Georgia, serif' }}>{slide.title}</h3>
       <div className="space-y-3 flex-1 overflow-hidden">
         {slide.content.map((item, i) => (
-          <div key={i} className="flex items-start gap-3 text-base leading-relaxed">
+          <div key={i} className="flex items-start gap-3 text-lg leading-relaxed">
             <span className="flex-shrink-0 mt-0.5 text-lg" style={{ color: theme.accent }}>&#10003;</span>
             <span style={{ color: theme.text }}>{item}</span>
           </div>
@@ -555,7 +561,7 @@ function SlideHeader({ title, theme }: { title: string; theme: ThemeColors }) {
   return (
     <>
       <div className="absolute top-0 left-0 right-0 h-1.5" style={{ background: theme.accent }} />
-      <h3 className="text-xl font-bold leading-tight" style={{ color: theme.title }}>{title}</h3>
+      <h3 className="text-2xl font-bold leading-tight pl-3" style={{ color: theme.title, fontFamily: 'Georgia, serif', borderLeft: `3px solid ${theme.accent}` }}>{title}</h3>
       <div className="w-20 h-0.5 mt-2" style={{ background: theme.accent }} />
     </>
   )
@@ -565,7 +571,7 @@ function BulletList({ items, theme }: { items: string[]; theme: ThemeColors }) {
   return (
     <ul className="mt-5 space-y-3 flex-1 overflow-hidden">
       {items.map((item, i) => (
-        <li key={i} className="flex items-start gap-3 text-base leading-relaxed">
+        <li key={i} className="flex items-start gap-3 text-lg leading-relaxed">
           <span className="mt-1.5 flex-shrink-0 w-2.5 h-2.5 rounded-full" style={{ background: theme.accent }} />
           <span style={{ color: theme.text }}>{item}</span>
         </li>
