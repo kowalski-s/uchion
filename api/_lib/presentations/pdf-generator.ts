@@ -555,14 +555,21 @@ export async function generatePresentationPdf(
   doc.registerFontkit(fontkit)
 
   // Load Inter fonts with Cyrillic support
+  // Production (Docker): /app/api/_assets/fonts/ or /app/dist/fonts/
+  // Development: public/fonts/ (via process.cwd())
+  const cwd = process.cwd()
   const fontPaths = [
     {
-      regular: path.join(process.cwd(), 'public/fonts/Inter-Regular.ttf'),
-      bold: path.join(process.cwd(), 'public/fonts/Inter-Bold.ttf'),
+      regular: path.join(cwd, 'api/_assets/fonts/Inter-Regular.ttf'),
+      bold: path.join(cwd, 'api/_assets/fonts/Inter-Bold.ttf'),
     },
     {
-      regular: path.join(__dirname, '../_assets/fonts/Inter-Regular.ttf'),
-      bold: path.join(__dirname, '../_assets/fonts/Inter-Bold.ttf'),
+      regular: path.join(cwd, 'public/fonts/Inter-Regular.ttf'),
+      bold: path.join(cwd, 'public/fonts/Inter-Bold.ttf'),
+    },
+    {
+      regular: path.join(cwd, 'dist/fonts/Inter-Regular.ttf'),
+      bold: path.join(cwd, 'dist/fonts/Inter-Bold.ttf'),
     },
   ]
 
