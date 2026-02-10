@@ -29,6 +29,20 @@
       "when": 1769900000000,
       "tag": "0003_add_subject_enum_values",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1769950000000,
+      "tag": "0004_add_presentations",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1770710400000,
+      "tag": "0005_add_email_codes",
+      "breakpoints": true
     }
   ]
 }
