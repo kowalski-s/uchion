@@ -10,7 +10,6 @@ import WorksheetsListPage from './pages/WorksheetsListPage'
 import SavedWorksheetPage from './pages/SavedWorksheetPage'
 import PaymentSuccessPage from './pages/PaymentSuccessPage'
 import PaymentCancelPage from './pages/PaymentCancelPage'
-import TelegramCallbackPage from './pages/TelegramCallbackPage'
 
 // Admin pages -- lazy-loaded into a separate chunk.
 // The AdminPage layout itself checks the user role before rendering,
@@ -42,9 +41,6 @@ export default function App() {
         <Route path="/worksheet/:sessionId" element={<WorksheetPage />} />
         <Route path="/worksheets" element={<WorksheetsListPage />} />
         <Route path="/worksheets/:id" element={<SavedWorksheetPage />} />
-
-        {/* Auth callback routes */}
-        <Route path="/auth/telegram/callback" element={<TelegramCallbackPage />} />
 
         {/* Payment routes */}
         <Route path="/payment/success" element={<PaymentSuccessPage />} />

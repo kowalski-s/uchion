@@ -21,7 +21,6 @@ interface AuthContextType {
   user: User | null
   status: 'loading' | 'authenticated' | 'unauthenticated'
   signInWithYandex: () => void
-  signInWithTelegram: () => void
   signOut: () => Promise<void>
   refreshAuth: () => Promise<void>
 }
@@ -64,17 +63,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   // Check authentication on mount
-  const checkAuth = useCallback(async () => {    try {
+  const checkAuth = useCallback(async () => {
+    try {
       const response = await fetch('/api/auth/me', {
-        credentials: 'include', // Important: send cookies
-      })      if (response.ok) {
-        const data = await response.json()        setUser(data.user)
-        setStatus('authenticated')      } else if (response.status === 401) {        // Try to refresh token
+        credentials: 'include',
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setUser(data.user)
+        setStatus('authenticated')
+      } else if (response.status === 401) {
         const refreshed = await tryRefresh()
-        if (!refreshed) {          setUser(null)
+        if (!refreshed) {
+          setUser(null)
           setStatus('unauthenticated')
         }
-      } else {        setUser(null)
+      } else {
+        setUser(null)
         setStatus('unauthenticated')
       }
     } catch (error) {
@@ -92,10 +97,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // OAuth redirect handlers
   const signInWithYandex = () => {
     window.location.href = '/api/auth/yandex/redirect'
-  }
-
-  const signInWithTelegram = () => {
-    window.location.href = '/api/auth/telegram/redirect'
   }
 
   // Logout
@@ -122,7 +123,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         status,
         signInWithYandex,
-        signInWithTelegram,
         signOut,
         refreshAuth,
       }}

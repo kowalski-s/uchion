@@ -89,7 +89,7 @@ export function logLoginSuccess(
   req: Request,
   userId: string,
   userEmail: string,
-  provider: 'yandex' | 'telegram'
+  provider: 'yandex' | 'telegram' | 'email'
 ): void {
   logAuditEvent(AuditEventType.AUTH_LOGIN_SUCCESS, req, {
     userId,
@@ -102,7 +102,7 @@ export function logLoginSuccess(
 export function logLoginFailed(
   req: Request,
   errorMessage: string,
-  provider?: 'yandex' | 'telegram',
+  provider?: 'yandex' | 'telegram' | 'email',
   metadata?: Record<string, unknown>
 ): void {
   logAuditEvent(AuditEventType.AUTH_LOGIN_FAILED, req, {

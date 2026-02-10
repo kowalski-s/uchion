@@ -44,6 +44,14 @@ VITE_TELEGRAM_BOT_USERNAME=...
 PRODAMUS_SECRET=...
 PRODAMUS_PAYFORM_URL=...
 APP_URL=http://localhost:3000
+
+# AI Models (optional, all have defaults)
+# AI_MODEL_PAID=openai/gpt-4.1
+# AI_MODEL_FREE=deepseek/deepseek-chat
+# AI_MODEL_AGENTS=openai/gpt-4.1-mini
+# AI_MODEL_VERIFIER_STEM=google/gemini-3-flash-preview
+# AI_MODEL_VERIFIER_HUMANITIES=google/gemini-2.5-flash-lite
+# AI_MODEL_PRESENTATION=anthropic/claude-sonnet-4.5
 ```
 
 ### 3. Database
@@ -67,6 +75,7 @@ npm run dev:server       # Только backend (port 3000)
 npm run test             # Unit tests (Vitest, watch)
 npm run test:run         # Unit tests (single run)
 npm run test:e2e         # E2E tests (Playwright)
+npm run test:all         # Unit + E2E
 npm run smoke            # Smoke tests (AI generation)
 ```
 
@@ -127,19 +136,40 @@ Callback URLs должны совпадать:
 - Yandex: `http://localhost:5173/api/auth/yandex/callback`
 - Telegram: Login Widget, domain = `localhost`
 
+### Puppeteer/Chrome не запускается
+- Windows: Chrome/Chromium должен быть установлен
+- Linux: установить зависимости Chromium (`apt-get install chromium-browser`)
+- В dev-mode Puppeteer ищет локальный Chrome
+
 ## Project Structure
 
 ```
 uchion/
 ├── server.ts           # Express entry point
 ├── server/
-│   ├── routes/         # API handlers (auth, generate, worksheets, folders, admin, billing)
+│   ├── routes/         # API handlers (auth, generate, presentations, worksheets, folders, admin, billing, telegram, health)
 │   ├── middleware/     # Auth, rate-limit, cookies
 │   └── lib/            # Server utilities (prodamus)
-├── api/_lib/           # Backend utilities (AI, PDF, auth, generation)
-│   └── generation/     # Config-driven generation system
+├── api/_lib/           # Backend utilities
+│   ├── generation/     # Config-driven generation system
+│   │   └── config/
+│   │       ├── subjects/        # Worksheet subject configs
+│   │       └── presentations/   # Presentation configs (subjects, templates)
+│   ├── presentations/  # Presentation generation (generator, pdf, sanitize)
+│   ├── ai/             # AI modules (validator, schema, prompts)
+│   ├── auth/           # Auth utilities (tokens, oauth, cookies)
+│   ├── alerts/         # Generation alerts
+│   ├── telegram/       # Telegram Bot API
+│   ├── ai-provider.ts  # AI provider abstraction
+│   ├── ai-models.ts    # Model selection per subject/tier
+│   └── pdf.ts          # PDF generation (Puppeteer)
 ├── src/                # React frontend
-├── shared/             # Shared types
-├── db/                 # Database schema
+│   ├── pages/          # 15 pages (+ 5 admin pages)
+│   ├── components/     # UI components
+│   ├── hooks/          # Custom hooks (useWorksheetEditor)
+│   ├── store/          # Zustand stores
+│   └── lib/            # Utilities (api, auth, pdf-client, admin-api, etc.)
+├── shared/             # Shared types (worksheet.ts, types.ts)
+├── db/                 # Database schema (10 tables)
 └── docs/               # Documentation
 ```

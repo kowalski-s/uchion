@@ -174,6 +174,28 @@ export async function checkGenerateRateLimit(
   return consumeLimit(limiter, userId)
 }
 
+export async function checkEmailSendCodeRateLimit(req: Request, email: string): Promise<RateLimitResult> {
+  // 3 requests per 10 minutes per email
+  const limiter = createLimiter('rl:email:send', 3, 10 * 60)
+  return consumeLimit(limiter, email.toLowerCase())
+}
+
+export async function checkEmailVerifyCodeRateLimit(req: Request, email?: string): Promise<RateLimitResult> {
+  // 10 attempts per 10 minutes per IP
+  const ipLimiter = createLimiter('rl:email:verify:ip', 10, 10 * 60)
+  const ipResult = await consumeLimit(ipLimiter, getClientIp(req))
+  if (!ipResult.success) return ipResult
+
+  // 10 attempts per 10 minutes per email (prevents distributed brute-force)
+  if (email) {
+    const emailLimiter = createLimiter('rl:email:verify:email', 10, 10 * 60)
+    const emailResult = await consumeLimit(emailLimiter, email.toLowerCase())
+    if (!emailResult.success) return emailResult
+  }
+
+  return ipResult
+}
+
 export async function checkBillingCreateLinkRateLimit(
   req: Request,
   userId: string
@@ -207,6 +229,14 @@ export async function requireRefreshRateLimit(req: Request): Promise<void> {
 
 export async function requireGenerateRateLimit(req: Request, userId: string): Promise<void> {
   return requireDedicated(() => checkGenerateRateLimit(req, userId))
+}
+
+export async function requireEmailSendCodeRateLimit(req: Request, email: string): Promise<void> {
+  return requireDedicated(() => checkEmailSendCodeRateLimit(req, email), 'Too many code requests. Please try again later.')
+}
+
+export async function requireEmailVerifyCodeRateLimit(req: Request, email?: string): Promise<void> {
+  return requireDedicated(() => checkEmailVerifyCodeRateLimit(req, email), 'Too many verification attempts. Please try again later.')
 }
 
 export async function requireBillingCreateLinkRateLimit(req: Request, userId: string): Promise<void> {

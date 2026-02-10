@@ -1,9 +1,10 @@
 import { Router } from 'express'
 import type { Request, Response } from 'express'
 import crypto from 'crypto'
-import { eq, and, isNull, or } from 'drizzle-orm'
+import { eq, and, isNull, or, desc, sql, gt } from 'drizzle-orm'
+import { z } from 'zod'
 import { db } from '../../db/index.js'
-import { users, subscriptions } from '../../db/schema.js'
+import { users, subscriptions, emailCodes } from '../../db/schema.js'
 import {
   getTokenFromCookie,
   setAuthCookies,
@@ -37,9 +38,13 @@ import {
   requireMeRateLimit,
   requireRefreshRateLimit,
   requireOAuthRedirectRateLimit,
+  requireEmailSendCodeRateLimit,
+  requireEmailVerifyCodeRateLimit,
 } from '../middleware/rate-limit.js'
 import { ApiError } from '../middleware/error-handler.js'
 import {
+  logLoginSuccess,
+  logLoginFailed,
   logOAuthCallbackSuccess,
   logOAuthCallbackFailed,
   logRateLimitExceeded,
@@ -47,6 +52,7 @@ import {
   logInvalidSignature,
   logExpiredAuth,
 } from '../middleware/audit-log.js'
+import { sendOTPEmail } from '../../api/_lib/email.js'
 
 const router = Router()
 
@@ -351,6 +357,170 @@ router.get('/yandex/callback', async (req: Request, res: Response) => {
     clearOAuthCookies(res)
     return res.redirect(302, `${appUrl}/login?error=authentication_failed`)
   }
+})
+
+// ==================== POST /api/auth/email/send-code ====================
+const emailSchema = z.string().email('Invalid email').max(255)
+
+const sendCodeSchema = z.object({
+  email: emailSchema,
+})
+
+router.post('/email/send-code', async (req: Request, res: Response) => {
+  const parsed = sendCodeSchema.safeParse(req.body)
+  if (!parsed.success) {
+    throw ApiError.badRequest('Invalid email address')
+  }
+
+  const email = parsed.data.email.toLowerCase()
+
+  // Rate limit: 3 per 10 min per email
+  await requireEmailSendCodeRateLimit(req, email)
+
+  // Invalidate all previous unused codes for this email
+  await db
+    .update(emailCodes)
+    .set({ usedAt: new Date() })
+    .where(
+      and(
+        eq(emailCodes.email, email),
+        isNull(emailCodes.usedAt)
+      )
+    )
+
+  // Generate 6-digit code
+  const code = crypto.randomInt(100000, 1000000).toString()
+
+  // Store code with 10-minute expiry
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000)
+  await db.insert(emailCodes).values({
+    email,
+    code,
+    expiresAt,
+  })
+
+  // Send email
+  try {
+    await sendOTPEmail(email, code)
+  } catch (error) {
+    console.error('[Email Auth] Failed to send OTP email:', error)
+    throw ApiError.internal('Failed to send verification code')
+  }
+
+  return res.status(200).json({ ok: true })
+})
+
+// ==================== POST /api/auth/email/verify-code ====================
+const verifyCodeSchema = z.object({
+  email: emailSchema,
+  code: z.string().regex(/^\d{6}$/, 'Code must be 6 digits'),
+})
+
+router.post('/email/verify-code', async (req: Request, res: Response) => {
+  const parsed = verifyCodeSchema.safeParse(req.body)
+  if (!parsed.success) {
+    throw ApiError.badRequest('Invalid email or code')
+  }
+
+  const email = parsed.data.email.toLowerCase()
+  const { code } = parsed.data
+
+  // Rate limit: 10 per 10 min per IP + per email
+  await requireEmailVerifyCodeRateLimit(req, email)
+
+  // Find the latest unused, non-expired code for this email
+  const [record] = await db
+    .select()
+    .from(emailCodes)
+    .where(
+      and(
+        eq(emailCodes.email, email),
+        isNull(emailCodes.usedAt),
+        gt(emailCodes.expiresAt, new Date())
+      )
+    )
+    .orderBy(desc(emailCodes.createdAt))
+    .limit(1)
+
+  if (!record || record.attempts >= 5) {
+    logLoginFailed(req, 'Invalid or expired code', 'email', { email })
+    throw ApiError.badRequest('Invalid or expired code')
+  }
+
+  // Atomic increment + check to prevent race condition (C1 fix)
+  const [updated] = await db
+    .update(emailCodes)
+    .set({ attempts: sql`${emailCodes.attempts} + 1` })
+    .where(
+      and(
+        eq(emailCodes.id, record.id),
+        isNull(emailCodes.usedAt),
+        sql`${emailCodes.attempts} < 5`
+      )
+    )
+    .returning({ attempts: emailCodes.attempts, code: emailCodes.code })
+
+  if (!updated) {
+    logLoginFailed(req, 'Code exhausted or already used', 'email', { email })
+    throw ApiError.badRequest('Invalid or expired code')
+  }
+
+  // Timing-safe comparison
+  const codeBuffer = Buffer.from(code, 'utf8')
+  const recordBuffer = Buffer.from(updated.code, 'utf8')
+  if (codeBuffer.length !== recordBuffer.length || !crypto.timingSafeEqual(codeBuffer, recordBuffer)) {
+    logLoginFailed(req, 'Wrong OTP code', 'email', { email, attempts: updated.attempts })
+    throw ApiError.badRequest('Invalid or expired code')
+  }
+
+  // Mark code as used
+  await db
+    .update(emailCodes)
+    .set({ usedAt: new Date() })
+    .where(eq(emailCodes.id, record.id))
+
+  // Find or create user
+  let [user] = await db
+    .select()
+    .from(users)
+    .where(and(eq(users.email, email), isNull(users.deletedAt)))
+    .limit(1)
+
+  if (!user) {
+    const [newUser] = await db
+      .insert(users)
+      .values({
+        email,
+        name: email.split('@')[0],
+        provider: 'email',
+        providerId: email,
+        emailVerified: new Date(),
+        role: 'user',
+        generationsLeft: 5,
+      })
+      .returning()
+
+    user = newUser
+  } else if (!user.emailVerified) {
+    // Mark email as verified if not already
+    await db
+      .update(users)
+      .set({ emailVerified: new Date(), updatedAt: new Date() })
+      .where(eq(users.id, user.id))
+  }
+
+  // Create JWT tokens (same as Yandex OAuth callback)
+  const accessToken = createAccessToken({
+    userId: user.id,
+    role: user.role,
+  })
+  const refreshToken = await createRefreshToken(user.id)
+
+  setAuthCookies(res, { accessToken, refreshToken })
+
+  logLoginSuccess(req, user.id, user.email, 'email')
+
+  return res.status(200).json({ ok: true })
 })
 
 // ==================== GET /api/auth/telegram/redirect ====================

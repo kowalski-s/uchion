@@ -184,6 +184,22 @@ export const refreshTokens = pgTable('refresh_tokens', {
   familyIdIdx: index('refresh_tokens_family_id_idx').on(table.familyId),
 }))
 
+// ==================== EMAIL CODES TABLE ====================
+// OTP codes for passwordless email authentication
+
+export const emailCodes = pgTable('email_codes', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  email: varchar('email', { length: 255 }).notNull(),
+  code: varchar('code', { length: 6 }).notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  attempts: integer('attempts').notNull().default(0),
+  usedAt: timestamp('used_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  emailIdx: index('email_codes_email_idx').on(table.email),
+  expiresAtIdx: index('email_codes_expires_at_idx').on(table.expiresAt),
+}))
+
 // ==================== PRESENTATIONS TABLE ====================
 
 export const presentations = pgTable('presentations', {
