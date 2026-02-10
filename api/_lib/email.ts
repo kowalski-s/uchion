@@ -3,7 +3,7 @@
  * Docs: https://godocs.unisender.ru/web-api-ref#email-send
  */
 
-const UNISENDER_GO_URL = 'https://go1.unisender.ru/ru/transactional/api/v1/email/send.json'
+const UNISENDER_GO_URL = 'https://go2.unisender.ru/ru/transactional/api/v1/email/send.json'
 const FROM_EMAIL = 'noreply@ychion.ru'
 const FROM_NAME = 'Ychion'
 
@@ -21,6 +21,7 @@ export async function sendEmail({ to, subject, text, html }: SendEmailParams): P
   }
 
   const body = {
+    api_key: apiKey,
     message: {
       recipients: [{ email: to }],
       body: {
@@ -38,7 +39,6 @@ export async function sendEmail({ to, subject, text, html }: SendEmailParams): P
     headers: {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
-      'X-API-KEY': apiKey,
     },
     body: JSON.stringify(body),
   })
