@@ -311,6 +311,11 @@ router.get('/yandex/callback', async (req: Request, res: Response) => {
       .where(eq(users.email, oauthUser.email.toLowerCase()))
       .limit(1)
 
+    if (user?.deletedAt) {
+      // Blocked user — deny login
+      return res.redirect(302, `${appUrl}/login?error=authentication_failed`)
+    }
+
     if (!user) {
       const [newUser] = await db
         .insert(users)
@@ -505,6 +510,11 @@ router.post('/email/verify-code', async (req: Request, res: Response) => {
     .where(eq(users.email, email))
     .limit(1)
 
+  if (user?.deletedAt) {
+    // Blocked user — deny login
+    throw ApiError.forbidden('Аккаунт заблокирован')
+  }
+
   if (!user) {
     // Truly new user
     const [newUser] = await db
@@ -521,19 +531,6 @@ router.post('/email/verify-code', async (req: Request, res: Response) => {
       .returning()
 
     user = newUser
-  } else if (user.deletedAt) {
-    // Reactivate soft-deleted user
-    const [reactivated] = await db
-      .update(users)
-      .set({
-        deletedAt: null,
-        emailVerified: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(users.id, user.id))
-      .returning()
-
-    user = reactivated
   } else if (!user.emailVerified) {
     // Existing user, mark email as verified
     await db
@@ -740,6 +737,11 @@ router.post('/telegram/callback', async (req: Request, res: Response) => {
         )
       )
       .limit(1)
+
+    if (user?.deletedAt) {
+      // Blocked user — deny login
+      throw ApiError.forbidden('Account is blocked')
+    }
 
     if (!user) {
       const [newUser] = await db

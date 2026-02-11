@@ -133,6 +133,8 @@ export default function LoginPage() {
         const data = await res.json().catch(() => ({}))
         if (res.status === 429) {
           setError('Слишком много попыток. Попробуйте позже.')
+        } else if (res.status === 403) {
+          setError('Аккаунт заблокирован. Обратитесь в поддержку.')
         } else if (res.status >= 500) {
           setError('Ошибка сервера. Попробуйте позже.')
         } else {
