@@ -195,16 +195,13 @@ export default function LoginPage() {
                 <span className="text-sm text-slate-600 leading-relaxed">
                   Я принимаю{' '}
                   <span className="text-[#8C52FF] underline underline-offset-2">
-                    пользовательское соглашение
+                    Пользовательское соглашение
                   </span>
-                  ,{' '}
+                  , с{' '}
                   <span className="text-[#8C52FF] underline underline-offset-2">
-                    политику конфиденциальности
+                    Политикой в отношении обработки персональных данных
                   </span>{' '}
-                  и{' '}
-                  <span className="text-[#8C52FF] underline underline-offset-2">
-                    согласие на обработку персональных данных
-                  </span>
+                  ознакомлен(а)
                 </span>
               </label>
 
