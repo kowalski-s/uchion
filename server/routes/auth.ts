@@ -498,14 +498,15 @@ router.post('/email/verify-code', async (req: Request, res: Response) => {
     .set({ usedAt: new Date() })
     .where(eq(emailCodes.id, record.id))
 
-  // Find or create user
+  // Find or create user (include soft-deleted to avoid unique constraint violation)
   let [user] = await db
     .select()
     .from(users)
-    .where(and(eq(users.email, email), isNull(users.deletedAt)))
+    .where(eq(users.email, email))
     .limit(1)
 
   if (!user) {
+    // Truly new user
     const [newUser] = await db
       .insert(users)
       .values({
@@ -520,8 +521,21 @@ router.post('/email/verify-code', async (req: Request, res: Response) => {
       .returning()
 
     user = newUser
+  } else if (user.deletedAt) {
+    // Reactivate soft-deleted user
+    const [reactivated] = await db
+      .update(users)
+      .set({
+        deletedAt: null,
+        emailVerified: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, user.id))
+      .returning()
+
+    user = reactivated
   } else if (!user.emailVerified) {
-    // Mark email as verified if not already
+    // Existing user, mark email as verified
     await db
       .update(users)
       .set({ emailVerified: new Date(), updatedAt: new Date() })
