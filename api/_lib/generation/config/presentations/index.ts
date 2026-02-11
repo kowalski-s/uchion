@@ -9,6 +9,7 @@ export {
 
 export {
   minimalismTemplate,
+  kidsTemplate,
   getTemplate,
   getAllTemplates,
   getTemplateIds,

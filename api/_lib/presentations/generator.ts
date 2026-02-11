@@ -1,6 +1,7 @@
 import PptxGenJS from 'pptxgenjs'
 import type { PresentationStructure, PresentationSlide, PresentationThemePreset } from '../../../shared/types.js'
 import { generateMinimalismPptx } from './minimalism-generator.js'
+import { generateKidsPptx } from './kids-generator.js'
 
 // =============================================================================
 // Theme Configuration
@@ -52,6 +53,15 @@ const THEMES: Record<PresentationThemePreset, ThemeConfig> = {
     accentColor: '2A7B4F',
     fontFace: 'Georgia',
     titleFontFace: 'Georgia',
+  },
+  kids: {
+    name: 'Kids',
+    backgroundColor: 'FDF6E3',
+    titleColor: '2D3436',
+    textColor: '2D3436',
+    accentColor: '4ECDC4',
+    fontFace: 'Arial',
+    titleFontFace: 'Arial',
   },
 }
 
@@ -592,9 +602,12 @@ export async function generatePptx(
   themePreset: PresentationThemePreset | 'custom',
   customDescription?: string
 ): Promise<string> {
-  // Use dedicated minimalism renderer for warm dark+beige style
+  // Use dedicated renderers for themes with custom styles
   if (themePreset === 'minimal') {
     return generateMinimalismPptx(structure)
+  }
+  if (themePreset === 'kids') {
+    return generateKidsPptx(structure)
   }
 
   const pres = new PptxGenJS()

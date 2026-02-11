@@ -95,6 +95,7 @@ const THEME_PRESETS: { value: PresentationThemePreset; label: string; descriptio
   { value: 'educational', label: 'Образовательный', description: 'Яркий, школьный', color: 'bg-purple-600' },
   { value: 'minimal', label: 'Минимализм', description: 'Тёплый, элегантный', color: 'bg-[#8B7355]' },
   { value: 'scientific', label: 'Научный', description: 'Для формул', color: 'bg-green-900' },
+  { value: 'kids', label: 'Для детей', description: 'Яркий, начальная школа', color: 'bg-[#4ECDC4]' },
 ]
 
 // =============================================================================
@@ -119,7 +120,7 @@ const GeneratePresentationFormSchema = z.object({
   grade: z.number().int().min(1).max(11),
   topic: z.string().min(3, 'Минимум 3 символа').max(200, 'Максимум 200 символов'),
   themeType: z.enum(['preset', 'custom']),
-  themePreset: z.enum(['professional', 'educational', 'minimal', 'scientific']).optional(),
+  themePreset: z.enum(['professional', 'educational', 'minimal', 'scientific', 'kids']).optional(),
   themeCustom: z.string().max(100, 'Максимум 100 символов').optional(),
   slideCount: z.union([z.literal(12), z.literal(18), z.literal(24)]).optional(),
 })
