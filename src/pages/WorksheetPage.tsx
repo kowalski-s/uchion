@@ -9,6 +9,7 @@ import { useWorksheetEditor } from '../hooks/useWorksheetEditor'
 import EditableWorksheetContent from '../components/EditableWorksheetContent'
 import EditModeToolbar from '../components/EditModeToolbar'
 import UnsavedChangesDialog, { useBeforeUnload } from '../components/UnsavedChangesDialog'
+import PdfTemplateModal, { type PdfTemplateId } from '../components/PdfTemplateModal'
 
 const SidebarNav = ({ activePage, hasAssignments, hasTest }: { activePage: number, hasAssignments: boolean, hasTest: boolean }) => (
   <nav className="hidden xl:flex flex-col gap-2 fixed left-8 top-32 w-40 text-sm print:hidden">
@@ -57,6 +58,8 @@ export default function WorksheetPage() {
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null)
   const [regeneratingIndex, setRegeneratingIndex] = useState<{ index: number; isTest: boolean } | null>(null)
+  const [showPdfModal, setShowPdfModal] = useState(false)
+  const [pdfLoading, setPdfLoading] = useState(false)
 
   // Worksheet editor hook
   const editor = useWorksheetEditor({
@@ -142,20 +145,28 @@ export default function WorksheetPage() {
     }
   }
 
-  const handleDownloadPdf = async () => {
+  const handleDownloadPdf = () => {
+    if (!editor.worksheet) return
+    setShowPdfModal(true)
+  }
+
+  const handlePdfTemplateSelect = async (templateId: PdfTemplateId) => {
     const currentWorksheet = editor.worksheet
     if (!currentWorksheet) return
 
+    setPdfLoading(true)
     try {
-      let base64 = currentWorksheet.pdfBase64
+      let base64: string | null = null
 
-      // If no cached PDF (cleared after edit/regeneration), rebuild on server
-      if (!base64 || base64.length === 0) {
-        base64 = await rebuildPdf(currentWorksheet)
+      // Use cached PDF only for standard template when available
+      if (templateId === 'standard' && currentWorksheet.pdfBase64 && currentWorksheet.pdfBase64.length > 0) {
+        base64 = currentWorksheet.pdfBase64
+      } else {
+        base64 = await rebuildPdf(currentWorksheet, templateId)
       }
 
-      // Fallback to client-side if server rebuild fails
-      if (!base64) {
+      // Fallback to client-side only for standard template
+      if (!base64 && templateId === 'standard') {
         const blob = await buildWorksheetPdf(currentWorksheet)
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
@@ -165,6 +176,12 @@ export default function WorksheetPage() {
         a.click()
         a.remove()
         URL.revokeObjectURL(url)
+        setShowPdfModal(false)
+        return
+      }
+
+      if (!base64) {
+        alert('Не удалось создать PDF. Попробуйте еще раз.')
         return
       }
 
@@ -183,9 +200,12 @@ export default function WorksheetPage() {
       a.click()
       a.remove()
       URL.revokeObjectURL(url)
+      setShowPdfModal(false)
     } catch (err) {
       void err
       alert('Не удалось создать PDF. Попробуйте еще раз.')
+    } finally {
+      setPdfLoading(false)
     }
   }
 
@@ -337,6 +357,13 @@ export default function WorksheetPage() {
         onSave={handleDialogSave}
         onDiscard={handleDialogDiscard}
         onCancel={handleDialogCancel}
+      />
+
+      <PdfTemplateModal
+        isOpen={showPdfModal}
+        onClose={() => setShowPdfModal(false)}
+        onSelect={handlePdfTemplateSelect}
+        loading={pdfLoading}
       />
 
       {/* HEADER (Hidden on Print) */}

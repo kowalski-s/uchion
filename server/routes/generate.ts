@@ -5,7 +5,7 @@ import { db } from '../../db/index.js'
 import { users, worksheets, subscriptions } from '../../db/schema.js'
 import { eq, sql, and, gt } from 'drizzle-orm'
 import { getAIProvider } from '../../api/_lib/ai-provider.js'
-import { buildPdf } from '../../api/_lib/pdf.js'
+import { buildPdf, type PdfTemplateId } from '../../api/_lib/pdf.js'
 import { withAuth } from '../middleware/auth.js'
 import { checkGenerateRateLimit, checkDailyGenerationLimit, checkRateLimit } from '../middleware/rate-limit.js'
 import { trackGeneration } from '../../api/_lib/alerts/generation-alerts.js'
@@ -353,13 +353,16 @@ router.post('/rebuild-pdf', async (req, res) => {
       return res.status(429).json({ status: 'error', code: 'RATE_LIMIT', message: 'Слишком много запросов.' })
     }
 
-    const parse = WorksheetSchema.safeParse(req.body)
+    const { templateId: rawTemplateId, ...worksheetData } = req.body || {}
+    const templateId: PdfTemplateId = rawTemplateId === 'rainbow' ? 'rainbow' : 'standard'
+
+    const parse = WorksheetSchema.safeParse(worksheetData)
     if (!parse.success) {
       return res.status(400).json({ status: 'error', code: 'INVALID_INPUT', message: 'Некорректные данные листа.' })
     }
 
     const worksheet = parse.data as Worksheet
-    const pdfBase64 = await buildPdf(worksheet, {} as GeneratePayload)
+    const pdfBase64 = await buildPdf(worksheet, {} as GeneratePayload, templateId)
 
     return res.json({ status: 'ok', pdfBase64 })
   } catch (err) {

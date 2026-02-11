@@ -51,7 +51,8 @@
       "Bash(npx vite build:*)",
       "Bash(npm ls:*)",
       "Bash(wc:*)",
-      "Bash(npm run db:push:*)"
+      "Bash(npm run db:push:*)",
+      "mcp__ide__getDiagnostics"
     ]
   }
 }

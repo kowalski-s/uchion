@@ -92,13 +92,13 @@ export async function regenerateTask(params: {
 }
 
 // Rebuild PDF from edited worksheet content (server-side Puppeteer)
-export async function rebuildPdf(worksheet: import('../../shared/types').Worksheet): Promise<string | null> {
+export async function rebuildPdf(worksheet: import('../../shared/types').Worksheet, templateId: string = 'standard'): Promise<string | null> {
   try {
     const res = await fetch('/api/generate/rebuild-pdf', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify(worksheet),
+      body: JSON.stringify({ ...worksheet, templateId }),
     })
     if (!res.ok) return null
     const data = await res.json()
