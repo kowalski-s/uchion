@@ -220,7 +220,7 @@ export default function DashboardPage() {
                 <p className="text-sm text-slate-500">Напишите нам в Telegram</p>
               </div>
               <a
-                href="https://t.me/uchion_support"
+                href="https://t.me/mama_umnivera"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-slate-700 font-medium text-sm transition-colors"
