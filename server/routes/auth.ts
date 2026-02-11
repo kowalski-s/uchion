@@ -377,6 +377,25 @@ router.post('/email/send-code', async (req: Request, res: Response) => {
   // Rate limit: 3 per 10 min per email
   await requireEmailSendCodeRateLimit(req, email)
 
+  // Deduplication: if a valid code was created within the last 30 seconds, skip creating a new one
+  const [recentCode] = await db
+    .select({ id: emailCodes.id })
+    .from(emailCodes)
+    .where(
+      and(
+        eq(emailCodes.email, email),
+        isNull(emailCodes.usedAt),
+        gt(emailCodes.expiresAt, new Date()),
+        gt(emailCodes.createdAt, new Date(Date.now() - 30 * 1000))
+      )
+    )
+    .limit(1)
+
+  if (recentCode) {
+    // Code was already sent recently, return success without invalidating it
+    return res.status(200).json({ ok: true })
+  }
+
   // Invalidate all previous unused codes for this email
   await db
     .update(emailCodes)

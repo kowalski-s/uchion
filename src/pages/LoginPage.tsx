@@ -18,6 +18,7 @@ export default function LoginPage() {
   const [code, setCode] = useState('')
   const [resendTimer, setResendTimer] = useState(0)
   const codeInputRef = useRef<HTMLInputElement>(null)
+  const isBusyRef = useRef(false) // Synchronous guard against double-fire
 
   // Check for OAuth errors in URL
   useEffect(() => {
@@ -76,7 +77,9 @@ export default function LoginPage() {
   const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
 
   const handleSendCode = async () => {
+    if (isBusyRef.current) return
     if (!consentAccepted || !isValidEmail(email)) return
+    isBusyRef.current = true
     setError(null)
     setIsLoading(true)
 
@@ -97,18 +100,21 @@ export default function LoginPage() {
         if (res.status === 429) {
           setError('Слишком много запросов. Попробуйте позже.')
         } else {
-          setError(data?.error?.message || 'Не удалось отправить код. Попробуйте позже.')
+          setError(typeof data?.error === 'string' ? data.error : 'Не удалось отправить код. Попробуйте позже.')
         }
       }
     } catch {
       setError('Ошибка сети. Проверьте подключение к интернету.')
     } finally {
+      isBusyRef.current = false
       setIsLoading(false)
     }
   }
 
   const handleVerifyCode = async () => {
+    if (isBusyRef.current) return
     if (!code || code.length !== 6) return
+    isBusyRef.current = true
     setError(null)
     setIsLoading(true)
 
@@ -127,13 +133,16 @@ export default function LoginPage() {
         const data = await res.json().catch(() => ({}))
         if (res.status === 429) {
           setError('Слишком много попыток. Попробуйте позже.')
+        } else if (res.status >= 500) {
+          setError('Ошибка сервера. Попробуйте позже.')
         } else {
-          setError(data?.error?.message || 'Неверный или истёкший код.')
+          setError('Неверный или истёкший код.')
         }
       }
     } catch {
       setError('Ошибка сети. Проверьте подключение к интернету.')
     } finally {
+      isBusyRef.current = false
       setIsLoading(false)
     }
   }
