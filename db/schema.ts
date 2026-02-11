@@ -25,7 +25,7 @@ export const users = pgTable('users', {
   role: userRoleEnum('role').notNull().default('user'),
   generationsLeft: integer('generations_left').notNull().default(5),
   // OAuth provider info
-  provider: varchar('provider', { length: 50 }),  // 'yandex' | 'telegram'
+  provider: varchar('provider', { length: 50 }),  // 'yandex' | 'email'
   providerId: varchar('provider_id', { length: 255 }),
   // Telegram alerts for admins
   telegramChatId: varchar('telegram_chat_id', { length: 50 }),  // Telegram chat ID for sending alerts

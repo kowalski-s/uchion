@@ -153,18 +153,16 @@ app.use((_req, res, next) => {
     res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
   }
 
-  // CSP: 'unsafe-inline' for scripts removed -- Telegram widget uses external script,
-  // but not inline scripts. style-src keeps 'unsafe-inline' because Tailwind/KaTeX require it.
+  // CSP: style-src keeps 'unsafe-inline' because Tailwind/KaTeX require it.
   res.setHeader(
     'Content-Security-Policy',
     [
       "default-src 'self'",
-      "script-src 'self' https://telegram.org https://oauth.telegram.org",
+      "script-src 'self'",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: https:",
       "font-src 'self' data:",
       "connect-src 'self'",
-      "frame-src https://oauth.telegram.org",
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",

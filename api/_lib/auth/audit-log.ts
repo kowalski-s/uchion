@@ -21,9 +21,7 @@ export enum AuditEventType {
 
   // Security events
   SECURITY_RATE_LIMIT_EXCEEDED = 'security.rate_limit.exceeded',
-  SECURITY_INVALID_SIGNATURE = 'security.invalid_signature',
   SECURITY_CSRF_DETECTED = 'security.csrf.detected',
-  SECURITY_EXPIRED_AUTH = 'security.expired_auth',
 }
 
 /**
@@ -125,7 +123,7 @@ export function logLoginSuccess(
   req: VercelRequest,
   userId: string,
   userEmail: string,
-  provider: 'yandex' | 'telegram'
+  provider: 'yandex' | 'email'
 ): void {
   logAuditEvent(AuditEventType.AUTH_LOGIN_SUCCESS, req, {
     userId,
@@ -141,7 +139,7 @@ export function logLoginSuccess(
 export function logLoginFailed(
   req: VercelRequest,
   errorMessage: string,
-  provider?: 'yandex' | 'telegram',
+  provider?: 'yandex' | 'email',
   metadata?: Record<string, unknown>
 ): void {
   logAuditEvent(AuditEventType.AUTH_LOGIN_FAILED, req, {
@@ -159,7 +157,7 @@ export function logOAuthCallbackSuccess(
   req: VercelRequest,
   userId: string,
   userEmail: string,
-  provider: 'yandex' | 'telegram'
+  provider: 'yandex'
 ): void {
   logAuditEvent(AuditEventType.OAUTH_CALLBACK_SUCCESS, req, {
     userId,
@@ -175,7 +173,7 @@ export function logOAuthCallbackSuccess(
 export function logOAuthCallbackFailed(
   req: VercelRequest,
   errorMessage: string,
-  provider: 'yandex' | 'telegram',
+  provider: 'yandex',
   metadata?: Record<string, unknown>
 ): void {
   logAuditEvent(AuditEventType.OAUTH_CALLBACK_FAILED, req, {
@@ -201,22 +199,6 @@ export function logRateLimitExceeded(
 }
 
 /**
- * Log invalid signature detection
- */
-export function logInvalidSignature(
-  req: VercelRequest,
-  provider: 'telegram',
-  metadata?: Record<string, unknown>
-): void {
-  logAuditEvent(AuditEventType.SECURITY_INVALID_SIGNATURE, req, {
-    provider,
-    success: false,
-    errorMessage: 'Invalid signature detected - possible tampering',
-    metadata,
-  })
-}
-
-/**
  * Log CSRF attack detection
  */
 export function logCsrfDetected(
@@ -232,18 +214,3 @@ export function logCsrfDetected(
   })
 }
 
-/**
- * Log expired authentication attempt
- */
-export function logExpiredAuth(
-  req: VercelRequest,
-  provider: 'telegram',
-  metadata?: Record<string, unknown>
-): void {
-  logAuditEvent(AuditEventType.SECURITY_EXPIRED_AUTH, req, {
-    provider,
-    success: false,
-    errorMessage: 'Expired authentication attempt - possible replay attack',
-    metadata,
-  })
-}

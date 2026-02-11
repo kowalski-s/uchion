@@ -13,9 +13,7 @@ export enum AuditEventType {
   OAUTH_CALLBACK_SUCCESS = 'oauth.callback.success',
   OAUTH_CALLBACK_FAILED = 'oauth.callback.failed',
   SECURITY_RATE_LIMIT_EXCEEDED = 'security.rate_limit.exceeded',
-  SECURITY_INVALID_SIGNATURE = 'security.invalid_signature',
   SECURITY_CSRF_DETECTED = 'security.csrf.detected',
-  SECURITY_EXPIRED_AUTH = 'security.expired_auth',
 }
 
 interface AuditLogEntry {
@@ -89,7 +87,7 @@ export function logLoginSuccess(
   req: Request,
   userId: string,
   userEmail: string,
-  provider: 'yandex' | 'telegram' | 'email'
+  provider: 'yandex' | 'email'
 ): void {
   logAuditEvent(AuditEventType.AUTH_LOGIN_SUCCESS, req, {
     userId,
@@ -102,7 +100,7 @@ export function logLoginSuccess(
 export function logLoginFailed(
   req: Request,
   errorMessage: string,
-  provider?: 'yandex' | 'telegram' | 'email',
+  provider?: 'yandex' | 'email',
   metadata?: Record<string, unknown>
 ): void {
   logAuditEvent(AuditEventType.AUTH_LOGIN_FAILED, req, {
@@ -117,7 +115,7 @@ export function logOAuthCallbackSuccess(
   req: Request,
   userId: string,
   userEmail: string,
-  provider: 'yandex' | 'telegram'
+  provider: 'yandex'
 ): void {
   logAuditEvent(AuditEventType.OAUTH_CALLBACK_SUCCESS, req, {
     userId,
@@ -130,7 +128,7 @@ export function logOAuthCallbackSuccess(
 export function logOAuthCallbackFailed(
   req: Request,
   errorMessage: string,
-  provider: 'yandex' | 'telegram',
+  provider: 'yandex',
   metadata?: Record<string, unknown>
 ): void {
   logAuditEvent(AuditEventType.OAUTH_CALLBACK_FAILED, req, {
@@ -152,22 +150,9 @@ export function logRateLimitExceeded(
   })
 }
 
-export function logInvalidSignature(
-  req: Request,
-  provider: 'telegram',
-  metadata?: Record<string, unknown>
-): void {
-  logAuditEvent(AuditEventType.SECURITY_INVALID_SIGNATURE, req, {
-    provider,
-    success: false,
-    errorMessage: 'Invalid signature detected - possible tampering',
-    metadata,
-  })
-}
-
 export function logCsrfDetected(
   req: Request,
-  provider: 'yandex' | 'telegram',
+  provider: 'yandex',
   metadata?: Record<string, unknown>
 ): void {
   logAuditEvent(AuditEventType.SECURITY_CSRF_DETECTED, req, {
@@ -178,15 +163,3 @@ export function logCsrfDetected(
   })
 }
 
-export function logExpiredAuth(
-  req: Request,
-  provider: 'telegram',
-  metadata?: Record<string, unknown>
-): void {
-  logAuditEvent(AuditEventType.SECURITY_EXPIRED_AUTH, req, {
-    provider,
-    success: false,
-    errorMessage: 'Expired authentication attempt - possible replay attack',
-    metadata,
-  })
-}
