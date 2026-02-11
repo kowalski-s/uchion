@@ -713,7 +713,7 @@ function generateRainbowHtml(worksheet: Worksheet): string {
           <div class="task-circle" style="background:${color};color:white">${i + 1}</div>
           <div class="task-text">${processText(task.text)}</div>
         </div>
-        ${shouldShowAnswerField(task.text) ? '<div class="answer-dots"></div>' : ''}
+        ${shouldShowAnswerField(task.text) ? '<div class="rb-answer-field"></div>' : ''}
       </div>
     `
   }).join('')
@@ -933,19 +933,13 @@ function generateRainbowHtml(worksheet: Worksheet): string {
       padding-top: 4px;
       flex: 1;
     }
-    .answer-dots {
+    .rb-answer-field {
       margin-left: 38px;
-      margin-top: 4px;
-      height: 44px;
-      border-bottom: 2px dotted #d1d5db;
-      position: relative;
-    }
-    .answer-dots::before {
-      content: '';
-      position: absolute;
-      top: 50%;
-      left: 0; right: 0;
-      border-bottom: 2px dotted #d1d5db;
+      margin-top: 6px;
+      height: 56px;
+      border: 1.5px dashed #d1d5db;
+      border-radius: 8px;
+      background: rgba(249, 250, 251, 0.3);
     }
 
     /* ===== Matching (rainbow) ===== */
@@ -1044,34 +1038,44 @@ function generateRainbowHtml(worksheet: Worksheet): string {
 
     /* ===== Notes ===== */
     .notes-section {
+      background: #f9fafb;
+      border-radius: 10px;
+      padding: 20px;
       margin-top: 12px;
     }
     .note-line {
-      border-bottom: 2px dotted #d1d5db;
-      height: 30px;
+      border-bottom: 1px solid #d1d5db;
+      height: 28px;
     }
 
     /* ===== Answers ===== */
-    .answers-card {
-      border: 1.5px solid #e5e7eb;
-      border-radius: 12px;
-      padding: 16px 20px;
+    .answers-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
       margin-top: 8px;
     }
+    .answers-grid.single-column {
+      grid-template-columns: 1fr;
+    }
     .answers-column h3 {
-      font-size: 13px;
+      font-size: 14px;
       font-weight: 700;
-      color: #374151;
-      margin-bottom: 8px;
+      color: #4f46e5;
+      margin-bottom: 12px;
     }
     .answers-list {
       list-style: none;
     }
     .answer-item {
+      background: #f9fafb;
+      border: 1px solid #f3f4f6;
+      border-radius: 6px;
+      padding: 8px 10px;
+      margin-bottom: 8px;
       font-size: 11px;
       color: #374151;
-      margin-bottom: 4px;
-      padding: 2px 0;
+      break-inside: avoid;
     }
     .answer-number {
       font-weight: 700;
@@ -1113,16 +1117,16 @@ function generateRainbowHtml(worksheet: Worksheet): string {
   <div class="page">
     ${headerHtml}
     <div class="section-ribbon"><span class="section-ribbon-icon">&#128203;</span> Ответы</div>
-    <div class="answers-card">
+    <div class="answers-grid${!hasAssignments || !hasTest ? ' single-column' : ''}">
       ${hasAssignments ? `
       <div class="answers-column">
-        <h3>Задания:</h3>
+        <h3>Задания</h3>
         <ul class="answers-list">${assignmentAnswersHtml}</ul>
       </div>
       ` : ''}
       ${hasTest ? `
-      <div class="answers-column" ${hasAssignments ? 'style="margin-top:14px"' : ''}>
-        <h3>Мини-тест:</h3>
+      <div class="answers-column">
+        <h3>Мини-тест</h3>
         <ul class="answers-list">${testAnswersHtml}</ul>
       </div>
       ` : ''}
@@ -1173,7 +1177,7 @@ function generateAcademicHtml(worksheet: Worksheet): string {
           <div class="ac-task-num">${i + 1}</div>
           <div class="ac-task-text">${processText(task.text)}</div>
         </div>
-        ${shouldShowAnswerField(task.text) ? '<div class="ac-answer-line"></div>' : ''}
+        ${shouldShowAnswerField(task.text) ? '<div class="ac-answer-field"></div>' : ''}
       </div>
     `
   }).join('')
@@ -1291,15 +1295,16 @@ function generateAcademicHtml(worksheet: Worksheet): string {
 
     /* ===== Topic ===== */
     .ac-topic {
+      text-align: center;
       margin-bottom: 24px;
     }
     .ac-topic h1 {
+      display: inline-block;
       font-size: 22px;
       font-weight: 700;
       color: #1a1a1a;
       padding-bottom: 8px;
       border-bottom: 3px solid #c4a882;
-      display: inline-block;
     }
 
     /* ===== Section badge ===== */
@@ -1346,19 +1351,13 @@ function generateAcademicHtml(worksheet: Worksheet): string {
       padding-top: 4px;
       flex: 1;
     }
-    .ac-answer-line {
+    .ac-answer-field {
       margin-left: 40px;
-      margin-top: 10px;
-      height: 48px;
-      border-bottom: 1.5px solid #c4a882;
-      position: relative;
-    }
-    .ac-answer-line::before {
-      content: '';
-      position: absolute;
-      top: 50%;
-      left: 0; right: 0;
-      border-bottom: 1.5px solid #c4a882;
+      margin-top: 8px;
+      height: 56px;
+      border: 1.5px dashed #c4a882;
+      border-radius: 6px;
+      background: rgba(196, 168, 130, 0.05);
     }
 
     /* ===== Matching (academic) ===== */
@@ -1439,12 +1438,15 @@ function generateAcademicHtml(worksheet: Worksheet): string {
     }
 
     /* ===== Notes ===== */
+    .ac-notes-area {
+      background: rgba(196, 168, 130, 0.08);
+      border-radius: 10px;
+      padding: 20px;
+      margin-top: 8px;
+    }
     .ac-note-line {
       border-bottom: 1px solid #c4a882;
-      height: 32px;
-    }
-    .ac-notes-area {
-      margin-top: 8px;
+      height: 28px;
     }
 
     /* ===== Page number ===== */
@@ -1470,24 +1472,34 @@ function generateAcademicHtml(worksheet: Worksheet): string {
       color: #1a1a1a;
       font-size: 24px;
     }
-    .ac-answers-body {
-      padding: 0;
+    .ac-answers-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-top: 8px;
+    }
+    .ac-answers-grid.single-column {
+      grid-template-columns: 1fr;
     }
     .ac-ans-section h3 {
-      font-size: 13px;
+      font-size: 14px;
       font-weight: 700;
-      color: #1a1a1a;
-      margin-bottom: 8px;
+      color: #8b7355;
+      margin-bottom: 12px;
     }
     .ac-ans-list {
       list-style: none;
       margin-bottom: 20px;
     }
     .ac-ans-item {
+      background: rgba(196, 168, 130, 0.08);
+      border: 1px solid rgba(196, 168, 130, 0.2);
+      border-radius: 6px;
+      padding: 8px 10px;
+      margin-bottom: 8px;
       font-size: 11px;
       color: #374151;
-      padding: 4px 0;
-      margin-left: 16px;
+      break-inside: avoid;
     }
 
     @media print {
@@ -1528,16 +1540,16 @@ function generateAcademicHtml(worksheet: Worksheet): string {
       <div class="ac-logo">УчиОн</div>
     </div>
     <div class="ac-section-badge">Ответы</div>
-    <div class="ac-answers-body">
+    <div class="ac-answers-grid${!hasAssignments || !hasTest ? ' single-column' : ''}">
       ${hasAssignments ? `
       <div class="ac-ans-section">
-        <h3>Задания:</h3>
+        <h3>Задания</h3>
         <ol class="ac-ans-list">${assignmentAnswersHtml}</ol>
       </div>
       ` : ''}
       ${hasTest ? `
       <div class="ac-ans-section">
-        <h3>Мини-тест:</h3>
+        <h3>Мини-тест</h3>
         <ol class="ac-ans-list">${testAnswersHtml}</ol>
       </div>
       ` : ''}
