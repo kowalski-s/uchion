@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-export type PdfTemplateId = 'standard' | 'rainbow'
+export type PdfTemplateId = 'standard' | 'rainbow' | 'academic'
 
 interface PdfTemplateModalProps {
   isOpen: boolean
@@ -19,6 +19,11 @@ const templates: { id: PdfTemplateId; name: string; description: string }[] = [
     id: 'rainbow',
     name: 'Радуга',
     description: 'Яркий и красочный, для начальной школы',
+  },
+  {
+    id: 'academic',
+    name: 'Академичный',
+    description: 'Элегантный стиль для средней и старшей школы',
   },
 ]
 
@@ -48,7 +53,7 @@ export default function PdfTemplateModal({ isOpen, onClose, onSelect, loading }:
         onClick={loading ? undefined : onClose}
       />
 
-      <div className="relative bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden">
+      <div className="relative bg-white rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden">
         <div className="relative px-6 pt-6 pb-4">
           <button
             onClick={onClose}
@@ -63,7 +68,7 @@ export default function PdfTemplateModal({ isOpen, onClose, onSelect, loading }:
           <h2 className="text-lg font-bold text-center text-gray-900 mb-1">Скачать PDF</h2>
           <p className="text-sm text-gray-500 text-center mb-5">Выберите стиль оформления рабочего листа</p>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             {templates.map((tpl) => (
               <button
                 key={tpl.id}
@@ -77,9 +82,9 @@ export default function PdfTemplateModal({ isOpen, onClose, onSelect, loading }:
               >
                 {/* Preview thumbnail */}
                 <div className={`rounded-lg mb-3 h-28 flex items-center justify-center overflow-hidden ${
-                  tpl.id === 'standard' ? 'bg-gray-50' : 'bg-pink-50'
+                  tpl.id === 'standard' ? 'bg-gray-50' : tpl.id === 'rainbow' ? 'bg-pink-50' : 'bg-amber-50/60'
                 }`}>
-                  {tpl.id === 'standard' ? <StandardPreview /> : <RainbowPreview />}
+                  {tpl.id === 'standard' ? <StandardPreview /> : tpl.id === 'rainbow' ? <RainbowPreview /> : <AcademicPreview />}
                 </div>
 
                 <div className="font-semibold text-sm text-gray-900">{tpl.name}</div>
@@ -207,6 +212,50 @@ function RainbowPreview() {
           {['bg-pink-300','bg-yellow-300','bg-blue-300','bg-green-300','bg-purple-300','bg-orange-300','bg-pink-300','bg-cyan-300'].map((c, i) => (
             <div key={i} className={`w-1.5 h-1.5 rounded-full ${c}`} />
           ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* Mini-preview of the Academic template */
+function AcademicPreview() {
+  return (
+    <div className="w-full h-full p-2 flex flex-col gap-1 text-[6px] leading-tight">
+      {/* Header */}
+      <div className="flex justify-between items-start">
+        <span className="font-bold text-[8px] text-gray-800">УчиОн</span>
+        <div className="flex flex-col items-end gap-0.5">
+          <div className="w-12 h-[3px] bg-[#c4a882]/40 rounded" />
+          <div className="w-10 h-[3px] bg-[#c4a882]/40 rounded" />
+        </div>
+      </div>
+      <div className="h-[2px] bg-[#c4a882] rounded-full" />
+      {/* Topic */}
+      <div className="mt-1">
+        <span className="font-bold text-[7px] text-gray-800">Тема урока</span>
+        <div className="h-[2px] w-14 bg-[#c4a882] rounded-full mt-[1px]" />
+      </div>
+      {/* Section badge */}
+      <div className="mt-1">
+        <span className="inline-block bg-[#c4a882] text-white text-[5px] font-bold px-1.5 py-[2px] rounded-[2px]">Задания</span>
+      </div>
+      {/* Tasks */}
+      <div className="flex flex-col gap-1 mt-0.5">
+        <div className="flex gap-1 items-start">
+          <div className="w-3 h-3 rounded-[2px] bg-gray-800 text-white flex items-center justify-center text-[5px] font-bold shrink-0">1</div>
+          <div className="flex-1">
+            <div className="w-full h-[3px] bg-gray-200 rounded" />
+            <div className="w-3/4 h-[3px] bg-gray-200 rounded mt-0.5" />
+            <div className="w-full h-[1px] bg-[#c4a882] mt-1.5" />
+          </div>
+        </div>
+        <div className="flex gap-1 items-start">
+          <div className="w-3 h-3 rounded-[2px] bg-gray-800 text-white flex items-center justify-center text-[5px] font-bold shrink-0">2</div>
+          <div className="flex-1">
+            <div className="w-full h-[3px] bg-gray-200 rounded" />
+            <div className="w-full h-[1px] bg-[#c4a882] mt-1.5" />
+          </div>
         </div>
       </div>
     </div>

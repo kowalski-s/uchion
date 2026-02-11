@@ -354,7 +354,8 @@ router.post('/rebuild-pdf', async (req, res) => {
     }
 
     const { templateId: rawTemplateId, ...worksheetData } = req.body || {}
-    const templateId: PdfTemplateId = rawTemplateId === 'rainbow' ? 'rainbow' : 'standard'
+    const validTemplates: PdfTemplateId[] = ['standard', 'rainbow', 'academic']
+    const templateId: PdfTemplateId = validTemplates.includes(rawTemplateId) ? rawTemplateId : 'standard'
 
     const parse = WorksheetSchema.safeParse(worksheetData)
     if (!parse.success) {
