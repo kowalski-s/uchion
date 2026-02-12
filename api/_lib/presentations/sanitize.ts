@@ -7,39 +7,62 @@ const VALID_EL_TYPES: Set<string> = new Set<ContentElementType>([
 /** Extract plain text from a content item (string or ContentElement) */
 export function getContentItemText(item: string | ContentElement): string {
   if (typeof item === 'string') return item
-  return item.text || ''
+  if (item && typeof item === 'object' && typeof (item as ContentElement).text === 'string') {
+    return (item as ContentElement).text || ''
+  }
+  return ''
 }
 
-/** Normalize mixed content array to ContentElement[] (strings become bullets) */
+/** Normalize mixed content array to ContentElement[] (strings become bullets, invalid objects skipped) */
 export function normalizeContent(content: (string | ContentElement)[]): ContentElement[] {
   return content.map(item => {
     if (typeof item === 'string') {
       return { el: 'bullet' as const, text: item }
     }
-    return item
-  })
+    if (item && typeof item === 'object' && typeof (item as ContentElement).text === 'string') {
+      return item as ContentElement
+    }
+    // Skip malformed objects
+    return null
+  }).filter((item): item is ContentElement => item !== null && item.text.trim() !== '')
 }
 
 /** Validate and clean a single content element object */
-function cleanContentElement(item: unknown): string | ContentElement {
-  if (typeof item === 'string') return item
-  if (item && typeof item === 'object' && 'el' in item && 'text' in item) {
+function cleanContentElement(item: unknown): string | ContentElement | null {
+  if (typeof item === 'string') {
+    // Filter out [object Object] strings that slipped through
+    if (item.includes('[object Object]')) return null
+    return item
+  }
+  if (item && typeof item === 'object') {
     const obj = item as Record<string, unknown>
-    if (VALID_EL_TYPES.has(String(obj.el)) && typeof obj.text === 'string' && obj.text.trim() !== '') {
-      const result: ContentElement = { el: obj.el as ContentElementType, text: obj.text }
-      if (obj.el === 'task' && typeof obj.number === 'number') {
-        result.number = obj.number
+    // Valid ContentElement: {el, text}
+    if ('el' in obj && typeof obj.text === 'string' && obj.text.trim() !== '') {
+      if (VALID_EL_TYPES.has(String(obj.el))) {
+        const result: ContentElement = { el: obj.el as ContentElementType, text: obj.text }
+        if (obj.el === 'task' && typeof obj.number === 'number') {
+          result.number = obj.number
+        }
+        return result
       }
-      return result
+      // Unknown el type but has text — convert to bullet
+      return { el: 'bullet', text: obj.text }
     }
-    // Invalid object with text — convert to bullet
+    // Object with text field but no el
     if (typeof obj.text === 'string' && obj.text.trim() !== '') {
       return { el: 'bullet', text: obj.text }
     }
+    // Try other common text properties
+    if (typeof obj.content === 'string' && obj.content.trim() !== '') {
+      return { el: 'bullet', text: obj.content }
+    }
+    if (typeof obj.value === 'string' && obj.value.trim() !== '') {
+      return { el: 'bullet', text: obj.value }
+    }
+    // Unrecoverable object — skip
+    return null
   }
-  // Fallback: stringify
-  const text = String(item).trim()
-  return text ? { el: 'bullet', text } : ''
+  return null
 }
 
 /**
@@ -66,22 +89,20 @@ function cleanSlide(slide: PresentationSlide): PresentationSlide {
     ...slide,
     content: slide.content
       .map(cleanContentElement)
-      .filter(item => getContentItemText(item).trim() !== ''),
-    leftColumn: slide.leftColumn?.map(item => typeof item === 'string' ? item : getContentItemText(item as any)).filter(item => item.trim() !== ''),
-    rightColumn: slide.rightColumn?.map(item => typeof item === 'string' ? item : getContentItemText(item as any)).filter(item => item.trim() !== ''),
+      .filter((item): item is string | ContentElement => item !== null && getContentItemText(item).trim() !== ''),
+    leftColumn: slide.leftColumn?.map(item => typeof item === 'string' ? item : getContentItemText(item as any)).filter(item => item.trim() !== '' && !item.includes('[object Object]')),
+    rightColumn: slide.rightColumn?.map(item => typeof item === 'string' ? item : getContentItemText(item as any)).filter(item => item.trim() !== '' && !item.includes('[object Object]')),
   }
 }
 
-/** Convert slides with missing required data to plain content */
+/** Convert slides with missing required data or deprecated types to plain content */
 function convertInvalidSlides(slides: PresentationSlide[]): PresentationSlide[] {
   return slides.map(slide => {
+    // Always convert diagram/twoColumn/chart to content — these types render poorly
+    if (slide.type === 'diagram' || slide.type === 'twoColumn' || slide.type === 'chart') {
+      return { ...slide, type: 'content' as const }
+    }
     if (slide.type === 'table' && (!slide.tableData || slide.tableData.headers.length === 0)) {
-      return { ...slide, type: 'content' as const }
-    }
-    if (slide.type === 'twoColumn' && (!slide.leftColumn?.length && !slide.rightColumn?.length)) {
-      return { ...slide, type: 'content' as const }
-    }
-    if (slide.type === 'chart' && (!slide.chartData || slide.chartData.labels.length === 0 || slide.chartData.values.length === 0)) {
       return { ...slide, type: 'content' as const }
     }
     return slide

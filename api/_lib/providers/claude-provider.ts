@@ -58,40 +58,42 @@ export class ClaudeProvider {
       "title": "Заголовок",
       "content": [элементы],
       // опционально для таблиц:
-      "tableData": {"headers": [...], "rows": [[...], ...]},
-      // опционально для двух колонок:
-      "leftColumn": [...], "rightColumn": [...]
+      "tableData": {"headers": [...], "rows": [[...], ...]}
     }
   ]
 }
 
-Поле "content" — массив элементов. Каждый элемент либо строка (обычный пункт), либо объект с полем "el":
+Поле "content" — массив элементов. Каждый элемент — объект с полем "el":
 - {"el": "heading", "text": "..."} — ключевое понятие/подзаголовок (крупный шрифт, по центру)
-- {"el": "definition", "text": "..."} — определение/правило (средний шрифт, рамка с акцентом)
+- {"el": "definition", "text": "..."} — определение/правило (с акцентной рамкой)
 - {"el": "text", "text": "..."} — обычный текст (без маркера)
-- {"el": "bullet", "text": "..."} — пункт списка (с маркером)
-- {"el": "highlight", "text": "..."} — важная мысль (акцентный цвет)
-- {"el": "task", "text": "...", "number": 1} — задание с номером (для practice слайдов)
-- {"el": "formula", "text": "..."} — формула внутри слайда
+- {"el": "bullet", "text": "..."} — пункт списка (с маркером •)
+- {"el": "highlight", "text": "..."} — важная мысль (акцентный цвет, жирный)
+- {"el": "task", "text": "...", "number": 1} — задание с номером
+- {"el": "formula", "text": "..."} — формула (крупно, по центру)
 
-Для content-слайдов начинай с heading (ключевое понятие темы), затем definition (если есть определение), потом bullet/text для деталей.
-Для practice-слайдов используй task с номерами.
+Каждый элемент content ОБЯЗАТЕЛЬНО должен быть объектом {"el": "...", "text": "..."}.
+НЕ используй простые строки в content — только объекты.
 
-Типы слайдов (выбирай подходящие):
-- title — титульный
-- content — текст с пунктами
-- twoColumn — две колонки
-- table — таблица
-- example — пример/задача с решением
-- formula — формула крупно
-- diagram — схема/структура
+Для content-слайдов: начинай с heading, затем definition (если есть), потом bullet/text.
+Для practice: используй task с номерами 1, 2, 3...
+
+Типы слайдов:
+- title — титульный (первый слайд)
+- content — основной тип, текст с семантической разметкой
+- table — таблица (ТОЛЬКО если данные действительно табличные, например сравнение)
+- example — пример с решением
+- formula — одна крупная формула с пояснением
 - practice — задания для учеников (ТОЛЬКО задания, БЕЗ ответов)
-- conclusion — итоги
+- conclusion — итоги (последний слайд)
+
+Используй преимущественно content и example. Тип table — только когда информация реально сравнительная (2-3 колонки с данными). Для всего остального используй content с разнообразной разметкой (heading, definition, bullet, highlight).
 
 ВАЖНО:
 - Слайды "practice" содержат ТОЛЬКО задания, БЕЗ ответов
 - После каждого "practice" добавь слайд type="content" с title="Ответы" и ответами
-- Каждый слайд должен иметь непустой content (минимум 3-4 пункта для content-слайдов)
+- Каждый слайд должен иметь непустой content (минимум 3-4 элемента)
+- Каждый элемент content — объект {"el": "тип", "text": "текст"}
 - Обязательно включи теорию, определения, формулы (если есть для темы)
 
 Создай интересную, содержательную презентацию. Теория, примеры, практика — на твоё усмотрение.
@@ -167,9 +169,20 @@ export class ClaudeProvider {
         slide.content = Array.isArray(slide.content)
           ? slide.content.map((item: unknown) => {
               if (typeof item === 'string') return item
-              if (item && typeof item === 'object' && 'el' in item && 'text' in item) return item
-              return String(item)
-            })
+              if (item && typeof item === 'object') {
+                const obj = item as Record<string, unknown>
+                // Valid ContentElement: {el, text}
+                if ('el' in obj && typeof obj.text === 'string') return item
+                // Object with just text field — wrap as bullet
+                if (typeof obj.text === 'string') return { el: 'bullet', text: obj.text }
+                // Object with content/value field — try to extract
+                if (typeof obj.content === 'string') return { el: 'bullet', text: obj.content }
+                if (typeof obj.value === 'string') return { el: 'bullet', text: obj.value }
+                // Skip unrecoverable objects
+                return null
+              }
+              return typeof item === 'number' ? String(item) : null
+            }).filter((item: unknown) => item !== null)
           : (slide.content ? [String(slide.content)] : [])
       }
 
