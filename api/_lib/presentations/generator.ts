@@ -134,13 +134,14 @@ function contentElementsToRows(
   theme: ThemeConfig
 ): { text: string; options: Record<string, unknown> }[] {
   return elements.map(el => {
+    // breakLine: true forces pptxgenjs to treat each element as a separate paragraph
     switch (el.el) {
       case 'heading':
         return {
           text: el.text,
           options: {
             fontSize: 28, fontFace: theme.titleFontFace, color: theme.titleColor,
-            bold: true, align: 'center' as const,
+            bold: true, align: 'center' as const, breakLine: true,
             paraSpaceBefore: 8, paraSpaceAfter: 10,
           },
         }
@@ -149,7 +150,7 @@ function contentElementsToRows(
           text: `  ${el.text}`,
           options: {
             fontSize: 22, fontFace: theme.fontFace, color: theme.textColor,
-            italic: true, paraSpaceAfter: 8,
+            italic: true, paraSpaceAfter: 8, breakLine: true,
             bullet: { code: '258E', color: theme.accentColor },
           },
         }
@@ -158,7 +159,7 @@ function contentElementsToRows(
           text: el.text,
           options: {
             fontSize: 20, fontFace: theme.fontFace, color: theme.textColor,
-            paraSpaceAfter: 8,
+            paraSpaceAfter: 8, breakLine: true,
           },
         }
       case 'highlight':
@@ -166,7 +167,7 @@ function contentElementsToRows(
           text: el.text,
           options: {
             fontSize: 22, fontFace: theme.fontFace, color: theme.accentColor,
-            bold: true, paraSpaceAfter: 8,
+            bold: true, paraSpaceAfter: 8, breakLine: true,
           },
         }
       case 'task':
@@ -174,7 +175,7 @@ function contentElementsToRows(
           text: `${el.number ?? ''}. ${el.text}`,
           options: {
             fontSize: 20, fontFace: theme.fontFace, color: theme.textColor,
-            paraSpaceAfter: 10,
+            paraSpaceAfter: 10, breakLine: true,
           },
         }
       case 'formula':
@@ -182,7 +183,7 @@ function contentElementsToRows(
           text: el.text,
           options: {
             fontSize: 26, fontFace: theme.titleFontFace, color: theme.accentColor,
-            bold: true, align: 'center' as const,
+            bold: true, align: 'center' as const, breakLine: true,
             paraSpaceBefore: 6, paraSpaceAfter: 10,
           },
         }
@@ -193,7 +194,7 @@ function contentElementsToRows(
           options: {
             fontSize: 22, fontFace: theme.fontFace, color: theme.textColor,
             bullet: { code: '2022', color: theme.accentColor },
-            paraSpaceAfter: 12,
+            paraSpaceAfter: 12, breakLine: true,
           },
         }
     }
