@@ -93,6 +93,18 @@ export interface FolderWithCount extends Folder {
 
 export type PresentationThemePreset = 'professional' | 'educational' | 'minimal' | 'scientific' | 'kids'
 
+export interface PresentationListItem {
+  id: string
+  title: string
+  subject: 'math' | 'algebra' | 'geometry' | 'russian'
+  grade: number
+  topic: string
+  themeType: 'preset' | 'custom'
+  themePreset?: PresentationThemePreset | null
+  slideCount: number
+  createdAt: string
+}
+
 export type ContentElementType = 'heading' | 'definition' | 'text' | 'bullet' | 'highlight' | 'task' | 'formula'
 
 export interface ContentElement {

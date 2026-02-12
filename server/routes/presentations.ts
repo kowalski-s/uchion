@@ -3,7 +3,7 @@ import type { Response } from 'express'
 import { z } from 'zod'
 import { db } from '../../db/index.js'
 import { users, presentations, subscriptions } from '../../db/schema.js'
-import { eq, sql, and, gt } from 'drizzle-orm'
+import { eq, sql, and, gt, desc, inArray } from 'drizzle-orm'
 import { getAIProvider, getClaudeProvider } from '../../api/_lib/ai-provider.js'
 import { generatePptx } from '../../api/_lib/presentations/generator.js'
 import { generatePresentationPdf } from '../../api/_lib/presentations/pdf-generator.js'
@@ -203,6 +203,18 @@ router.post('/generate', withAuth(async (req: AuthenticatedRequest, res: Respons
       }).returning({ id: presentations.id })
 
       dbId = inserted?.id || null
+
+      // Enforce 15-presentation limit per user: auto-delete oldest
+      const userPresentations = await db
+        .select({ id: presentations.id })
+        .from(presentations)
+        .where(eq(presentations.userId, userId))
+        .orderBy(desc(presentations.createdAt))
+
+      if (userPresentations.length > 15) {
+        const toDelete = userPresentations.slice(15).map(p => p.id)
+        await db.delete(presentations).where(inArray(presentations.id, toDelete))
+      }
     } catch (dbError) {
       console.error('[API] Failed to save presentation to database:', dbError)
     }
@@ -242,6 +254,99 @@ router.post('/generate', withAuth(async (req: AuthenticatedRequest, res: Respons
     sendEvent({ type: 'error', code, message: '\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0441\u0433\u0435\u043d\u0435\u0440\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u043f\u0440\u0435\u0437\u0435\u043d\u0442\u0430\u0446\u0438\u044e. \u041f\u043e\u043f\u0440\u043e\u0431\u0443\u0439\u0442\u0435 \u0435\u0449\u0451 \u0440\u0430\u0437.' })
     res.end()
   }
+}))
+
+// ==================== GET /api/presentations ====================
+// List user's presentations (without heavy pptxBase64 field)
+router.get('/', withAuth(async (req: AuthenticatedRequest, res: Response) => {
+  const items = await db
+    .select({
+      id: presentations.id,
+      title: presentations.title,
+      subject: presentations.subject,
+      grade: presentations.grade,
+      topic: presentations.topic,
+      themeType: presentations.themeType,
+      themePreset: presentations.themePreset,
+      slideCount: presentations.slideCount,
+      createdAt: presentations.createdAt,
+    })
+    .from(presentations)
+    .where(eq(presentations.userId, req.user.id))
+    .orderBy(desc(presentations.createdAt))
+    .limit(15)
+
+  res.json({
+    presentations: items.map(p => ({
+      ...p,
+      createdAt: p.createdAt.toISOString(),
+    })),
+  })
+}))
+
+// ==================== GET /api/presentations/:id ====================
+// Single presentation with full data (structure + pptxBase64)
+router.get('/:id', withAuth(async (req: AuthenticatedRequest, res: Response) => {
+  const { id } = req.params
+
+  const [presentation] = await db
+    .select()
+    .from(presentations)
+    .where(and(
+      eq(presentations.id, id),
+      eq(presentations.userId, req.user.id)
+    ))
+    .limit(1)
+
+  if (!presentation) {
+    return res.status(404).json({ error: 'Презентация не найдена' })
+  }
+
+  let structure = null
+  try {
+    structure = JSON.parse(presentation.structure)
+  } catch {
+    // Invalid JSON in DB
+  }
+
+  res.json({
+    presentation: {
+      id: presentation.id,
+      title: presentation.title,
+      subject: presentation.subject,
+      grade: presentation.grade,
+      topic: presentation.topic,
+      themeType: presentation.themeType,
+      themePreset: presentation.themePreset,
+      themeCustom: presentation.themeCustom,
+      slideCount: presentation.slideCount,
+      structure,
+      pptxBase64: presentation.pptxBase64 || '',
+      createdAt: presentation.createdAt.toISOString(),
+    },
+  })
+}))
+
+// ==================== DELETE /api/presentations/:id ====================
+router.delete('/:id', withAuth(async (req: AuthenticatedRequest, res: Response) => {
+  const { id } = req.params
+
+  const [existing] = await db
+    .select({ id: presentations.id })
+    .from(presentations)
+    .where(and(
+      eq(presentations.id, id),
+      eq(presentations.userId, req.user.id)
+    ))
+    .limit(1)
+
+  if (!existing) {
+    return res.status(404).json({ error: 'Презентация не найдена' })
+  }
+
+  await db.delete(presentations).where(eq(presentations.id, id))
+
+  res.json({ success: true })
 }))
 
 export default router

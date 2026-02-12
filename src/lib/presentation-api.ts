@@ -1,4 +1,10 @@
-import type { GeneratePresentationPayload, GeneratePresentationResponse } from '../../shared/types'
+import type {
+  GeneratePresentationPayload,
+  GeneratePresentationResponse,
+  PresentationListItem,
+  PresentationStructure,
+  PresentationThemePreset,
+} from '../../shared/types'
 
 export async function generatePresentation(
   payload: GeneratePresentationPayload,
@@ -63,4 +69,63 @@ export async function generatePresentation(
   }
 
   return finalResult
+}
+
+// ==================== PRESENTATIONS CRUD ====================
+
+export async function fetchPresentations(): Promise<PresentationListItem[]> {
+  const res = await fetch('/api/presentations', {
+    credentials: 'include',
+  })
+
+  if (!res.ok) {
+    if (res.status === 401) throw new Error('Unauthorized')
+    throw new Error('Failed to fetch presentations')
+  }
+
+  const data = await res.json()
+  return data.presentations
+}
+
+export interface PresentationDetail {
+  id: string
+  title: string
+  subject: 'math' | 'algebra' | 'geometry' | 'russian'
+  grade: number
+  topic: string
+  themeType: 'preset' | 'custom'
+  themePreset?: PresentationThemePreset | null
+  themeCustom?: string | null
+  slideCount: number
+  structure: PresentationStructure
+  pptxBase64: string
+  createdAt: string
+}
+
+export async function fetchPresentation(id: string): Promise<PresentationDetail> {
+  const res = await fetch(`/api/presentations/${id}`, {
+    credentials: 'include',
+  })
+
+  if (!res.ok) {
+    if (res.status === 401) throw new Error('Требуется авторизация')
+    if (res.status === 404) throw new Error('Презентация не найдена')
+    throw new Error('Ошибка загрузки презентации')
+  }
+
+  const data = await res.json()
+  return data.presentation
+}
+
+export async function deletePresentation(id: string): Promise<void> {
+  const res = await fetch(`/api/presentations/${id}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  })
+
+  if (!res.ok) {
+    if (res.status === 401) throw new Error('Unauthorized')
+    if (res.status === 404) throw new Error('Presentation not found')
+    throw new Error('Failed to delete presentation')
+  }
 }

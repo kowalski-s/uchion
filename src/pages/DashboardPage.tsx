@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../lib/auth'
-import { formatPlanName } from '../lib/dashboard-api'
+import { formatPlanName, formatSubjectName } from '../lib/dashboard-api'
+import { fetchPresentations, deletePresentation } from '../lib/presentation-api'
 import Header from '../components/Header'
 import WorksheetManager from '../components/WorksheetManager'
 import BuyGenerationsModal from '../components/BuyGenerationsModal'
+import type { PresentationListItem } from '../../shared/types'
 
 // Icon components (used in stats cards)
 
@@ -79,8 +82,34 @@ function getMaxGenerations(plan: string): number {
 
 export default function DashboardPage() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { user, status, signOut } = useAuth()
   const [showBuyModal, setShowBuyModal] = useState(false)
+  const [deletingPresentationId, setDeletingPresentationId] = useState<string | null>(null)
+
+  // Presentations
+  const { data: presentationsList = [], isLoading: presentationsLoading } = useQuery({
+    queryKey: ['presentations'],
+    queryFn: fetchPresentations,
+    enabled: status === 'authenticated',
+  })
+
+  const deletePresentationMutation = useMutation({
+    mutationFn: deletePresentation,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['presentations'] })
+      setDeletingPresentationId(null)
+    },
+  })
+
+  const handleDeletePresentation = (id: string) => {
+    if (deletingPresentationId === id) {
+      deletePresentationMutation.mutate(id)
+    } else {
+      setDeletingPresentationId(id)
+      setTimeout(() => setDeletingPresentationId(prev => prev === id ? null : prev), 3000)
+    }
+  }
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -192,18 +221,73 @@ export default function DashboardPage() {
         {/* Presentations Section */}
         <section className="mb-8">
           <div className="flex items-center gap-3 mb-4">
-            <span className="section-badge">0</span>
+            <span className="section-badge">{presentationsList.length}</span>
             <h2 className="text-lg font-bold text-slate-900">Презентации</h2>
-            <ArrowRightIcon className="w-5 h-5 text-slate-400" />
+            <Link to="/presentations/generate" className="ml-auto text-sm text-[#8C52FF] hover:text-[#7B3FEE] font-medium transition-colors flex items-center gap-1">
+              Создать
+              <ArrowRightIcon className="w-4 h-4" />
+            </Link>
           </div>
 
           <div className="glass-container p-6">
-            <div className="text-center py-4">
-              <div className="inline-flex items-center justify-center w-12 h-12 bg-slate-100 rounded-xl mb-3">
-                <PresentationIcon className="w-6 h-6 text-slate-400" />
+            {presentationsLoading ? (
+              <div className="flex justify-center py-4">
+                <div className="animate-spin rounded-full h-6 w-6 border-2 border-purple-200 border-t-[#8C52FF]"></div>
               </div>
-              <p className="text-slate-400 text-sm">Презентаций пока нет</p>
-            </div>
+            ) : presentationsList.length === 0 ? (
+              <div className="text-center py-4">
+                <div className="inline-flex items-center justify-center w-12 h-12 bg-slate-100 rounded-xl mb-3">
+                  <PresentationIcon className="w-6 h-6 text-slate-400" />
+                </div>
+                <p className="text-slate-400 text-sm mb-3">Презентаций пока нет</p>
+                <Link
+                  to="/presentations/generate"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#8C52FF] text-white text-sm font-medium hover:bg-[#7B3FEE] transition-colors"
+                >
+                  Создать первую
+                </Link>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {presentationsList.map((p) => (
+                  <div
+                    key={p.id}
+                    className="flex items-center gap-3 p-3 rounded-xl hover:bg-purple-50/50 transition-colors cursor-pointer group"
+                    onClick={() => navigate(`/presentations/${p.id}`)}
+                  >
+                    <div className="flex-shrink-0 p-2 bg-purple-100 rounded-lg">
+                      <PresentationIcon className="w-4 h-4 text-[#8C52FF]" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-slate-900 truncate">{p.title}</p>
+                      <p className="text-xs text-slate-500">
+                        {formatSubjectName(p.subject)}, {p.grade} кл.
+                        <span className="mx-1 text-slate-300">|</span>
+                        {p.slideCount} слайдов
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleDeletePresentation(p.id)
+                        }}
+                        className={`p-1.5 rounded-lg transition-colors ${
+                          deletingPresentationId === p.id
+                            ? 'bg-red-100 text-red-600'
+                            : 'hover:bg-red-50 text-slate-400 hover:text-red-500'
+                        }`}
+                        title={deletingPresentationId === p.id ? 'Нажмите ещё раз для удаления' : 'Удалить'}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </section>
 
