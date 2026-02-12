@@ -259,9 +259,24 @@ router.post('/generate', withAuth(async (req: AuthenticatedRequest, res: Respons
 // ==================== GET /api/presentations ====================
 // List user's presentations (without heavy pptxBase64 field)
 router.get('/', withAuth(async (req: AuthenticatedRequest, res: Response) => {
+  const { folderId, limit } = req.query
+
+  const conditions = [eq(presentations.userId, req.user.id)]
+
+  // Filter by folder
+  if (folderId === 'null' || folderId === '') {
+    // Root items (no folder)
+    conditions.push(sql`${presentations.folderId} IS NULL`)
+  } else if (typeof folderId === 'string' && folderId.length > 0) {
+    conditions.push(eq(presentations.folderId, folderId))
+  }
+
+  const queryLimit = typeof limit === 'string' ? Math.min(parseInt(limit, 10) || 1000, 1000) : 1000
+
   const items = await db
     .select({
       id: presentations.id,
+      folderId: presentations.folderId,
       title: presentations.title,
       subject: presentations.subject,
       grade: presentations.grade,
@@ -272,9 +287,9 @@ router.get('/', withAuth(async (req: AuthenticatedRequest, res: Response) => {
       createdAt: presentations.createdAt,
     })
     .from(presentations)
-    .where(eq(presentations.userId, req.user.id))
+    .where(and(...conditions))
     .orderBy(desc(presentations.createdAt))
-    .limit(15)
+    .limit(queryLimit)
 
   res.json({
     presentations: items.map(p => ({
@@ -325,6 +340,48 @@ router.get('/:id', withAuth(async (req: AuthenticatedRequest, res: Response) => 
       createdAt: presentation.createdAt.toISOString(),
     },
   })
+}))
+
+// ==================== PATCH /api/presentations/:id ====================
+// Update presentation title, folderId
+router.patch('/:id', withAuth(async (req: AuthenticatedRequest, res: Response) => {
+  const { id } = req.params
+
+  const UpdateSchema = z.object({
+    title: z.string().min(1).max(300).optional(),
+    folderId: z.string().uuid().nullable().optional(),
+  })
+
+  const parse = UpdateSchema.safeParse(req.body)
+  if (!parse.success) {
+    return res.status(400).json({ error: 'Invalid data' })
+  }
+
+  const [existing] = await db
+    .select({ id: presentations.id })
+    .from(presentations)
+    .where(and(
+      eq(presentations.id, id),
+      eq(presentations.userId, req.user.id)
+    ))
+    .limit(1)
+
+  if (!existing) {
+    return res.status(404).json({ error: 'Презентация не найдена' })
+  }
+
+  const updates: Record<string, unknown> = {}
+  if (parse.data.title !== undefined) updates.title = parse.data.title
+  if (parse.data.folderId !== undefined) updates.folderId = parse.data.folderId
+
+  if (Object.keys(updates).length > 0) {
+    await db
+      .update(presentations)
+      .set(updates)
+      .where(eq(presentations.id, id))
+  }
+
+  res.json({ success: true })
 }))
 
 // ==================== DELETE /api/presentations/:id ====================

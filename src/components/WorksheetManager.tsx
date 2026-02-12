@@ -210,10 +210,10 @@ export default function WorksheetManager() {
     enabled: status === 'authenticated',
   })
 
-  // Fetch only 5 recent worksheets for dashboard
+  // Fetch only 3 recent worksheets for dashboard
   const { data: worksheets, isLoading: isLoadingWorksheets } = useQuery({
     queryKey: ['worksheets', 'recent'],
-    queryFn: () => fetchWorksheets({ limit: 5 }),
+    queryFn: () => fetchWorksheets({ limit: 3 }),
     enabled: status === 'authenticated',
   })
 

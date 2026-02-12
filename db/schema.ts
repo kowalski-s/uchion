@@ -205,6 +205,7 @@ export const emailCodes = pgTable('email_codes', {
 export const presentations = pgTable('presentations', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  folderId: uuid('folder_id').references(() => folders.id, { onDelete: 'set null' }), // Optional folder
   title: varchar('title', { length: 300 }).notNull(),
   subject: subjectEnum('subject').notNull(),
   grade: integer('grade').notNull(),
@@ -218,6 +219,7 @@ export const presentations = pgTable('presentations', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
   userIdIdx: index('presentations_user_id_idx').on(table.userId),
+  folderIdIdx: index('presentations_folder_id_idx').on(table.folderId),
   subjectIdx: index('presentations_subject_idx').on(table.subject),
   createdAtIdx: index('presentations_created_at_idx').on(table.createdAt),
 }))
@@ -307,5 +309,9 @@ export const presentationsRelations = relations(presentations, ({ one }) => ({
   user: one(users, {
     fields: [presentations.userId],
     references: [users.id],
+  }),
+  folder: one(folders, {
+    fields: [presentations.folderId],
+    references: [folders.id],
   }),
 }))

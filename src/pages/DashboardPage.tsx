@@ -90,7 +90,7 @@ export default function DashboardPage() {
   // Presentations
   const { data: presentationsList = [], isLoading: presentationsLoading } = useQuery({
     queryKey: ['presentations'],
-    queryFn: fetchPresentations,
+    queryFn: () => fetchPresentations(),
     enabled: status === 'authenticated',
   })
 
@@ -222,7 +222,13 @@ export default function DashboardPage() {
         <section className="mb-8">
           <div className="flex items-center gap-3 mb-4">
             <span className="section-badge">{presentationsList.length}</span>
-            <h2 className="text-lg font-bold text-slate-900">Презентации</h2>
+            <Link
+              to="/presentations"
+              className="flex items-center gap-2 group"
+            >
+              <h2 className="text-lg font-bold text-slate-900 group-hover:text-[#8C52FF] transition-colors">Презентации</h2>
+              <ArrowRightIcon className="w-5 h-5 text-slate-400 group-hover:text-[#8C52FF] transition-colors" />
+            </Link>
             <Link to="/presentations/generate" className="ml-auto text-sm text-[#8C52FF] hover:text-[#7B3FEE] font-medium transition-colors flex items-center gap-1">
               Создать
               <ArrowRightIcon className="w-4 h-4" />
@@ -249,7 +255,7 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="space-y-2">
-                {presentationsList.map((p) => (
+                {presentationsList.slice(0, 3).map((p) => (
                   <div
                     key={p.id}
                     className="flex items-center gap-3 p-3 rounded-xl hover:bg-purple-50/50 transition-colors cursor-pointer group"

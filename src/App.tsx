@@ -9,6 +9,7 @@ import DashboardPage from './pages/DashboardPage'
 import WorksheetsListPage from './pages/WorksheetsListPage'
 import SavedWorksheetPage from './pages/SavedWorksheetPage'
 import SavedPresentationPage from './pages/SavedPresentationPage'
+import PresentationsListPage from './pages/PresentationsListPage'
 import PaymentSuccessPage from './pages/PaymentSuccessPage'
 import PaymentCancelPage from './pages/PaymentCancelPage'
 
@@ -42,6 +43,7 @@ export default function App() {
         <Route path="/worksheet/:sessionId" element={<WorksheetPage />} />
         <Route path="/worksheets" element={<WorksheetsListPage />} />
         <Route path="/worksheets/:id" element={<SavedWorksheetPage />} />
+        <Route path="/presentations" element={<PresentationsListPage />} />
         <Route path="/presentations/:id" element={<SavedPresentationPage />} />
 
         {/* Payment routes */}

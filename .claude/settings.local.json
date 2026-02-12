@@ -52,7 +52,10 @@
       "Bash(npm ls:*)",
       "Bash(wc:*)",
       "Bash(npm run db:push:*)",
-      "mcp__ide__getDiagnostics"
+      "mcp__ide__getDiagnostics",
+      "Bash(git rm:*)",
+      "Bash(node --import tsx:*)",
+      "Bash(git -C D:githubuchion status -u)"
     ]
   }
 }

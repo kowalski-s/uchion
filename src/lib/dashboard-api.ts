@@ -119,6 +119,7 @@ export async function duplicateWorksheet(id: string): Promise<WorksheetListItem>
 export interface FetchFoldersResponse {
   folders: FolderWithCount[]
   rootWorksheetCount: number
+  rootPresentationCount?: number
 }
 
 export async function fetchFolders(): Promise<FetchFoldersResponse> {

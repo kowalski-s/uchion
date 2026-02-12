@@ -3,7 +3,7 @@ import type { Response } from 'express'
 import { eq, and, isNull, asc, count } from 'drizzle-orm'
 import { z } from 'zod'
 import { db } from '../../db/index.js'
-import { folders, worksheets, subscriptions } from '../../db/schema.js'
+import { folders, worksheets, subscriptions, presentations } from '../../db/schema.js'
 import { withAuth, type AuthUser } from '../middleware/auth.js'
 import { ApiError } from '../middleware/error-handler.js'
 import { requireRateLimit } from '../middleware/rate-limit.js'
@@ -72,16 +72,31 @@ router.get('/', withAuth(async (req: AuthenticatedRequest, res: Response) => {
     countMap.set(key, (countMap.get(key) || 0) + 1)
   }
 
+  // Count presentations per folder
+  const presentationCounts = await db
+    .select({ folderId: presentations.folderId })
+    .from(presentations)
+    .where(eq(presentations.userId, user.id))
+
+  const presentationCountMap = new Map<string | null, number>()
+  for (const p of presentationCounts) {
+    const key = p.folderId
+    presentationCountMap.set(key, (presentationCountMap.get(key) || 0) + 1)
+  }
+
   const foldersWithCount = userFolders.map(folder => ({
     ...folder,
     worksheetCount: countMap.get(folder.id) || 0,
+    presentationCount: presentationCountMap.get(folder.id) || 0,
   }))
 
   const rootWorksheetCount = countMap.get(null) || 0
+  const rootPresentationCount = presentationCountMap.get(null) || 0
 
   return res.status(200).json({
     folders: foldersWithCount,
     rootWorksheetCount,
+    rootPresentationCount,
   })
 }))
 
@@ -376,6 +391,12 @@ router.delete('/:id', withAuth(async (req: AuthenticatedRequest, res: Response) 
       eq(worksheets.folderId, id),
       isNull(worksheets.deletedAt)
     ))
+
+  // Move presentations to root
+  await db
+    .update(presentations)
+    .set({ folderId: null })
+    .where(eq(presentations.folderId, id))
 
   // Move child folders to root
   await db

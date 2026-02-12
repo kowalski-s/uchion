@@ -73,8 +73,17 @@ export async function generatePresentation(
 
 // ==================== PRESENTATIONS CRUD ====================
 
-export async function fetchPresentations(): Promise<PresentationListItem[]> {
-  const res = await fetch('/api/presentations', {
+export async function fetchPresentations(options?: { folderId?: string | null; limit?: number }): Promise<PresentationListItem[]> {
+  const params = new URLSearchParams()
+  if (options?.folderId !== undefined) {
+    params.set('folderId', options.folderId === null ? 'null' : options.folderId)
+  }
+  if (options?.limit) {
+    params.set('limit', String(options.limit))
+  }
+
+  const query = params.toString()
+  const res = await fetch(`/api/presentations${query ? `?${query}` : ''}`, {
     credentials: 'include',
   })
 
@@ -85,6 +94,21 @@ export async function fetchPresentations(): Promise<PresentationListItem[]> {
 
   const data = await res.json()
   return data.presentations
+}
+
+export async function updatePresentation(id: string, data: { title?: string; folderId?: string | null }): Promise<void> {
+  const res = await fetch(`/api/presentations/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(data),
+  })
+
+  if (!res.ok) {
+    if (res.status === 401) throw new Error('Требуется авторизация')
+    if (res.status === 404) throw new Error('Презентация не найдена')
+    throw new Error('Не удалось обновить презентацию')
+  }
 }
 
 export interface PresentationDetail {

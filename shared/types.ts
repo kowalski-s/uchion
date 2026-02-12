@@ -87,6 +87,7 @@ export interface Folder {
 
 export interface FolderWithCount extends Folder {
   worksheetCount: number
+  presentationCount?: number
 }
 
 // ==================== PRESENTATIONS ====================
@@ -95,6 +96,7 @@ export type PresentationThemePreset = 'professional' | 'educational' | 'minimal'
 
 export interface PresentationListItem {
   id: string
+  folderId?: string | null
   title: string
   subject: 'math' | 'algebra' | 'geometry' | 'russian'
   grade: number
