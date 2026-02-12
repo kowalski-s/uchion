@@ -1,15 +1,18 @@
 import type { PresentationTemplateConfig, TemplateRegistry } from './types.js'
 import { minimalismTemplate } from './minimalism.js'
 import { kidsTemplate } from './kids.js'
+import { schoolTemplate } from './school.js'
 
 export { minimalismTemplate } from './minimalism.js'
 export { kidsTemplate } from './kids.js'
+export { schoolTemplate } from './school.js'
 export type { PresentationTemplateConfig, TemplateRegistry, SlideType } from './types.js'
 export { validatePresentation, GeneratedPresentationSchema } from './types.js'
 
 const templateRegistry: TemplateRegistry = {
   minimalism: minimalismTemplate,
   kids: kidsTemplate,
+  school: schoolTemplate,
 }
 
 export function getTemplate(id: string): PresentationTemplateConfig {

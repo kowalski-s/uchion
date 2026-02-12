@@ -12,7 +12,7 @@ export const paymentIntentStatusEnum = pgEnum('payment_intent_status', ['created
 export const subjectEnum = pgEnum('subject', ['math', 'algebra', 'geometry', 'russian'])
 export const difficultyEnum = pgEnum('difficulty', ['easy', 'medium', 'hard'])
 export const presentationThemeTypeEnum = pgEnum('presentation_theme_type', ['preset', 'custom'])
-export const presentationThemePresetEnum = pgEnum('presentation_theme_preset', ['professional', 'educational', 'minimal', 'scientific', 'kids'])
+export const presentationThemePresetEnum = pgEnum('presentation_theme_preset', ['professional', 'educational', 'minimal', 'scientific', 'kids', 'school'])
 
 // ==================== USERS TABLE ====================
 

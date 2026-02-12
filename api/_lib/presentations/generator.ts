@@ -2,6 +2,7 @@ import PptxGenJS from 'pptxgenjs'
 import type { PresentationStructure, PresentationSlide, PresentationThemePreset, ContentElement } from '../../../shared/types.js'
 import { generateMinimalismPptx } from './minimalism-generator.js'
 import { generateKidsPptx } from './kids-generator.js'
+import { generateSchoolPptx } from './school-generator.js'
 import { normalizeContent, getContentItemText } from './sanitize.js'
 
 // =============================================================================
@@ -63,6 +64,15 @@ const THEMES: Record<PresentationThemePreset, ThemeConfig> = {
     accentColor: '4ECDC4',
     fontFace: 'Arial',
     titleFontFace: 'Arial',
+  },
+  school: {
+    name: 'School',
+    backgroundColor: 'F5F0EA',
+    titleColor: '2D3436',
+    textColor: '2D3436',
+    accentColor: 'C9A96E',
+    fontFace: 'Arial',
+    titleFontFace: 'Georgia',
   },
 }
 
@@ -672,6 +682,9 @@ export async function generatePptx(
   }
   if (themePreset === 'kids') {
     return generateKidsPptx(structure)
+  }
+  if (themePreset === 'school') {
+    return generateSchoolPptx(structure)
   }
 
   const pres = new PptxGenJS()

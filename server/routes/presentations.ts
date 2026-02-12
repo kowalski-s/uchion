@@ -25,7 +25,7 @@ const InputSchema = z.object({
   grade: z.number().int().min(1).max(11),
   topic: z.string().min(3).max(200),
   themeType: z.enum(['preset', 'custom']),
-  themePreset: z.enum(['professional', 'educational', 'minimal', 'scientific', 'kids']).optional(),
+  themePreset: z.enum(['professional', 'educational', 'minimal', 'scientific', 'kids', 'school']).optional(),
   themeCustom: z.string().max(100).optional(),
   slideCount: z.union([z.literal(12), z.literal(18), z.literal(24)]).optional(),
 })

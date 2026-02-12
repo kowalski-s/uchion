@@ -91,7 +91,7 @@ export interface FolderWithCount extends Folder {
 
 // ==================== PRESENTATIONS ====================
 
-export type PresentationThemePreset = 'professional' | 'educational' | 'minimal' | 'scientific' | 'kids'
+export type PresentationThemePreset = 'professional' | 'educational' | 'minimal' | 'scientific' | 'kids' | 'school'
 
 export interface PresentationListItem {
   id: string

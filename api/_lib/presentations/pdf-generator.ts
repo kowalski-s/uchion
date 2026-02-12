@@ -56,6 +56,12 @@ const THEMES: Record<PresentationThemePreset, PdfTheme> = {
     text: hexToRgb('2D3436'),
     accent: hexToRgb('4ECDC4'),
   },
+  school: {
+    bg: hexToRgb('F5F0EA'),
+    title: hexToRgb('2D3436'),
+    text: hexToRgb('2D3436'),
+    accent: hexToRgb('C9A96E'),
+  },
 }
 
 // A4 landscape dimensions in points
