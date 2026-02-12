@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react'
-import type { PresentationStructure, PresentationSlide, PresentationThemePreset } from '../../../shared/types'
+import type { PresentationStructure, PresentationSlide, PresentationThemePreset, ContentElement } from '../../../shared/types'
 
 // =============================================================================
 // Theme colors (mirrors PPTX generator themes)
@@ -59,13 +59,143 @@ const THEMES: Record<PresentationThemePreset, ThemeColors> = {
 }
 
 // =============================================================================
+// Rich Content helpers
+// =============================================================================
+
+function getContentItemText(item: string | ContentElement): string {
+  if (typeof item === 'string') return item
+  return item.text || ''
+}
+
+function normalizeContent(content: (string | ContentElement)[]): ContentElement[] {
+  return content.map(item => {
+    if (typeof item === 'string') return { el: 'bullet' as const, text: item }
+    return item
+  })
+}
+
+/** Render rich content elements with semantic styling */
+function RichContent({ items, theme }: { items: ContentElement[]; theme: ThemeColors }) {
+  return (
+    <>
+      {items.map((item, i) => {
+        switch (item.el) {
+          case 'heading':
+            return (
+              <div key={i} className="text-xl font-bold text-center my-2" style={{ color: theme.title }}>
+                {item.text}
+              </div>
+            )
+          case 'definition':
+            return (
+              <div key={i} className="text-base my-1.5 pl-3 italic" style={{ color: theme.text, borderLeft: `3px solid ${theme.accent}` }}>
+                {item.text}
+              </div>
+            )
+          case 'text':
+            return (
+              <p key={i} className="text-base leading-relaxed my-1" style={{ color: theme.text }}>
+                {item.text}
+              </p>
+            )
+          case 'highlight':
+            return (
+              <div key={i} className="text-lg font-bold my-1.5" style={{ color: theme.accent }}>
+                {item.text}
+              </div>
+            )
+          case 'task':
+            return (
+              <div key={i} className="text-base leading-relaxed my-1.5 flex gap-1" style={{ color: theme.text }}>
+                <span className="font-bold flex-shrink-0">{item.number}.</span>
+                <span>{item.text}</span>
+              </div>
+            )
+          case 'formula':
+            return (
+              <div key={i} className="text-xl font-bold text-center my-2" style={{ color: theme.accent }}>
+                {item.text}
+              </div>
+            )
+          case 'bullet':
+          default:
+            return (
+              <div key={i} className="flex items-start gap-3 text-lg leading-relaxed">
+                <span className="mt-1.5 flex-shrink-0 w-2.5 h-2.5 rounded-full" style={{ background: theme.accent }} />
+                <span style={{ color: theme.text }}>{item.text}</span>
+              </div>
+            )
+        }
+      })}
+    </>
+  )
+}
+
+/** Rich content for minimalism/kids themes (smaller sizing) */
+function RichContentCompact({ items, theme }: { items: ContentElement[]; theme: ThemeColors }) {
+  return (
+    <>
+      {items.map((item, i) => {
+        switch (item.el) {
+          case 'heading':
+            return (
+              <div key={i} className="text-lg font-bold text-center my-1.5" style={{ color: theme.title, fontFamily: 'Georgia, serif' }}>
+                {item.text}
+              </div>
+            )
+          case 'definition':
+            return (
+              <div key={i} className="text-sm my-1 pl-2.5 italic" style={{ color: theme.text, borderLeft: `3px solid ${theme.accent}` }}>
+                {item.text}
+              </div>
+            )
+          case 'text':
+            return (
+              <p key={i} className="text-sm leading-relaxed my-0.5" style={{ color: theme.text }}>
+                {item.text}
+              </p>
+            )
+          case 'highlight':
+            return (
+              <div key={i} className="text-sm font-bold my-1" style={{ color: theme.accent }}>
+                {item.text}
+              </div>
+            )
+          case 'task':
+            return (
+              <div key={i} className="text-sm leading-relaxed my-1 flex gap-1" style={{ color: theme.text }}>
+                <span className="font-bold flex-shrink-0">{item.number}.</span>
+                <span>{item.text}</span>
+              </div>
+            )
+          case 'formula':
+            return (
+              <div key={i} className="text-base font-bold text-center my-1.5" style={{ color: theme.accent, fontFamily: 'Georgia, serif' }}>
+                {item.text}
+              </div>
+            )
+          case 'bullet':
+          default:
+            return (
+              <li key={i} className="flex items-start gap-3 text-sm leading-relaxed">
+                <span className="mt-1 flex-shrink-0 w-2 h-2 rounded-full" style={{ background: theme.accent }} />
+                <span style={{ color: theme.text }}>{item.text}</span>
+              </li>
+            )
+        }
+      })}
+    </>
+  )
+}
+
+// =============================================================================
 // Minimalism slide renderers
 // =============================================================================
 
 function MinTitleSlide({ slide, theme }: { slide: PresentationSlide; theme: ThemeColors }) {
-  const category = slide.content[0] || ''
-  const subtitle = slide.content[1] || ''
-  const footer = slide.content[2] || ''
+  const category = getContentItemText(slide.content[0] || '')
+  const subtitle = getContentItemText(slide.content[1] || '')
+  const footer = getContentItemText(slide.content[2] || '')
   return (
     <div className="relative flex h-full" style={{ background: theme.dark }}>
       {/* Left content */}
@@ -108,12 +238,7 @@ function MinContentSlide({ slide, theme, index, total }: { slide: PresentationSl
       </h3>
       <div className="w-20 h-0.5 mt-2 mb-4" style={{ background: theme.accent }} />
       <ul className="space-y-2.5 flex-1 overflow-hidden">
-        {slide.content.map((item, i) => (
-          <li key={i} className="flex items-start gap-3 text-sm leading-relaxed">
-            <span className="mt-1 flex-shrink-0 w-2 h-2 rounded-full" style={{ background: theme.accent }} />
-            <span style={{ color: theme.text }}>{item}</span>
-          </li>
-        ))}
+        <RichContentCompact items={normalizeContent(slide.content)} theme={theme} />
       </ul>
     </div>
   )
@@ -136,7 +261,7 @@ function MinTwoColumnSlide({ slide, theme, index, total }: { slide: Presentation
           {slide.title}
         </h3>
         <span className="text-[10px] mt-auto" style={{ color: theme.muted }}>
-          {slide.content[0] || ''}
+          {getContentItemText(slide.content[0] || '')}
         </span>
       </div>
       {/* Right panel with cards */}
@@ -147,7 +272,7 @@ function MinTwoColumnSlide({ slide, theme, index, total }: { slide: Presentation
           </div>
         )) : slide.content.slice(1).map((item, i) => (
           <div key={i} className="flex items-center rounded-sm px-3 py-2.5" style={{ background: '#FFFFFF', borderLeft: `3px solid ${theme.accent}` }}>
-            <span className="text-sm" style={{ color: theme.text }}>{item}</span>
+            <span className="text-sm" style={{ color: theme.text }}>{getContentItemText(item)}</span>
           </div>
         ))}
       </div>
@@ -157,9 +282,9 @@ function MinTwoColumnSlide({ slide, theme, index, total }: { slide: Presentation
 
 function MinFormulaSlide({ slide, theme, index, total }: { slide: PresentationSlide; theme: ThemeColors; index: number; total: number }) {
   const sectionNum = getSectionNum(index, total)
-  const formula = slide.content[0] || ''
-  const description = slide.content[1] || ''
-  const legendItems = slide.content.slice(2)
+  const formula = getContentItemText(slide.content[0] || '')
+  const description = getContentItemText(slide.content[1] || '')
+  const legendItems = slide.content.slice(2).map(getContentItemText)
 
   return (
     <div className="flex flex-col h-full px-10 pt-7" style={{ background: '#FFFFFF' }}>
@@ -205,12 +330,7 @@ function MinExampleSlide({ slide, theme, index, total }: { slide: PresentationSl
       {/* Card with accent top border */}
       <div className="mt-4 flex-1 rounded-sm overflow-hidden" style={{ background: '#FFFFFF', borderTop: `3px solid ${theme.accent}` }}>
         <div className="p-5 space-y-2">
-          {slide.content.map((item, i) => (
-            <p key={i} className={`text-sm leading-relaxed ${i === 0 ? 'font-semibold' : ''}`}
-              style={{ color: i === 0 ? theme.title : theme.text }}>
-              {item}
-            </p>
-          ))}
+          <RichContentCompact items={normalizeContent(slide.content)} theme={theme} />
         </div>
       </div>
     </div>
@@ -229,9 +349,7 @@ function MinPracticeSlide({ slide, theme, index, total }: { slide: PresentationS
       </h3>
       <div className="w-full h-0.5 mt-2 mb-4" style={{ background: theme.accent }} />
       <div className="space-y-3 flex-1 overflow-hidden">
-        {slide.content.map((item, i) => (
-          <p key={i} className="text-sm leading-relaxed" style={{ color: theme.text }}>{item}</p>
-        ))}
+        <RichContentCompact items={normalizeContent(slide.content)} theme={theme} />
       </div>
     </div>
   )
@@ -296,7 +414,7 @@ function MinConclusionSlide({ slide, theme }: { slide: PresentationSlide; theme:
         {slide.content.length > 0 && (
           <div className="mt-4 pl-4 space-y-0.5">
             {slide.content.map((line, i) => (
-              <p key={i} className="text-xs" style={{ color: theme.muted }}>{line}</p>
+              <p key={i} className="text-xs" style={{ color: theme.muted }}>{getContentItemText(line)}</p>
             ))}
           </div>
         )}
@@ -310,13 +428,13 @@ function MinConclusionSlide({ slide, theme }: { slide: PresentationSlide; theme:
   )
 }
 
-function MinBulletList({ items, theme }: { items: string[]; theme: ThemeColors }) {
+function MinBulletList({ items, theme }: { items: (string | ContentElement)[]; theme: ThemeColors }) {
   return (
     <ul className="space-y-2.5 flex-1 overflow-hidden">
       {items.map((item, i) => (
         <li key={i} className="flex items-start gap-3 text-sm leading-relaxed">
           <span className="mt-1 flex-shrink-0 w-2 h-2 rounded-full" style={{ background: theme.accent }} />
-          <span style={{ color: theme.text }}>{item}</span>
+          <span style={{ color: theme.text }}>{getContentItemText(item)}</span>
         </li>
       ))}
     </ul>
@@ -348,9 +466,9 @@ function KidsDecoCircles() {
 }
 
 function KidsTitleSlide({ slide, theme }: { slide: PresentationSlide; theme: ThemeColors }) {
-  const category = slide.content[0] || ''
-  const subtitle = slide.content[1] || ''
-  const footer = slide.content[2] || ''
+  const category = getContentItemText(slide.content[0] || '')
+  const subtitle = getContentItemText(slide.content[1] || '')
+  const footer = getContentItemText(slide.content[2] || '')
   return (
     <div className="relative flex flex-col items-center justify-center h-full px-10" style={{ background: theme.bg }}>
       <KidsDecoCircles />
@@ -396,12 +514,7 @@ function KidsContentSlide({ slide, theme, index, total }: { slide: PresentationS
       {/* White card */}
       <div className="bg-white rounded-xl shadow-sm p-5 flex-1 overflow-hidden">
         <ul className="space-y-2.5">
-          {slide.content.map((item, i) => (
-            <li key={i} className="flex items-start gap-3 text-sm leading-relaxed">
-              <span className="mt-1 flex-shrink-0 w-2 h-2 rounded-full" style={{ background: '#4ECDC4' }} />
-              <span style={{ color: theme.text }}>{item}</span>
-            </li>
-          ))}
+          <RichContentCompact items={normalizeContent(slide.content)} theme={theme} />
         </ul>
       </div>
     </div>
@@ -426,7 +539,7 @@ function KidsTwoColumnSlide({ slide, theme, index, total }: { slide: Presentatio
           {slide.title}
         </h3>
         <span className="text-[10px] mt-auto text-white/60">
-          {slide.content[0] || ''}
+          {getContentItemText(slide.content[0] || '')}
         </span>
       </div>
       {/* Right side cards */}
@@ -439,7 +552,7 @@ function KidsTwoColumnSlide({ slide, theme, index, total }: { slide: Presentatio
         )) : slide.content.slice(1).map((item, i) => (
           <div key={i} className="bg-white rounded-lg px-3 py-2 shadow-sm text-sm"
             style={{ borderLeft: `3px solid ${KIDS_CARD_COLORS[i % KIDS_CARD_COLORS.length]}`, color: theme.text }}>
-            {item}
+            {getContentItemText(item)}
           </div>
         ))}
       </div>
@@ -449,9 +562,9 @@ function KidsTwoColumnSlide({ slide, theme, index, total }: { slide: Presentatio
 
 function KidsFormulaSlide({ slide, theme, index, total }: { slide: PresentationSlide; theme: ThemeColors; index: number; total: number }) {
   const sectionNum = getSectionNum(index, total)
-  const formula = slide.content[0] || ''
-  const description = slide.content[1] || ''
-  const legendItems = slide.content.slice(2)
+  const formula = getContentItemText(slide.content[0] || '')
+  const description = getContentItemText(slide.content[1] || '')
+  const legendItems = slide.content.slice(2).map(getContentItemText)
 
   return (
     <div className="relative flex flex-col h-full px-10 pt-7" style={{ background: theme.bg }}>
@@ -499,12 +612,7 @@ function KidsExampleSlide({ slide, theme, index, total }: { slide: PresentationS
       </h3>
       <div className="mt-4 flex-1 bg-white rounded-xl shadow-sm overflow-hidden" style={{ borderTop: '3px solid #FF6B8A' }}>
         <div className="p-5 space-y-2">
-          {slide.content.map((item, i) => (
-            <p key={i} className={`text-sm leading-relaxed ${i === 0 ? 'font-semibold' : ''}`}
-              style={{ color: theme.text }}>
-              {item}
-            </p>
-          ))}
+          <RichContentCompact items={normalizeContent(slide.content)} theme={theme} />
         </div>
       </div>
     </div>
@@ -525,9 +633,7 @@ function KidsPracticeSlide({ slide, theme, index, total }: { slide: Presentation
       <div className="w-full h-0.5 mt-2 mb-3" style={{ background: '#4ECDC4' }} />
       <div className="bg-white rounded-xl shadow-sm p-5 flex-1 overflow-hidden" style={{ borderLeft: '3px solid #A78BFA' }}>
         <div className="space-y-3">
-          {slide.content.map((item, i) => (
-            <p key={i} className="text-sm leading-relaxed" style={{ color: theme.text }}>{item}</p>
-          ))}
+          <RichContentCompact items={normalizeContent(slide.content)} theme={theme} />
         </div>
       </div>
     </div>
@@ -593,7 +699,7 @@ function KidsConclusionSlide({ slide, theme }: { slide: PresentationSlide; theme
         {slide.content.length > 0 && (
           <div className="mt-4 space-y-0.5">
             {slide.content.map((line, i) => (
-              <p key={i} className="text-xs" style={{ color: theme.muted }}>{line}</p>
+              <p key={i} className="text-xs" style={{ color: theme.muted }}>{getContentItemText(line)}</p>
             ))}
           </div>
         )}
@@ -608,13 +714,13 @@ function KidsConclusionSlide({ slide, theme }: { slide: PresentationSlide; theme
   )
 }
 
-function KidsBulletList({ items, theme }: { items: string[]; theme: ThemeColors }) {
+function KidsBulletList({ items, theme }: { items: (string | ContentElement)[]; theme: ThemeColors }) {
   return (
     <ul className="space-y-2.5 flex-1 overflow-hidden">
       {items.map((item, i) => (
         <li key={i} className="flex items-start gap-3 text-sm leading-relaxed">
           <span className="mt-1 flex-shrink-0 w-2 h-2 rounded-full" style={{ background: '#4ECDC4' }} />
-          <span style={{ color: theme.text }}>{item}</span>
+          <span style={{ color: theme.text }}>{getContentItemText(item)}</span>
         </li>
       ))}
     </ul>
@@ -636,7 +742,7 @@ function TitleSlide({ slide, theme }: { slide: PresentationSlide; theme: ThemeCo
       </h2>
       {slide.content.length > 0 && (
         <p className="text-lg text-center opacity-80 max-w-lg" style={{ color: theme.text }}>
-          {slide.content.join(' ')}
+          {slide.content.map(getContentItemText).join(' ')}
         </p>
       )}
     </div>
@@ -648,14 +754,9 @@ function ContentSlide({ slide, theme }: { slide: PresentationSlide; theme: Theme
     <div className="flex flex-col h-full px-10 pt-8" style={{ background: theme.bg }}>
       <SlideHeader title={slide.title} theme={theme} />
       <div className="mt-5 bg-gray-50 rounded-xl p-5 flex-1 overflow-hidden">
-        <ul className="space-y-3">
-          {slide.content.map((item, i) => (
-            <li key={i} className="flex items-start gap-3 text-lg leading-relaxed">
-              <span className="mt-1.5 flex-shrink-0 w-2.5 h-2.5 rounded-full" style={{ background: theme.accent }} />
-              <span style={{ color: theme.text }}>{item}</span>
-            </li>
-          ))}
-        </ul>
+        <div className="space-y-3">
+          <RichContent items={normalizeContent(slide.content)} theme={theme} />
+        </div>
       </div>
     </div>
   )
@@ -732,20 +833,15 @@ function ExampleSlide({ slide, theme }: { slide: PresentationSlide; theme: Theme
     <div className="flex flex-col h-full px-10 pt-8" style={{ background: theme.bg }}>
       <SlideHeader title={slide.title} theme={theme} />
       <div className="mt-5 rounded-xl p-6 flex-1 overflow-hidden" style={{ background: theme.accentLight, borderTop: `3px solid ${theme.accent}` }}>
-        {slide.content.map((item, i) => (
-          <p key={i} className={`leading-relaxed mb-2 ${i === 0 ? 'text-lg font-bold' : 'text-base'}`}
-            style={{ color: i === 0 ? theme.title : theme.text }}>
-            {item}
-          </p>
-        ))}
+        <RichContent items={normalizeContent(slide.content)} theme={theme} />
       </div>
     </div>
   )
 }
 
 function FormulaSlide({ slide, theme }: { slide: PresentationSlide; theme: ThemeColors }) {
-  const formula = slide.content[0] || ''
-  const explanation = slide.content.slice(1)
+  const formula = getContentItemText(slide.content[0] || '')
+  const explanation = slide.content.slice(1).map(getContentItemText)
   return (
     <div className="flex flex-col h-full px-10 pt-8" style={{ background: theme.bg }}>
       <SlideHeader title={slide.title} theme={theme} />
@@ -764,7 +860,7 @@ function FormulaSlide({ slide, theme }: { slide: PresentationSlide; theme: Theme
 }
 
 function DiagramSlide({ slide, theme }: { slide: PresentationSlide; theme: ThemeColors }) {
-  const items = slide.content.slice(0, 6)
+  const items = slide.content.slice(0, 6).map(getContentItemText)
   return (
     <div className="flex flex-col h-full px-10 pt-8" style={{ background: theme.bg }}>
       <SlideHeader title={slide.title} theme={theme} />
@@ -828,9 +924,7 @@ function PracticeSlide({ slide, theme }: { slide: PresentationSlide; theme: Them
       <div className="w-full h-px mt-2" style={{ background: theme.accent }} />
       <div className="mt-5 bg-gray-50 rounded-xl p-5 flex-1 overflow-hidden" style={{ borderLeft: `3px solid ${theme.accent}` }}>
         <div className="space-y-3">
-          {slide.content.map((item, i) => (
-            <p key={i} className="text-lg leading-relaxed pl-3" style={{ color: theme.text }}>{item}</p>
-          ))}
+          <RichContent items={normalizeContent(slide.content)} theme={theme} />
         </div>
       </div>
     </div>
@@ -838,16 +932,21 @@ function PracticeSlide({ slide, theme }: { slide: PresentationSlide; theme: Them
 }
 
 function ConclusionSlide({ slide, theme }: { slide: PresentationSlide; theme: ThemeColors }) {
+  const elements = normalizeContent(slide.content)
   return (
     <div className="flex flex-col h-full px-10 pt-10" style={{ background: theme.bg }}>
       <div className="absolute top-0 left-0 right-0 h-3" style={{ background: theme.accent }} />
       <h3 className="text-3xl font-bold text-center mb-6" style={{ color: theme.title, fontFamily: 'Georgia, serif' }}>{slide.title}</h3>
       <div className="space-y-3 flex-1 overflow-hidden">
-        {slide.content.map((item, i) => (
-          <div key={i} className="flex items-start gap-3 text-lg leading-relaxed">
-            <span className="flex-shrink-0 mt-0.5 text-lg" style={{ color: theme.accent }}>&#10003;</span>
-            <span style={{ color: theme.text }}>{item}</span>
-          </div>
+        {elements.map((el, i) => (
+          el.el === 'bullet' ? (
+            <div key={i} className="flex items-start gap-3 text-lg leading-relaxed">
+              <span className="flex-shrink-0 mt-0.5 text-lg" style={{ color: theme.accent }}>&#10003;</span>
+              <span style={{ color: theme.text }}>{el.text}</span>
+            </div>
+          ) : (
+            <RichContent key={i} items={[el]} theme={theme} />
+          )
         ))}
       </div>
     </div>
@@ -868,13 +967,13 @@ function SlideHeader({ title, theme }: { title: string; theme: ThemeColors }) {
   )
 }
 
-function BulletList({ items, theme }: { items: string[]; theme: ThemeColors }) {
+function BulletList({ items, theme }: { items: (string | ContentElement)[]; theme: ThemeColors }) {
   return (
     <ul className="mt-5 space-y-3 flex-1 overflow-hidden">
       {items.map((item, i) => (
         <li key={i} className="flex items-start gap-3 text-lg leading-relaxed">
           <span className="mt-1.5 flex-shrink-0 w-2.5 h-2.5 rounded-full" style={{ background: theme.accent }} />
-          <span style={{ color: theme.text }}>{item}</span>
+          <span style={{ color: theme.text }}>{getContentItemText(item)}</span>
         </li>
       ))}
     </ul>

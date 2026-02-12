@@ -1,5 +1,6 @@
 import PptxGenJS from 'pptxgenjs'
-import type { PresentationStructure, PresentationSlide } from '../../../shared/types.js'
+import type { PresentationStructure, PresentationSlide, ContentElement } from '../../../shared/types.js'
+import { normalizeContent, getContentItemText } from './sanitize.js'
 
 // =============================================================================
 // Minimalism Theme — Warm dark+beige style
@@ -36,6 +37,80 @@ function addMinimalismFooter(
   })
 }
 
+// =============================================================================
+// Rich Content → PptxGenJS text rows (minimalism sizing)
+// =============================================================================
+
+function contentElementsToRows(
+  elements: ContentElement[]
+): { text: string; options: Record<string, unknown> }[] {
+  return elements.map(el => {
+    switch (el.el) {
+      case 'heading':
+        return {
+          text: el.text,
+          options: {
+            fontSize: 24, fontFace: HEADING_FONT, color: COLORS.primary,
+            bold: true, align: 'center' as const,
+            paraSpaceBefore: 6, paraSpaceAfter: 8,
+          },
+        }
+      case 'definition':
+        return {
+          text: `  ${el.text}`,
+          options: {
+            fontSize: 18, fontFace: BODY_FONT, color: COLORS.text,
+            italic: true, paraSpaceAfter: 6,
+            bullet: { code: '258E', color: COLORS.accent },
+          },
+        }
+      case 'text':
+        return {
+          text: el.text,
+          options: {
+            fontSize: 16, fontFace: BODY_FONT, color: COLORS.text,
+            paraSpaceAfter: 6,
+          },
+        }
+      case 'highlight':
+        return {
+          text: el.text,
+          options: {
+            fontSize: 18, fontFace: BODY_FONT, color: COLORS.accent,
+            bold: true, paraSpaceAfter: 6,
+          },
+        }
+      case 'task':
+        return {
+          text: `${el.number ?? ''}. ${el.text}`,
+          options: {
+            fontSize: 16, fontFace: BODY_FONT, color: COLORS.text,
+            paraSpaceAfter: 8,
+          },
+        }
+      case 'formula':
+        return {
+          text: el.text,
+          options: {
+            fontSize: 22, fontFace: HEADING_FONT, color: COLORS.accent,
+            bold: true, align: 'center' as const,
+            paraSpaceBefore: 4, paraSpaceAfter: 8,
+          },
+        }
+      case 'bullet':
+      default:
+        return {
+          text: el.text,
+          options: {
+            fontSize: 18, fontFace: BODY_FONT, color: COLORS.text,
+            bullet: { code: '2022' as const, color: COLORS.accent },
+            paraSpaceAfter: 8,
+          },
+        }
+    }
+  })
+}
+
 // --- Title Slide ---
 function addTitleSlide(
   pres: PptxGenJS,
@@ -53,7 +128,7 @@ function addTitleSlide(
   })
 
   // Category label (from first content item or title prefix)
-  const category = slide.content[0] || ''
+  const category = getContentItemText(slide.content[0] || '')
   if (category) {
     s.addText(category.toUpperCase(), {
       x: 1.1, y: 0.8, w: 5, h: 0.4,
@@ -70,7 +145,7 @@ function addTitleSlide(
   })
 
   // Subtitle (second content item)
-  const subtitle = slide.content[1] || ''
+  const subtitle = getContentItemText(slide.content[1] || '')
   if (subtitle) {
     s.addText(subtitle, {
       x: 1.1, y: 3.5, w: 5, h: 0.5,
@@ -79,7 +154,7 @@ function addTitleSlide(
   }
 
   // Footer info (third content item)
-  const footer = slide.content[2] || ''
+  const footer = getContentItemText(slide.content[2] || '')
   if (footer) {
     s.addText(footer, {
       x: 1.1, y: 4.8, w: 5, h: 0.4,
@@ -131,17 +206,10 @@ function addContentSlide(
     fill: { color: COLORS.accent },
   })
 
-  // Bullet items
+  // Content items
   if (slide.content.length > 0) {
-    const bulletRows = slide.content.map((text) => ({
-      text,
-      options: {
-        fontSize: 18, fontFace: BODY_FONT, color: COLORS.text,
-        bullet: { code: '2022' as const, color: COLORS.accent },
-        paraSpaceAfter: 8,
-      },
-    }))
-    s.addText(bulletRows, {
+    const rows = contentElementsToRows(normalizeContent(slide.content))
+    s.addText(rows, {
       x: 0.9, y: sectionNum ? 1.9 : 1.5, w: 8.4, h: 4.5,
       valign: 'top' as const, lineSpacingMultiple: 1.25,
     })
@@ -212,8 +280,8 @@ function addTwoColumnSlide(
     }
   } else if (slide.content.length > 0) {
     // Fallback: bullet points on right
-    const rows = slide.content.map((text) => ({
-      text,
+    const rows = slide.content.map((item) => ({
+      text: getContentItemText(item),
       options: {
         fontSize: 14, fontFace: BODY_FONT, color: COLORS.text,
         bullet: { code: '2022' as const, color: COLORS.accent },
@@ -312,7 +380,7 @@ function addFormulaSlide(
   })
 
   // Formula box (beige background)
-  const formula = slide.content[0] || ''
+  const formula = getContentItemText(slide.content[0] || '')
   s.addShape(pres.ShapeType.rect, {
     x: 0.7, y: 1.9, w: 8.6, h: 2.2,
     fill: { color: COLORS.lightGray },
@@ -325,7 +393,7 @@ function addFormulaSlide(
   })
 
   // Description under formula
-  const description = slide.content[1] || ''
+  const description = getContentItemText(slide.content[1] || '')
   if (description) {
     s.addText(description, {
       x: 0.7, y: 3.3, w: 8.6, h: 0.5,
@@ -335,7 +403,7 @@ function addFormulaSlide(
   }
 
   // Legend items (remaining content as symbol-explanation pairs)
-  const legendItems = slide.content.slice(2)
+  const legendItems = slide.content.slice(2).map(getContentItemText)
   if (legendItems.length > 0) {
     const itemWidth = 8.6 / Math.max(legendItems.length, 1)
     let fx = 0.7
@@ -391,16 +459,7 @@ function addExampleSlide(
   })
 
   if (slide.content.length > 0) {
-    const rows = slide.content.map((text, idx) => ({
-      text,
-      options: {
-        fontSize: idx === 0 ? 18 : 15,
-        fontFace: BODY_FONT,
-        color: idx === 0 ? COLORS.primary : COLORS.text,
-        bold: idx === 0,
-        paraSpaceAfter: 8,
-      },
-    }))
+    const rows = contentElementsToRows(normalizeContent(slide.content))
     s.addText(rows, {
       x: 1.0, y: 1.9, w: 8.0, h: 4.2,
       valign: 'top' as const, lineSpacingMultiple: 1.3,
@@ -441,13 +500,7 @@ function addPracticeSlide(
 
   // Task items
   if (slide.content.length > 0) {
-    const rows = slide.content.map((text) => ({
-      text,
-      options: {
-        fontSize: 18, fontFace: BODY_FONT, color: COLORS.text,
-        paraSpaceAfter: 10,
-      },
-    }))
+    const rows = contentElementsToRows(normalizeContent(slide.content))
     s.addText(rows, {
       x: 0.9, y: sectionNum ? 1.8 : 1.5, w: 8.2, h: 4.8,
       valign: 'top' as const, lineSpacingMultiple: 1.3,
@@ -481,7 +534,7 @@ function addDiagramSlide(
   })
 
   // Render items as boxes in grid
-  const items = slide.content.slice(0, 6)
+  const items = slide.content.slice(0, 6).map(getContentItemText)
   const cols = items.length <= 3 ? items.length : Math.ceil(items.length / 2)
   const rows = items.length <= 3 ? 1 : 2
   const boxW = 3.0
@@ -592,7 +645,7 @@ function addEndSlide(
 
   // Contact info / summary
   if (slide.content.length > 0) {
-    s.addText(slide.content.join('\n'), {
+    s.addText(slide.content.map(getContentItemText).join('\n'), {
       x: 1.1, y: 3.5, w: 4, h: 1,
       fontSize: 12, fontFace: BODY_FONT, color: COLORS.muted,
     })

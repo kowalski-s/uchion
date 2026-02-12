@@ -93,10 +93,18 @@ export interface FolderWithCount extends Folder {
 
 export type PresentationThemePreset = 'professional' | 'educational' | 'minimal' | 'scientific' | 'kids'
 
+export type ContentElementType = 'heading' | 'definition' | 'text' | 'bullet' | 'highlight' | 'task' | 'formula'
+
+export interface ContentElement {
+  el: ContentElementType
+  text: string
+  number?: number  // for task: task number
+}
+
 export interface PresentationSlide {
   type: 'title' | 'content' | 'twoColumn' | 'table' | 'example' | 'formula' | 'diagram' | 'chart' | 'practice' | 'conclusion'
   title: string
-  content: string[] // bullet points or text lines
+  content: (string | ContentElement)[]
   tableData?: { headers: string[]; rows: string[][] }
   leftColumn?: string[]
   rightColumn?: string[]

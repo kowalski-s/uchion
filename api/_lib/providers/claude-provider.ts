@@ -56,7 +56,7 @@ export class ClaudeProvider {
     {
       "type": "тип слайда",
       "title": "Заголовок",
-      "content": ["текст", "текст"],
+      "content": [элементы],
       // опционально для таблиц:
       "tableData": {"headers": [...], "rows": [[...], ...]},
       // опционально для двух колонок:
@@ -64,6 +64,18 @@ export class ClaudeProvider {
     }
   ]
 }
+
+Поле "content" — массив элементов. Каждый элемент либо строка (обычный пункт), либо объект с полем "el":
+- {"el": "heading", "text": "..."} — ключевое понятие/подзаголовок (крупный шрифт, по центру)
+- {"el": "definition", "text": "..."} — определение/правило (средний шрифт, рамка с акцентом)
+- {"el": "text", "text": "..."} — обычный текст (без маркера)
+- {"el": "bullet", "text": "..."} — пункт списка (с маркером)
+- {"el": "highlight", "text": "..."} — важная мысль (акцентный цвет)
+- {"el": "task", "text": "...", "number": 1} — задание с номером (для practice слайдов)
+- {"el": "formula", "text": "..."} — формула внутри слайда
+
+Для content-слайдов начинай с heading (ключевое понятие темы), затем definition (если есть определение), потом bullet/text для деталей.
+Для practice-слайдов используй task с номерами.
 
 Типы слайдов (выбирай подходящие):
 - title — титульный
@@ -153,7 +165,11 @@ export class ClaudeProvider {
         // Ensure title and content exist
         slide.title = slide.title || ''
         slide.content = Array.isArray(slide.content)
-          ? slide.content.map(String)
+          ? slide.content.map((item: unknown) => {
+              if (typeof item === 'string') return item
+              if (item && typeof item === 'object' && 'el' in item && 'text' in item) return item
+              return String(item)
+            })
           : (slide.content ? [String(slide.content)] : [])
       }
 

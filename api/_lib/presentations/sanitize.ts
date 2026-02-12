@@ -1,4 +1,46 @@
-import type { PresentationStructure, PresentationSlide } from '../../../shared/types.js'
+import type { PresentationStructure, PresentationSlide, ContentElement, ContentElementType } from '../../../shared/types.js'
+
+const VALID_EL_TYPES: Set<string> = new Set<ContentElementType>([
+  'heading', 'definition', 'text', 'bullet', 'highlight', 'task', 'formula',
+])
+
+/** Extract plain text from a content item (string or ContentElement) */
+export function getContentItemText(item: string | ContentElement): string {
+  if (typeof item === 'string') return item
+  return item.text || ''
+}
+
+/** Normalize mixed content array to ContentElement[] (strings become bullets) */
+export function normalizeContent(content: (string | ContentElement)[]): ContentElement[] {
+  return content.map(item => {
+    if (typeof item === 'string') {
+      return { el: 'bullet' as const, text: item }
+    }
+    return item
+  })
+}
+
+/** Validate and clean a single content element object */
+function cleanContentElement(item: unknown): string | ContentElement {
+  if (typeof item === 'string') return item
+  if (item && typeof item === 'object' && 'el' in item && 'text' in item) {
+    const obj = item as Record<string, unknown>
+    if (VALID_EL_TYPES.has(String(obj.el)) && typeof obj.text === 'string' && obj.text.trim() !== '') {
+      const result: ContentElement = { el: obj.el as ContentElementType, text: obj.text }
+      if (obj.el === 'task' && typeof obj.number === 'number') {
+        result.number = obj.number
+      }
+      return result
+    }
+    // Invalid object with text — convert to bullet
+    if (typeof obj.text === 'string' && obj.text.trim() !== '') {
+      return { el: 'bullet', text: obj.text }
+    }
+  }
+  // Fallback: stringify
+  const text = String(item).trim()
+  return text ? { el: 'bullet', text } : ''
+}
 
 /**
  * Post-process AI-generated presentation structure:
@@ -18,11 +60,13 @@ export function sanitizePresentationStructure(
   return { title: structure.title, slides }
 }
 
-/** Remove empty strings from content arrays */
+/** Clean and validate content items, remove empty entries */
 function cleanSlide(slide: PresentationSlide): PresentationSlide {
   return {
     ...slide,
-    content: slide.content.filter(item => item.trim() !== ''),
+    content: slide.content
+      .map(cleanContentElement)
+      .filter(item => getContentItemText(item).trim() !== ''),
     leftColumn: slide.leftColumn?.filter(item => item.trim() !== ''),
     rightColumn: slide.rightColumn?.filter(item => item.trim() !== ''),
   }
@@ -52,12 +96,13 @@ const ANSWER_PATTERNS = [
   /^решени[еяй]/i,
 ]
 
-function isAnswerLine(line: string): boolean {
+function isAnswerLine(item: string | ContentElement): boolean {
+  const line = getContentItemText(item)
   return ANSWER_PATTERNS.some(p => p.test(line.trim()))
 }
 
-function isAnswerHeaderLine(line: string): boolean {
-  const trimmed = line.trim().toLowerCase()
+function isAnswerHeaderLine(item: string | ContentElement): boolean {
+  const trimmed = getContentItemText(item).trim().toLowerCase()
   return trimmed === 'ответы' || trimmed === 'ответы:' || trimmed === 'ответ:' || trimmed === 'ответ'
 }
 

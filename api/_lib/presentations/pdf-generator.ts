@@ -3,7 +3,8 @@ import fontkit from '@pdf-lib/fontkit'
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import type { PresentationStructure, PresentationSlide, PresentationThemePreset } from '../../../shared/types.js'
+import type { PresentationStructure, PresentationSlide, PresentationThemePreset, ContentElement } from '../../../shared/types.js'
+import { normalizeContent, getContentItemText } from './sanitize.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -157,6 +158,83 @@ function drawSlideHeader(page: any, title: string, font: any, boldFont: any, the
   return y - 20
 }
 
+/** Draw rich content elements, returns Y position after all elements */
+function drawContentElements(
+  page: any,
+  elements: ContentElement[],
+  startY: number,
+  font: any,
+  boldFont: any,
+  theme: PdfTheme,
+  contentW: number = CONTENT_W,
+  marginLeft: number = MARGIN
+): number {
+  let y = startY
+  for (const el of elements) {
+    if (y < MARGIN + 30) break
+    switch (el.el) {
+      case 'heading': {
+        const lines = wrapText(el.text, boldFont, 22, contentW - 40)
+        for (const line of lines) {
+          if (y < MARGIN + 30) break
+          const tw = boldFont.widthOfTextAtSize(line, 22)
+          page.drawText(line, { x: (W - tw) / 2, y, size: 22, font: boldFont, color: rgb(...theme.title) })
+          y -= 28
+        }
+        y -= 4
+        break
+      }
+      case 'definition': {
+        // Draw accent bar left
+        page.drawRectangle({
+          x: marginLeft + 4, y: y - 2, width: 3, height: 18,
+          color: rgb(...theme.accent),
+        })
+        y = drawWrappedText(page, el.text, marginLeft + 14, y, font, 17, theme.text, contentW - 18, 22)
+        y -= 6
+        break
+      }
+      case 'text': {
+        y = drawWrappedText(page, el.text, marginLeft + 4, y, font, 16, theme.text, contentW - 8, 21)
+        y -= 5
+        break
+      }
+      case 'highlight': {
+        y = drawWrappedText(page, el.text, marginLeft + 4, y, boldFont, 17, theme.accent, contentW - 8, 22)
+        y -= 6
+        break
+      }
+      case 'task': {
+        const prefix = `${el.number ?? ''}.`
+        page.drawText(prefix, { x: marginLeft + 4, y, size: 16, font: boldFont, color: rgb(...theme.text) })
+        const prefixW = boldFont.widthOfTextAtSize(prefix, 16) + 6
+        y = drawWrappedText(page, el.text, marginLeft + 4 + prefixW, y, font, 16, theme.text, contentW - 8 - prefixW, 21)
+        y -= 7
+        break
+      }
+      case 'formula': {
+        const fLines = wrapText(el.text, boldFont, 22, contentW - 60)
+        for (const line of fLines) {
+          if (y < MARGIN + 30) break
+          const tw = boldFont.widthOfTextAtSize(line, 22)
+          page.drawText(line, { x: (W - tw) / 2, y, size: 22, font: boldFont, color: rgb(...theme.accent) })
+          y -= 28
+        }
+        y -= 4
+        break
+      }
+      case 'bullet':
+      default: {
+        page.drawText('\u2022', { x: marginLeft + 4, y: y + 1, size: 17, font, color: rgb(...theme.accent) })
+        y = drawWrappedText(page, el.text, marginLeft + 22, y, font, 17, theme.text, contentW - 22, 23)
+        y -= 6
+        break
+      }
+    }
+  }
+  return y
+}
+
 async function renderTitleSlide(
   page: any, slide: PresentationSlide,
   font: any, boldFont: any, theme: PdfTheme
@@ -177,7 +255,7 @@ async function renderTitleSlide(
   // Subtitle
   if (slide.content.length > 0) {
     y -= 10
-    const subtitle = slide.content.join(' ')
+    const subtitle = slide.content.map(getContentItemText).join(' ')
     const subLines = wrapText(subtitle, font, 18, CONTENT_W - 100)
     for (const line of subLines) {
       const tw = font.widthOfTextAtSize(line, 18)
@@ -206,13 +284,8 @@ async function renderContentSlide(
     color: rgb(0.973, 0.976, 0.98),
   })
 
-  for (const item of slide.content) {
-    if (y < MARGIN + 30) break
-    // Bullet
-    page.drawText('\u2022', { x: MARGIN + 4, y: y + 1, size: 17, font, color: rgb(...theme.accent) })
-    y = drawWrappedText(page, item, MARGIN + 22, y, font, 17, theme.text, CONTENT_W - 22, 23)
-    y -= 6
-  }
+  const elements = normalizeContent(slide.content)
+  drawContentElements(page, elements, y, font, boldFont, theme)
 
   drawSlideNumber(page, num, total, font, theme)
 }
@@ -313,8 +386,9 @@ async function renderTableSlide(
     let y = startY
     for (const item of slide.content) {
       if (y < MARGIN + 30) break
+      const text = getContentItemText(item)
       page.drawText('\u2022', { x: MARGIN + 4, y: y + 1, size: 12, font, color: rgb(...theme.accent) })
-      y = drawWrappedText(page, item, MARGIN + 18, y, font, 12, theme.text, CONTENT_W - 18, 17)
+      y = drawWrappedText(page, text, MARGIN + 18, y, font, 12, theme.text, CONTENT_W - 18, 17)
       y -= 5
     }
   }
@@ -343,14 +417,8 @@ async function renderExampleSlide(
   })
 
   let y = startY - 10
-  for (let i = 0; i < slide.content.length; i++) {
-    if (y < MARGIN + 40) break
-    const sz = i === 0 ? 17 : 15
-    const clr = i === 0 ? theme.title : theme.text
-    const f = i === 0 ? boldFont : font
-    y = drawWrappedText(page, slide.content[i], MARGIN + 14, y, f, sz, clr, CONTENT_W - 28, sz + 5)
-    y -= 6
-  }
+  const elements = normalizeContent(slide.content)
+  y = drawContentElements(page, elements, y, font, boldFont, theme, CONTENT_W - 28, MARGIN + 10)
 
   drawSlideNumber(page, num, total, font, theme)
 }
@@ -364,7 +432,7 @@ async function renderFormulaSlide(
   let startY = drawSlideHeader(page, slide.title, font, boldFont, theme)
 
   // Large centered formula
-  const formula = slide.content[0] || ''
+  const formula = getContentItemText(slide.content[0] || '')
   const fLines = wrapText(formula, boldFont, 30, CONTENT_W - 60)
   let y = startY - 20
   for (const line of fLines) {
@@ -377,7 +445,7 @@ async function renderFormulaSlide(
   y -= 10
   for (let i = 1; i < slide.content.length; i++) {
     if (y < MARGIN + 30) break
-    y = drawWrappedText(page, slide.content[i], MARGIN + 40, y, font, 15, theme.text, CONTENT_W - 80, 20)
+    y = drawWrappedText(page, getContentItemText(slide.content[i]), MARGIN + 40, y, font, 15, theme.text, CONTENT_W - 80, 20)
     y -= 5
   }
 
@@ -392,7 +460,7 @@ async function renderDiagramSlide(
   page.drawRectangle({ x: 0, y: 0, width: W, height: H, color: rgb(...theme.bg) })
   let startY = drawSlideHeader(page, slide.title, font, boldFont, theme)
 
-  const items = slide.content
+  const items = slide.content.map(getContentItemText)
   const count = Math.min(items.length, 6)
   const boxW = 180
   const boxH = 50
@@ -470,8 +538,9 @@ async function renderChartSlide(
     let y = startY
     for (const item of slide.content) {
       if (y < MARGIN + 30) break
+      const text = getContentItemText(item)
       page.drawText('\u2022', { x: MARGIN + 4, y: y + 1, size: 12, font, color: rgb(...theme.accent) })
-      y = drawWrappedText(page, item, MARGIN + 18, y, font, 12, theme.text, CONTENT_W - 18, 17)
+      y = drawWrappedText(page, text, MARGIN + 18, y, font, 12, theme.text, CONTENT_W - 18, 17)
       y -= 5
     }
   }
@@ -506,11 +575,8 @@ async function renderPracticeSlide(
   })
 
   let y = startY - 5
-  for (const item of slide.content) {
-    if (y < MARGIN + 30) break
-    y = drawWrappedText(page, item, MARGIN + 10, y, font, 16, theme.text, CONTENT_W - 20, 22)
-    y -= 8
-  }
+  const elements = normalizeContent(slide.content)
+  drawContentElements(page, elements, y, font, boldFont, theme, CONTENT_W - 20, MARGIN + 5)
 
   drawSlideNumber(page, num, total, font, theme)
 }
@@ -535,12 +601,19 @@ async function renderConclusionSlide(
   }
 
   y -= 10
-  for (const item of slide.content) {
+  const elements = normalizeContent(slide.content)
+  for (const el of elements) {
     if (y < MARGIN + 30) break
-    // Checkmark
-    page.drawText('\u2713', { x: MARGIN + 30, y: y + 1, size: 16, font, color: rgb(...theme.accent) })
-    y = drawWrappedText(page, item, MARGIN + 50, y, font, 16, theme.text, CONTENT_W - 80, 22)
-    y -= 8
+    const text = el.text
+    // Checkmark for bullet items, standard rendering for others
+    if (el.el === 'bullet') {
+      page.drawText('\u2713', { x: MARGIN + 30, y: y + 1, size: 16, font, color: rgb(...theme.accent) })
+      y = drawWrappedText(page, text, MARGIN + 50, y, font, 16, theme.text, CONTENT_W - 80, 22)
+      y -= 8
+    } else {
+      // Use rich rendering for non-bullet elements
+      y = drawContentElements(page, [el], y, font, boldFont, theme, CONTENT_W - 60, MARGIN + 30)
+    }
   }
 
   drawSlideNumber(page, num, total, font, theme)

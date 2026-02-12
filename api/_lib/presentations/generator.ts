@@ -1,7 +1,8 @@
 import PptxGenJS from 'pptxgenjs'
-import type { PresentationStructure, PresentationSlide, PresentationThemePreset } from '../../../shared/types.js'
+import type { PresentationStructure, PresentationSlide, PresentationThemePreset, ContentElement } from '../../../shared/types.js'
 import { generateMinimalismPptx } from './minimalism-generator.js'
 import { generateKidsPptx } from './kids-generator.js'
+import { normalizeContent, getContentItemText } from './sanitize.js'
 
 // =============================================================================
 // Theme Configuration
@@ -125,13 +126,88 @@ function addSlideFooter(
 }
 
 // =============================================================================
+// Rich Content → PptxGenJS text rows
+// =============================================================================
+
+function contentElementsToRows(
+  elements: ContentElement[],
+  theme: ThemeConfig
+): { text: string; options: Record<string, unknown> }[] {
+  return elements.map(el => {
+    switch (el.el) {
+      case 'heading':
+        return {
+          text: el.text,
+          options: {
+            fontSize: 28, fontFace: theme.titleFontFace, color: theme.titleColor,
+            bold: true, align: 'center' as const,
+            paraSpaceBefore: 8, paraSpaceAfter: 10,
+          },
+        }
+      case 'definition':
+        return {
+          text: `  ${el.text}`,
+          options: {
+            fontSize: 22, fontFace: theme.fontFace, color: theme.textColor,
+            italic: true, paraSpaceAfter: 8,
+            bullet: { code: '258E', color: theme.accentColor },
+          },
+        }
+      case 'text':
+        return {
+          text: el.text,
+          options: {
+            fontSize: 20, fontFace: theme.fontFace, color: theme.textColor,
+            paraSpaceAfter: 8,
+          },
+        }
+      case 'highlight':
+        return {
+          text: el.text,
+          options: {
+            fontSize: 22, fontFace: theme.fontFace, color: theme.accentColor,
+            bold: true, paraSpaceAfter: 8,
+          },
+        }
+      case 'task':
+        return {
+          text: `${el.number ?? ''}. ${el.text}`,
+          options: {
+            fontSize: 20, fontFace: theme.fontFace, color: theme.textColor,
+            paraSpaceAfter: 10,
+          },
+        }
+      case 'formula':
+        return {
+          text: el.text,
+          options: {
+            fontSize: 26, fontFace: theme.titleFontFace, color: theme.accentColor,
+            bold: true, align: 'center' as const,
+            paraSpaceBefore: 6, paraSpaceAfter: 10,
+          },
+        }
+      case 'bullet':
+      default:
+        return {
+          text: el.text,
+          options: {
+            fontSize: 22, fontFace: theme.fontFace, color: theme.textColor,
+            bullet: { code: '2022', color: theme.accentColor },
+            paraSpaceAfter: 12,
+          },
+        }
+    }
+  })
+}
+
+// =============================================================================
 // Slide Generators
 // =============================================================================
 
 function addTitleSlide(
   pres: PptxGenJS,
   title: string,
-  content: string[],
+  content: (string | ContentElement)[],
   theme: ThemeConfig
 ): void {
   const slide = pres.addSlide()
@@ -157,7 +233,7 @@ function addTitleSlide(
   })
 
   // Subtitle
-  const subtitle = content.length > 0 ? content.join('\n') : ''
+  const subtitle = content.length > 0 ? content.map(getContentItemText).join('\n') : ''
   if (subtitle) {
     slide.addText(subtitle, {
       x: 1.5, y: 3.5, w: 10, h: 1.2,
@@ -177,7 +253,7 @@ function addTitleSlide(
 function addContentSlide(
   pres: PptxGenJS,
   title: string,
-  content: string[],
+  content: (string | ContentElement)[],
   slideNumber: number,
   totalSlides: number,
   theme: ThemeConfig
@@ -193,15 +269,8 @@ function addContentSlide(
       rectRadius: 0.08,
     })
 
-    const bulletRows = content.map((text) => ({
-      text,
-      options: {
-        fontSize: 22, fontFace: theme.fontFace, color: theme.textColor,
-        bullet: { code: '2022', color: theme.accentColor },
-        paraSpaceAfter: 12,
-      },
-    }))
-    slide.addText(bulletRows, {
+    const rows = contentElementsToRows(normalizeContent(content), theme)
+    slide.addText(rows, {
       x: 0.8, y: 1.5, w: 11.4, h: 4.8,
       valign: 'top', lineSpacingMultiple: 1.3,
     })
@@ -316,8 +385,8 @@ function addTableSlide(
     })
   } else if (slideData.content.length > 0) {
     // Fallback to bullet content if no tableData
-    const bulletRows = slideData.content.map((text) => ({
-      text,
+    const bulletRows = slideData.content.map((item) => ({
+      text: getContentItemText(item),
       options: {
         fontSize: 16, fontFace: theme.fontFace, color: theme.textColor,
         bullet: { code: '2022', color: theme.accentColor },
@@ -357,16 +426,8 @@ function addExampleSlide(
   })
 
   if (slideData.content.length > 0) {
-    const rows = slideData.content.map((text, idx) => ({
-      text,
-      options: {
-        fontSize: idx === 0 ? 20 : 17,
-        fontFace: theme.fontFace,
-        color: idx === 0 ? theme.titleColor : theme.textColor,
-        bold: idx === 0,
-        paraSpaceAfter: 8,
-      },
-    }))
+    const elements = normalizeContent(slideData.content)
+    const rows = contentElementsToRows(elements, theme)
     slide.addText(rows, {
       x: 1.0, y: 1.7, w: 11.0, h: 4.6,
       valign: 'top', lineSpacingMultiple: 1.3,
@@ -387,7 +448,7 @@ function addFormulaSlide(
   addSlideHeader(pres, slide, slideData.title, theme)
 
   // First content item as the big formula
-  const formula = slideData.content[0] || ''
+  const formula = getContentItemText(slideData.content[0] || '')
   const explanation = slideData.content.slice(1)
 
   // Large centered formula
@@ -399,8 +460,8 @@ function addFormulaSlide(
 
   // Explanation below
   if (explanation.length > 0) {
-    const rows = explanation.map((text) => ({
-      text,
+    const rows = explanation.map((item) => ({
+      text: getContentItemText(item),
       options: {
         fontSize: 18, fontFace: theme.fontFace, color: theme.textColor,
         paraSpaceAfter: 6,
@@ -426,7 +487,7 @@ function addDiagramSlide(
   addSlideHeader(pres, slide, slideData.title, theme)
 
   // Render each content item as a labeled box with connecting lines
-  const items = slideData.content
+  const items = slideData.content.map(getContentItemText)
   const boxCount = Math.min(items.length, 6)
   const cols = boxCount <= 3 ? boxCount : Math.ceil(boxCount / 2)
   const rows = boxCount <= 3 ? 1 : 2
@@ -487,8 +548,8 @@ function addChartSlide(
     })
   } else if (slideData.content.length > 0) {
     // Fallback to bullet content
-    const bulletRows = slideData.content.map((text) => ({
-      text,
+    const bulletRows = slideData.content.map((item) => ({
+      text: getContentItemText(item),
       options: {
         fontSize: 16, fontFace: theme.fontFace, color: theme.textColor,
         bullet: { code: '2022', color: theme.accentColor },
@@ -534,13 +595,7 @@ function addPracticeSlide(
   })
 
   if (slideData.content.length > 0) {
-    const rows = slideData.content.map((text) => ({
-      text,
-      options: {
-        fontSize: 20, fontFace: theme.fontFace, color: theme.textColor,
-        paraSpaceAfter: 10,
-      },
-    }))
+    const rows = contentElementsToRows(normalizeContent(slideData.content), theme)
     slide.addText(rows, {
       x: 0.8, y: 1.8, w: 11.4, h: 4.5,
       valign: 'top', lineSpacingMultiple: 1.3,
@@ -553,7 +608,7 @@ function addPracticeSlide(
 function addConclusionSlide(
   pres: PptxGenJS,
   title: string,
-  content: string[],
+  content: (string | ContentElement)[],
   slideNumber: number,
   totalSlides: number,
   theme: ThemeConfig
@@ -576,14 +631,22 @@ function addConclusionSlide(
 
   // Summary text
   if (content.length > 0) {
-    const summaryRows = content.map((text) => ({
-      text,
-      options: {
-        fontSize: 20, fontFace: theme.fontFace, color: theme.textColor,
-        bullet: { code: '2713', color: theme.accentColor },
-        paraSpaceAfter: 10,
-      },
-    }))
+    const elements = normalizeContent(content)
+    // For conclusion, default bullets get checkmark instead
+    const summaryRows = elements.map(el => {
+      if (el.el === 'bullet') {
+        return {
+          text: el.text,
+          options: {
+            fontSize: 20, fontFace: theme.fontFace, color: theme.textColor,
+            bullet: { code: '2713', color: theme.accentColor },
+            paraSpaceAfter: 10,
+          },
+        }
+      }
+      // Other element types use standard rendering
+      return contentElementsToRows([el], theme)[0]
+    })
     slide.addText(summaryRows, {
       x: 1.5, y: 2.2, w: 10, h: 4.0,
       valign: 'top', lineSpacingMultiple: 1.3,
