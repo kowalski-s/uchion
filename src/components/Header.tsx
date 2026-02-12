@@ -76,7 +76,7 @@ export default function Header() {
             <div className="relative" ref={createRef}>
               <button
                 onClick={() => setCreateOpen(!createOpen)}
-                className="flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 bg-[#8C52FF] hover:bg-[#7B3FEE] text-white text-sm font-semibold rounded-xl transition-all hover:scale-105 shadow-sm shadow-purple-200"
+                className="flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 text-[#8C52FF] text-sm font-semibold rounded-xl transition-all hover:scale-105 bg-purple-50/80 hover:bg-purple-100 border border-purple-200/60 shadow-[0_0_8px_rgba(140,82,255,0.15)]"
               >
                 <PlusIcon className="w-4 h-4" />
                 <span className="hidden sm:inline">Создать</span>

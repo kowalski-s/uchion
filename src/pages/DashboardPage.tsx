@@ -229,10 +229,6 @@ export default function DashboardPage() {
               <h2 className="text-lg font-bold text-slate-900 group-hover:text-[#8C52FF] transition-colors">Презентации</h2>
               <ArrowRightIcon className="w-5 h-5 text-slate-400 group-hover:text-[#8C52FF] transition-colors" />
             </Link>
-            <Link to="/presentations/generate" className="ml-auto text-sm text-[#8C52FF] hover:text-[#7B3FEE] font-medium transition-colors flex items-center gap-1">
-              Создать
-              <ArrowRightIcon className="w-4 h-4" />
-            </Link>
           </div>
 
           <div className="glass-container p-6">
