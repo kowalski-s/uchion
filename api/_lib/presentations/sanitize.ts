@@ -67,8 +67,8 @@ function cleanSlide(slide: PresentationSlide): PresentationSlide {
     content: slide.content
       .map(cleanContentElement)
       .filter(item => getContentItemText(item).trim() !== ''),
-    leftColumn: slide.leftColumn?.filter(item => item.trim() !== ''),
-    rightColumn: slide.rightColumn?.filter(item => item.trim() !== ''),
+    leftColumn: slide.leftColumn?.map(item => typeof item === 'string' ? item : String(item)).filter(item => item.trim() !== ''),
+    rightColumn: slide.rightColumn?.map(item => typeof item === 'string' ? item : String(item)).filter(item => item.trim() !== ''),
   }
 }
 
