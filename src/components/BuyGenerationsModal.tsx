@@ -16,19 +16,45 @@ function CloseIcon({ className = "w-5 h-5" }: { className?: string }) {
 
 // Pricing configuration
 const PRICE_PER_GENERATION = 20  // rubles
-const MIN_GENERATIONS = 5
-const MAX_GENERATIONS = 200
+const BULK_DISCOUNT = 210  // flat discount for 60+ generations
+const BULK_THRESHOLD = 60
+
+// Quick-select packages (shown as mini-blocks)
+const QUICK_PACKAGES = [
+  { count: 15, price: 300 },
+  { count: 30, price: 600 },
+  { count: 60, price: 990 },
+] as const
+
+function getPrice(count: number): number {
+  const basePrice = count * PRICE_PER_GENERATION
+  if (count >= BULK_THRESHOLD) return basePrice - BULK_DISCOUNT
+  return basePrice
+}
+
+function getBasePrice(count: number): number {
+  return count * PRICE_PER_GENERATION
+}
+
+function getDiscountPercent(count: number): number {
+  if (count < BULK_THRESHOLD) return 0
+  const base = getBasePrice(count)
+  const actual = getPrice(count)
+  return Math.round(((base - actual) / base) * 100)
+}
 
 export default function BuyGenerationsModal({ isOpen, onClose }: BuyGenerationsModalProps) {
-  const [generationsCount, setGenerationsCount] = useState(MIN_GENERATIONS)
+  const [generationsCount, setGenerationsCount] = useState(15)
   const [purchasing, setPurchasing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const { user } = useAuth()
   const currentBalance = user?.generationsLeft ?? 0
 
-  // Calculate price
-  const totalPrice = generationsCount * PRICE_PER_GENERATION
+  const totalPrice = getPrice(generationsCount)
+  const basePrice = getBasePrice(generationsCount)
+  const discount = getDiscountPercent(generationsCount)
+  const hasDiscount = discount > 0
 
   async function handlePurchase() {
     try {
@@ -111,43 +137,89 @@ export default function BuyGenerationsModal({ isOpen, onClose }: BuyGenerationsM
 
         {/* Content */}
         <div className="px-6 pb-6">
+          {/* Discount badge */}
+          <div className="flex justify-center mb-3">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-50 border border-green-200 rounded-full">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-green-600">
+                <path fillRule="evenodd" d="M5.5 3A2.5 2.5 0 0 0 3 5.5v2.879a2.5 2.5 0 0 0 .732 1.767l6.5 6.5a2.5 2.5 0 0 0 3.536 0l2.878-2.878a2.5 2.5 0 0 0 0-3.536l-6.5-6.5A2.5 2.5 0 0 0 8.38 3H5.5ZM6 7a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clipRule="evenodd" />
+              </svg>
+              <span className="text-green-700 text-sm font-medium">Скидка до 18% от 60 генераций</span>
+            </div>
+          </div>
+
+          {/* Quick-select packages */}
+          <div className="grid grid-cols-3 gap-2 mb-5">
+            {QUICK_PACKAGES.map((pkg) => {
+              const isSelected = generationsCount === pkg.count
+              const pkgBasePrice = pkg.count * PRICE_PER_GENERATION
+              const pkgHasDiscount = pkg.price < pkgBasePrice
+              return (
+                <button
+                  key={pkg.count}
+                  onClick={() => setGenerationsCount(pkg.count)}
+                  className={`relative flex flex-col items-center py-3 px-2 rounded-xl border-2 transition-all ${
+                    isSelected
+                      ? 'border-[#8C52FF] bg-[#8C52FF]/5 shadow-md shadow-purple-200/50'
+                      : 'border-slate-200 bg-white hover:border-[#8C52FF]/40 hover:bg-slate-50'
+                  }`}
+                >
+                  {pkgHasDiscount && (
+                    <span className="absolute -top-2.5 right-1.5 px-1.5 py-0.5 bg-green-500 text-white text-[10px] font-bold rounded-full leading-none">
+                      -{Math.round(((pkgBasePrice - pkg.price) / pkgBasePrice) * 100)}%
+                    </span>
+                  )}
+                  <span className={`text-lg font-bold ${isSelected ? 'text-[#8C52FF]' : 'text-slate-800'}`}>
+                    {pkg.count}
+                  </span>
+                  <span className="text-[11px] text-slate-500 mb-1">генераций</span>
+                  {pkgHasDiscount && (
+                    <span className="text-[11px] text-slate-400 line-through">{pkgBasePrice} &#8381;</span>
+                  )}
+                  <span className={`text-sm font-semibold ${isSelected ? 'text-[#8C52FF]' : 'text-slate-700'}`}>
+                    {pkg.price} &#8381;
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+
           {/* Slider section */}
-          <div className="mb-6">
+          <div className="mb-5">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-slate-600">Количество генераций:</span>
-              <span className="text-xl font-bold text-slate-900">{generationsCount}</span>
+              <span className="text-slate-600 text-sm">Или выберите количество:</span>
+              <span className="text-lg font-bold text-slate-900">{generationsCount}</span>
             </div>
 
             <input
               type="range"
-              min={MIN_GENERATIONS}
-              max={MAX_GENERATIONS}
+              min={5}
+              max={200}
               value={generationsCount}
               onChange={(e) => setGenerationsCount(parseInt(e.target.value, 10))}
-              className="w-full h-2 bg-gradient-to-r from-purple-200 to-purple-400 rounded-lg appearance-none cursor-pointer slider-thumb"
+              className="w-full h-2 rounded-lg appearance-none cursor-pointer"
               style={{
-                background: `linear-gradient(to right, #8C52FF 0%, #8C52FF ${((generationsCount - MIN_GENERATIONS) / (MAX_GENERATIONS - MIN_GENERATIONS)) * 100}%, #e2e8f0 ${((generationsCount - MIN_GENERATIONS) / (MAX_GENERATIONS - MIN_GENERATIONS)) * 100}%, #e2e8f0 100%)`
+                background: `linear-gradient(to right, #8C52FF 0%, #8C52FF ${((generationsCount - 5) / (200 - 5)) * 100}%, #e2e8f0 ${((generationsCount - 5) / (200 - 5)) * 100}%, #e2e8f0 100%)`
               }}
             />
 
             <div className="flex justify-between text-xs text-slate-400 mt-1">
-              <span>{MIN_GENERATIONS}</span>
-              <span>{MAX_GENERATIONS}</span>
+              <span>5</span>
+              <span>200</span>
             </div>
-          </div>
-
-          {/* Price info */}
-          <div className="mb-4 text-center">
-            <p className="text-slate-500 text-sm">
-              Цена за генерацию: <span className="font-semibold text-slate-700">{PRICE_PER_GENERATION} ₽</span>
-            </p>
           </div>
 
           {/* Total */}
           <div className="mb-4 text-center">
-            <p className="text-slate-600 text-lg">
-              Итого: <span className="text-2xl font-bold text-slate-900">{totalPrice} ₽</span>
-            </p>
+            <div className="text-slate-600 text-lg">
+              Итого:{' '}
+              {hasDiscount && (
+                <span className="text-base text-slate-400 line-through mr-1.5">{basePrice} &#8381;</span>
+              )}
+              <span className="text-2xl font-bold text-slate-900">{totalPrice} &#8381;</span>
+              {hasDiscount && (
+                <span className="ml-2 text-sm font-semibold text-green-600">-{discount}%</span>
+              )}
+            </div>
           </div>
 
           {/* Error message */}
