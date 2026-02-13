@@ -24,9 +24,8 @@ const InputSchema = z.object({
   subject: z.enum(['math', 'algebra', 'geometry', 'russian']),
   grade: z.number().int().min(1).max(11),
   topic: z.string().min(3).max(200),
-  themeType: z.enum(['preset', 'custom']),
-  themePreset: z.enum(['professional', 'educational', 'minimal', 'scientific', 'kids', 'school']).optional(),
-  themeCustom: z.string().max(100).optional(),
+  themeType: z.literal('preset'),
+  themePreset: z.enum(['professional', 'kids', 'school']).optional(),
   slideCount: z.union([z.literal(12), z.literal(18), z.literal(24)]).optional(),
 })
 
@@ -44,20 +43,12 @@ router.post('/generate', withAuth(async (req: AuthenticatedRequest, res: Respons
 
   const input = parse.data
 
-  // 2. Check themeType consistency
-  if (input.themeType === 'preset' && !input.themePreset) {
+  // 2. Check themePreset is provided
+  if (!input.themePreset) {
     return res.status(400).json({
       status: 'error',
       code: 'VALIDATION_ERROR',
-      message: '\u0423\u043a\u0430\u0436\u0438\u0442\u0435 \u0442\u0435\u043c\u0443 \u043f\u0440\u0435\u0437\u0435\u043d\u0442\u0430\u0446\u0438\u0438 (themePreset).',
-    })
-  }
-
-  if (input.themeType === 'custom' && !input.themeCustom) {
-    return res.status(400).json({
-      status: 'error',
-      code: 'VALIDATION_ERROR',
-      message: '\u041e\u043f\u0438\u0448\u0438\u0442\u0435 \u0436\u0435\u043b\u0430\u0435\u043c\u044b\u0439 \u0441\u0442\u0438\u043b\u044c \u043f\u0440\u0435\u0437\u0435\u043d\u0442\u0430\u0446\u0438\u0438 (themeCustom).',
+      message: '\u0423\u043a\u0430\u0436\u0438\u0442\u0435 \u0441\u0442\u0438\u043b\u044c \u043f\u0440\u0435\u0437\u0435\u043d\u0442\u0430\u0446\u0438\u0438 (themePreset).',
     })
   }
 
@@ -137,9 +128,8 @@ router.post('/generate', withAuth(async (req: AuthenticatedRequest, res: Respons
       subject: input.subject,
       grade: input.grade,
       topic: input.topic,
-      themeType: input.themeType,
+      themeType: 'preset',
       themePreset: input.themePreset,
-      themeCustom: input.themeCustom,
       slideCount: input.slideCount as 12 | 18 | 24 | undefined,
       isPaid,
     }, (percent) => {
@@ -152,13 +142,10 @@ router.post('/generate', withAuth(async (req: AuthenticatedRequest, res: Respons
     const sanitizedStructure = sanitizePresentationStructure(structure)
     console.log(`[API] Sanitized: ${structure.slides.length} -> ${sanitizedStructure.slides.length} slides`)
 
-    // 7. Call generatePptx(structure, themePreset || 'custom', themeCustom)
+    // 7. Call generatePptx(structure, themePreset)
     let pptxBase64: string
     try {
-      const effectiveTheme = input.themeType === 'preset' && input.themePreset
-        ? input.themePreset
-        : 'custom' as const
-      pptxBase64 = await generatePptx(sanitizedStructure, effectiveTheme, input.themeCustom)
+      pptxBase64 = await generatePptx(sanitizedStructure, input.themePreset!)
     } catch (e) {
       console.error('[API] PPTX generation error:', e)
       sendEvent({ type: 'error', code: 'PDF_ERROR', message: '\u041e\u0448\u0438\u0431\u043a\u0430 \u0433\u0435\u043d\u0435\u0440\u0430\u0446\u0438\u0438 \u043f\u0440\u0435\u0437\u0435\u043d\u0442\u0430\u0446\u0438\u0438.' })
@@ -171,10 +158,7 @@ router.post('/generate', withAuth(async (req: AuthenticatedRequest, res: Respons
     // 7b. Generate PDF from same structure
     let pdfBase64: string
     try {
-      const effectiveThemePdf = input.themeType === 'preset' && input.themePreset
-        ? input.themePreset
-        : 'custom' as const
-      pdfBase64 = await generatePresentationPdf(sanitizedStructure, effectiveThemePdf)
+      pdfBase64 = await generatePresentationPdf(sanitizedStructure, input.themePreset!)
     } catch (e) {
       console.error('[API] PDF generation error:', e)
       // Non-fatal: PDF is optional, proceed with empty string
@@ -194,9 +178,9 @@ router.post('/generate', withAuth(async (req: AuthenticatedRequest, res: Respons
         subject: input.subject,
         grade: input.grade,
         topic: input.topic,
-        themeType: input.themeType,
-        themePreset: input.themeType === 'preset' ? input.themePreset : null,
-        themeCustom: input.themeType === 'custom' ? input.themeCustom : null,
+        themeType: 'preset',
+        themePreset: input.themePreset,
+        themeCustom: null,
         slideCount: sanitizedStructure.slides.length,
         structure: JSON.stringify(sanitizedStructure),
         pptxBase64,
