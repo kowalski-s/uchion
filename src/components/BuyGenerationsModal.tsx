@@ -15,8 +15,13 @@ function CloseIcon({ className = "w-5 h-5" }: { className?: string }) {
 
 // Pricing configuration
 const PRICE_PER_GENERATION = 20  // rubles
-const BULK_DISCOUNT = 210  // flat discount for 60+ generations
-const BULK_THRESHOLD = 60
+
+// Discounted packages (only these specific counts have discounts)
+const DISCOUNT_PACKAGES: Record<number, number> = {
+  60: 990,    // base 1200, -18%
+  120: 2190,  // base 2400, -9%
+  200: 3790,  // base 4000, -5%
+}
 
 // Quick-select packages (shown as mini-blocks)
 const QUICK_PACKAGES = [
@@ -26,9 +31,8 @@ const QUICK_PACKAGES = [
 ] as const
 
 function getPrice(count: number): number {
-  const basePrice = count * PRICE_PER_GENERATION
-  if (count >= BULK_THRESHOLD) return basePrice - BULK_DISCOUNT
-  return basePrice
+  if (count in DISCOUNT_PACKAGES) return DISCOUNT_PACKAGES[count]
+  return count * PRICE_PER_GENERATION
 }
 
 function getBasePrice(count: number): number {
@@ -36,9 +40,9 @@ function getBasePrice(count: number): number {
 }
 
 function getDiscountPercent(count: number): number {
-  if (count < BULK_THRESHOLD) return 0
+  if (!(count in DISCOUNT_PACKAGES)) return 0
   const base = getBasePrice(count)
-  const actual = getPrice(count)
+  const actual = DISCOUNT_PACKAGES[count]
   return Math.round(((base - actual) / base) * 100)
 }
 
