@@ -9,7 +9,7 @@ import CustomSelect from '../components/ui/CustomSelect'
 import { useAuth } from '../lib/auth'
 import { getGenerationsLeft, canGenerate } from '../lib/limits'
 import Header from '../components/Header'
-import type { PresentationThemePreset, PresentationStructure } from '../../shared/types'
+import type { PresentationStructure } from '../../shared/types'
 import SlidePreview from '../components/presentations/SlidePreview'
 
 // =============================================================================
@@ -31,11 +31,10 @@ const SLIDE_COUNTS: { value: 12 | 18 | 24; label: string; description: string }[
   { value: 24, label: 'Детальная', description: '24 слайда' },
 ]
 
-const THEME_PRESETS: { value: PresentationThemePreset; label: string; description: string; color: string }[] = [
+type ActiveThemePreset = 'professional' | 'kids' | 'school'
+
+const THEME_PRESETS: { value: ActiveThemePreset; label: string; description: string; color: string }[] = [
   { value: 'professional', label: 'Профессиональный', description: 'Строгий, деловой', color: 'bg-blue-900' },
-  { value: 'educational', label: 'Образовательный', description: 'Яркий, школьный', color: 'bg-purple-600' },
-  { value: 'minimal', label: 'Минимализм', description: 'Тёплый, элегантный', color: 'bg-[#8B7355]' },
-  { value: 'scientific', label: 'Научный', description: 'Для формул', color: 'bg-green-900' },
   { value: 'kids', label: 'Для детей', description: 'Яркий, начальная школа', color: 'bg-[#4ECDC4]' },
   { value: 'school', label: 'Школьный', description: 'Классический, уютный', color: 'bg-[#8B9DAE]' },
 ]
@@ -48,9 +47,8 @@ const GeneratePresentationFormSchema = z.object({
   subject: z.enum(['math', 'algebra', 'geometry', 'russian']),
   grade: z.number().int().min(1).max(11),
   topic: z.string().min(3, 'Минимум 3 символа').max(200, 'Максимум 200 символов'),
-  themeType: z.enum(['preset', 'custom']),
-  themePreset: z.enum(['professional', 'educational', 'minimal', 'scientific', 'kids', 'school']).optional(),
-  themeCustom: z.string().max(100, 'Максимум 100 символов').optional(),
+  themeType: z.literal('preset'),
+  themePreset: z.enum(['professional', 'kids', 'school']),
   slideCount: z.union([z.literal(12), z.literal(18), z.literal(24)]).optional(),
 })
 
@@ -109,14 +107,12 @@ export default function GeneratePresentationPage() {
       grade: 3,
       topic: '',
       themeType: 'preset',
-      themePreset: 'educational',
-      themeCustom: '',
+      themePreset: 'professional',
       slideCount: 18,
     }
   })
 
   const watchSubject = form.watch('subject')
-  const watchThemeType = form.watch('themeType')
   const watchThemePreset = form.watch('themePreset')
   const watchSlideCount = form.watch('slideCount')
 
@@ -230,8 +226,7 @@ export default function GeneratePresentationPage() {
       grade: 3,
       topic: '',
       themeType: 'preset',
-      themePreset: 'educational',
-      themeCustom: '',
+      themePreset: 'professional',
       slideCount: 18,
     })
   }
@@ -310,7 +305,7 @@ export default function GeneratePresentationPage() {
             {generatedResult.structure && (
               <SlidePreview
                 structure={generatedResult.structure}
-                themePreset={form.getValues('themeType') === 'preset' ? form.getValues('themePreset') : undefined}
+                themePreset={form.getValues('themePreset')}
               />
             )}
           </div>
@@ -367,17 +362,16 @@ export default function GeneratePresentationPage() {
               {/* Theme selector */}
               <div className="mb-6">
                 <label className="block text-sm font-semibold text-slate-700 text-left mb-3">Стиль оформления</label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {THEME_PRESETS.map(theme => (
                     <button
                       key={theme.value}
                       type="button"
                       onClick={() => {
-                        form.setValue('themeType', 'preset')
                         form.setValue('themePreset', theme.value)
                       }}
                       className={`relative flex items-center gap-4 px-5 py-4 rounded-xl border-2 transition-all text-left ${
-                        watchThemeType === 'preset' && watchThemePreset === theme.value
+                        watchThemePreset === theme.value
                           ? 'border-[#8C52FF] bg-purple-50'
                           : 'border-slate-200 hover:border-slate-300 bg-white'
                       }`}
@@ -389,27 +383,6 @@ export default function GeneratePresentationPage() {
                       </div>
                     </button>
                   ))}
-
-                  {/* Custom theme option */}
-                  <button
-                    type="button"
-                    onClick={() => form.setValue('themeType', 'custom')}
-                    className={`relative flex items-center gap-4 px-5 py-4 rounded-xl border-2 transition-all text-left ${
-                      watchThemeType === 'custom'
-                        ? 'border-[#8C52FF] bg-purple-50'
-                        : 'border-slate-200 hover:border-slate-300 bg-white'
-                    }`}
-                  >
-                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-400 to-pink-400 flex-shrink-0 flex items-center justify-center">
-                      <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
-                      </svg>
-                    </div>
-                    <div>
-                      <div className="text-sm font-semibold text-slate-900">Свой стиль</div>
-                      <div className="text-xs text-slate-500">Опишите желаемый дизайн</div>
-                    </div>
-                  </button>
                 </div>
               </div>
 
@@ -434,22 +407,6 @@ export default function GeneratePresentationPage() {
                   ))}
                 </div>
               </div>
-
-              {/* Custom theme input - shown when custom is selected */}
-              {watchThemeType === 'custom' && (
-                <div className="mb-6 animate-in fade-in slide-in-from-top-2 duration-300">
-                  <label className="block text-sm font-semibold text-slate-700 text-left mb-2">Описание стиля</label>
-                  <input
-                    type="text"
-                    className="h-14 w-full rounded-xl border border-slate-200 bg-white px-5 text-lg text-slate-900 placeholder:text-slate-400 outline-none transition-all focus:border-[#8C52FF] focus:ring-4 focus:ring-[#8C52FF]/10"
-                    placeholder="например: в стиле Apple"
-                    {...form.register('themeCustom')}
-                  />
-                  {form.formState.errors.themeCustom && (
-                    <p className="text-sm text-red-500 text-left mt-1">{form.formState.errors.themeCustom.message}</p>
-                  )}
-                </div>
-              )}
 
               {/* Submit button */}
               <div className="flex justify-end">
