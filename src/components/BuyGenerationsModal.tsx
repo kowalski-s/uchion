@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { useAuth } from '../lib/auth'
 
 interface BuyGenerationsModalProps {
   isOpen: boolean
@@ -47,9 +46,6 @@ export default function BuyGenerationsModal({ isOpen, onClose }: BuyGenerationsM
   const [generationsCount, setGenerationsCount] = useState(15)
   const [purchasing, setPurchasing] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  const { user } = useAuth()
-  const currentBalance = user?.generationsLeft ?? 0
 
   const totalPrice = getPrice(generationsCount)
   const basePrice = getBasePrice(generationsCount)
@@ -126,29 +122,12 @@ export default function BuyGenerationsModal({ isOpen, onClose }: BuyGenerationsM
             Пополнить <span className="text-[#8C52FF]">генерации</span>
           </h2>
 
-          {/* Balance badge */}
-          <div className="flex justify-center mt-3">
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 rounded-full">
-              <span className="text-slate-600 text-sm">Баланс генераций:</span>
-              <span className="font-bold text-slate-900">{currentBalance}</span>
-            </div>
-          </div>
         </div>
 
         {/* Content */}
         <div className="px-6 pb-6">
-          {/* Discount badge */}
-          <div className="flex justify-center mb-3">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-50 border border-green-200 rounded-full">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-green-600">
-                <path fillRule="evenodd" d="M5.5 3A2.5 2.5 0 0 0 3 5.5v2.879a2.5 2.5 0 0 0 .732 1.767l6.5 6.5a2.5 2.5 0 0 0 3.536 0l2.878-2.878a2.5 2.5 0 0 0 0-3.536l-6.5-6.5A2.5 2.5 0 0 0 8.38 3H5.5ZM6 7a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clipRule="evenodd" />
-              </svg>
-              <span className="text-green-700 text-sm font-medium">Скидка до 18% от 60 генераций</span>
-            </div>
-          </div>
-
           {/* Quick-select packages */}
-          <div className="grid grid-cols-3 gap-2 mb-5">
+          <div className="grid grid-cols-3 gap-3 mb-5">
             {QUICK_PACKAGES.map((pkg) => {
               const isSelected = generationsCount === pkg.count
               const pkgBasePrice = pkg.count * PRICE_PER_GENERATION
@@ -157,25 +136,28 @@ export default function BuyGenerationsModal({ isOpen, onClose }: BuyGenerationsM
                 <button
                   key={pkg.count}
                   onClick={() => setGenerationsCount(pkg.count)}
-                  className={`relative flex flex-col items-center py-3 px-2 rounded-xl border-2 transition-all ${
+                  className={`relative flex flex-col items-center py-3.5 px-2 rounded-2xl border-2 transition-all duration-200 ${
                     isSelected
-                      ? 'border-[#8C52FF] bg-[#8C52FF]/5 shadow-md shadow-purple-200/50'
-                      : 'border-slate-200 bg-white hover:border-[#8C52FF]/40 hover:bg-slate-50'
+                      ? 'border-[#8C52FF] bg-gradient-to-b from-[#8C52FF]/10 to-[#A855F7]/5 shadow-[0_0_16px_rgba(140,82,255,0.25)]'
+                      : 'border-purple-100 bg-white hover:border-[#8C52FF]/50 hover:shadow-[0_0_12px_rgba(140,82,255,0.15)]'
                   }`}
                 >
                   {pkgHasDiscount && (
-                    <span className="absolute -top-2.5 right-1.5 px-1.5 py-0.5 bg-green-500 text-white text-[10px] font-bold rounded-full leading-none">
+                    <span
+                      className="absolute -top-2.5 -right-1 px-2 py-0.5 text-white text-[10px] font-bold rounded-full leading-none shadow-[0_0_8px_rgba(168,85,247,0.5)]"
+                      style={{ background: 'linear-gradient(135deg, #A855F7, #D946EF)' }}
+                    >
                       -{Math.round(((pkgBasePrice - pkg.price) / pkgBasePrice) * 100)}%
                     </span>
                   )}
-                  <span className={`text-lg font-bold ${isSelected ? 'text-[#8C52FF]' : 'text-slate-800'}`}>
+                  <span className={`text-xl font-bold ${isSelected ? 'text-[#8C52FF]' : 'text-slate-800'}`}>
                     {pkg.count}
                   </span>
                   <span className="text-[11px] text-slate-500 mb-1">генераций</span>
                   {pkgHasDiscount && (
                     <span className="text-[11px] text-slate-400 line-through">{pkgBasePrice} &#8381;</span>
                   )}
-                  <span className={`text-sm font-semibold ${isSelected ? 'text-[#8C52FF]' : 'text-slate-700'}`}>
+                  <span className={`text-sm font-bold ${isSelected ? 'text-[#8C52FF]' : 'text-slate-700'}`}>
                     {pkg.price} &#8381;
                   </span>
                 </button>
@@ -217,7 +199,7 @@ export default function BuyGenerationsModal({ isOpen, onClose }: BuyGenerationsM
               )}
               <span className="text-2xl font-bold text-slate-900">{totalPrice} &#8381;</span>
               {hasDiscount && (
-                <span className="ml-2 text-sm font-semibold text-green-600">-{discount}%</span>
+                <span className="ml-2 text-sm font-bold text-[#A855F7]">-{discount}%</span>
               )}
             </div>
           </div>
