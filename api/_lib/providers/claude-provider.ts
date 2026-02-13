@@ -1,9 +1,41 @@
 import type { PresentationStructure } from '../../../shared/types.js'
 import OpenAI from 'openai'
 import { getPresentationSubjectConfig } from '../generation/config/presentations/index.js'
+import { getSubjectConfig } from '../generation/config/index.js'
 import { getPresentationModel } from '../ai-models.js'
 import { sanitizeUserInput } from '../generation/sanitize.js'
 import type { GeneratePresentationParams } from '../ai-provider.js'
+
+/**
+ * Build curriculum context for practice tasks.
+ * Collects prior knowledge from previous grades so AI can
+ * create tasks that combine current topic with earlier material.
+ */
+function buildCurriculumContext(subjectId: string, grade: number): string {
+  const subjectConfig = getSubjectConfig(subjectId)
+  if (!subjectConfig) return ''
+
+  const lines: string[] = []
+  const gradeRange = subjectConfig.gradeRange
+
+  // Collect promptHints from previous grades (concise summaries)
+  for (let g = gradeRange.from; g < grade; g++) {
+    const gradeConfig = subjectConfig.grades[g]
+    if (gradeConfig?.promptHint) {
+      lines.push(`  ${g} класс: ${gradeConfig.promptHint}`)
+    }
+  }
+
+  // Current grade topics
+  const currentGrade = subjectConfig.grades[grade]
+  if (currentGrade?.topics?.length) {
+    lines.push(`  ${grade} класс (текущий): ${currentGrade.topics.join(', ')}`)
+  }
+
+  if (lines.length === 0) return ''
+
+  return `\nПрограмма ${subjectConfig.name} (что ученики уже знают и изучают):\n${lines.join('\n')}`
+}
 
 /**
  * Claude Provider for Presentation Generation
@@ -39,6 +71,9 @@ export class ClaudeProvider {
     if (params.themeType === 'custom' && params.themeCustom) {
       style = sanitizeUserInput(params.themeCustom)
     }
+
+    // Build curriculum context for practice tasks
+    const curriculumContext = buildCurriculumContext(params.subject, params.grade)
 
     // Simplified prompt - let Claude be creative
     const userPrompt = `Создай презентацию для урока.
@@ -89,9 +124,24 @@ export class ClaudeProvider {
 
 Используй преимущественно content и example. Тип table — только когда информация реально сравнительная (2-3 колонки с данными). Для всего остального используй content с разнообразной разметкой (heading, definition, bullet, highlight).
 
+ПРАКТИЧЕСКИЕ ЗАДАНИЯ (слайды practice) — ВАЖНЫЕ ТРЕБОВАНИЯ:
+Задания должны идти с нарастающей сложностью. Если заданий 5, то:
+- Задание 1: простое, прямое применение правила/формулы из урока. Одно действие.
+- Задание 2: чуть сложнее, требует понимания нюансов темы. Может включать подстановку или преобразование.
+- Задание 3: среднее, комбинирует знание текущей темы с ранее пройденным материалом (например, нужно сначала упростить, потом применить новое правило).
+- Задание 4: сложное, задача в несколько шагов. Обязательно использует ранее изученные темы вместе с текущей.
+- Задание 5: самое сложное, нестандартная или олимпиадная задача. Комбинирует несколько разных тем и навыков, но при этом основывается на теме урока.
+
+Если заданий меньше 5 — сохраняй пропорцию: от простого к сложному.
+Если заданий больше 5 — продолжай нарастание, последние задания самые трудные.
+
+Обязательно в сложных заданиях (3+) включай знания, которые ученики уже проходили ДО этой темы. Например, для алгебры 8 класса (квадратные уравнения) — в сложных заданиях комбинируй с одночленами, многочленами, степенями из 7 класса.
+${curriculumContext}
+
 ВАЖНО:
 - Слайды "practice" содержат ТОЛЬКО задания, БЕЗ ответов
 - После каждого "practice" добавь слайд type="content" с title="Ответы" и ответами
+- В слайде "Ответы" давай полные решения для сложных заданий (3+), не только конечный ответ
 - Каждый слайд должен иметь непустой content (минимум 3-4 элемента)
 - Каждый элемент content — объект {"el": "тип", "text": "текст"}
 - Обязательно включи теорию, определения, формулы (если есть для темы)
