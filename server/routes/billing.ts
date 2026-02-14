@@ -48,8 +48,19 @@ interface CreateLinkPayload {
 
 // Dynamic pricing configuration
 const PRICE_PER_GENERATION = 20  // rubles
-const MIN_GENERATIONS = 5
-const MAX_GENERATIONS = 200
+const ALLOWED_GENERATION_COUNTS = [5, 15, 30, 60, 120, 200] as const
+
+// Discounted packages (specific counts with fixed prices)
+const DISCOUNT_PACKAGES: Record<number, number> = {
+  60: 990,    // base 1200, -18%
+  120: 2190,  // base 2400, -9%
+  200: 3790,  // base 4000, -5%
+}
+
+function getGenerationsPrice(count: number): number {
+  if (count in DISCOUNT_PACKAGES) return DISCOUNT_PACKAGES[count]
+  return count * PRICE_PER_GENERATION
+}
 
 // Simple email validation regex
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -171,7 +182,7 @@ async function applyProductEffect(
   const dynamicMatch = productCode.match(/^generations_dynamic_(\d+)$/)
   if (dynamicMatch) {
     const generationsCount = parseInt(dynamicMatch[1], 10)
-    if (generationsCount >= MIN_GENERATIONS && generationsCount <= MAX_GENERATIONS) {
+    if (ALLOWED_GENERATION_COUNTS.includes(generationsCount as any)) {
       await db
         .update(users)
         .set({
@@ -269,15 +280,15 @@ router.post('/prodamus/create-link', withAuth(async (req, res) => {
       if (typeof generationsCount !== 'number' || !Number.isInteger(generationsCount)) {
         return res.status(400).json({ error: 'Количество генераций должно быть целым числом' })
       }
-      if (generationsCount < MIN_GENERATIONS || generationsCount > MAX_GENERATIONS) {
-        return res.status(400).json({ error: `Количество генераций должно быть от ${MIN_GENERATIONS} до ${MAX_GENERATIONS}` })
+      if (!ALLOWED_GENERATION_COUNTS.includes(generationsCount as any)) {
+        return res.status(400).json({ error: `Допустимые количества генераций: ${ALLOWED_GENERATION_COUNTS.join(', ')}` })
       }
 
       isDynamicPurchase = true
       effectiveProductCode = `generations_dynamic_${generationsCount}`
       product = {
         name: `Пакет ${generationsCount} генераций`,
-        price: generationsCount * PRICE_PER_GENERATION,
+        price: getGenerationsPrice(generationsCount),
         type: 'generations',
         value: generationsCount,
       }

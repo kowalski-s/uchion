@@ -23,6 +23,9 @@ const DISCOUNT_PACKAGES: Record<number, number> = {
   200: 3790,  // base 4000, -5%
 }
 
+// Allowed generation counts (slider steps)
+const GENERATION_STEPS = [5, 15, 30, 60, 120, 200] as const
+
 // Quick-select packages (shown as mini-blocks)
 const QUICK_PACKAGES = [
   { count: 15, price: 300 },
@@ -176,22 +179,34 @@ export default function BuyGenerationsModal({ isOpen, onClose }: BuyGenerationsM
               <span className="text-lg font-bold text-slate-900">{generationsCount}</span>
             </div>
 
-            <input
-              type="range"
-              min={5}
-              max={200}
-              value={generationsCount}
-              onChange={(e) => setGenerationsCount(parseInt(e.target.value, 10))}
-              className="w-full h-2 rounded-lg appearance-none cursor-pointer"
-              style={{
-                background: `linear-gradient(to right, #8C52FF 0%, #8C52FF ${((generationsCount - 5) / (200 - 5)) * 100}%, #e2e8f0 ${((generationsCount - 5) / (200 - 5)) * 100}%, #e2e8f0 100%)`
-              }}
-            />
+            {(() => {
+              const stepIndex = GENERATION_STEPS.indexOf(generationsCount as typeof GENERATION_STEPS[number])
+              const currentIndex = stepIndex >= 0 ? stepIndex : 0
+              const maxIndex = GENERATION_STEPS.length - 1
+              const fillPercent = (currentIndex / maxIndex) * 100
+              return (
+                <>
+                  <input
+                    type="range"
+                    min={0}
+                    max={maxIndex}
+                    step={1}
+                    value={currentIndex}
+                    onChange={(e) => setGenerationsCount(GENERATION_STEPS[parseInt(e.target.value, 10)])}
+                    className="w-full h-2 rounded-lg appearance-none cursor-pointer"
+                    style={{
+                      background: `linear-gradient(to right, #8C52FF 0%, #8C52FF ${fillPercent}%, #e2e8f0 ${fillPercent}%, #e2e8f0 100%)`
+                    }}
+                  />
 
-            <div className="flex justify-between text-xs text-slate-400 mt-1">
-              <span>5</span>
-              <span>200</span>
-            </div>
+                  <div className="flex justify-between text-xs text-slate-400 mt-1">
+                    {GENERATION_STEPS.map((step) => (
+                      <span key={step}>{step}</span>
+                    ))}
+                  </div>
+                </>
+              )
+            })()}
           </div>
 
           {/* Total */}
