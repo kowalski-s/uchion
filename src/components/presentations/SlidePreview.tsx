@@ -1250,7 +1250,7 @@ function ConclusionSlide({ slide, theme }: { slide: PresentationSlide; theme: Th
               <span style={{ color: theme.text }}>{el.text}</span>
             </div>
           ) : (
-            <RichContent key={i} items={[el]} theme={theme} />
+            <React.Fragment key={i}><RichContent items={[el]} theme={theme} /></React.Fragment>
           )
         ))}
       </div>
