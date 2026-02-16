@@ -63,15 +63,14 @@ export default function Header() {
   }, [createOpen])
 
   return (
-    <>
-      {/* Logo — fixed top-left, independent of header */}
-      <Link to="/" className="fixed top-2 left-3 z-20 hover:opacity-80 transition-opacity">
-        <img src="/logo.png" alt="УчиОн" className="h-16" />
-      </Link>
+      <header className="relative z-10 pt-4 pb-4">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 flex items-center justify-between">
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Logo */}
+            <Link to="/" className="flex-shrink-0 hover:opacity-80 transition-opacity mr-1 sm:mr-2">
+              <img src="/logo.png" alt="УчиОн" className="h-10 sm:h-12" />
+            </Link>
 
-      <header className="relative z-10 pt-6 pb-4">
-        <div className="mx-auto max-w-6xl px-6 flex items-center justify-between">
-          <div className="flex items-center gap-3">
             {/* Create button with dropdown */}
             {user && (
             <div className="relative" ref={createRef}>
@@ -143,6 +142,5 @@ export default function Header() {
         </div>
       </div>
     </header>
-    </>
   )
 }
