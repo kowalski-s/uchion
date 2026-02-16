@@ -120,7 +120,7 @@ export default function Header() {
                 className={`flex items-center gap-2 px-4 py-2 text-[#8C52FF] text-sm font-semibold rounded-xl transition-all hover:scale-105 bg-purple-50/80 hover:bg-purple-100 border border-purple-200/60 shadow-[0_0_8px_rgba(140,82,255,0.15)] ${isDashboard ? 'bg-purple-100 border-purple-300/80' : ''}`}
               >
                 <UserIcon className="w-4 h-4" />
-                <span>Личный кабинет</span>
+                <span className="hidden sm:inline">Личный кабинет</span>
               </Link>
               {user.role === 'admin' && (
                 <Link
