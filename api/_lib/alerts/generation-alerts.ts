@@ -98,6 +98,35 @@ export async function checkValidationScore(params: {
   }
 }
 
+/**
+ * Send an instant alert when a generation completely fails.
+ * No cooldown — fires on every failure.
+ */
+export async function sendInstantFailureAlert(params: {
+  subject: string
+  grade: number
+  topic: string
+  errorMessage?: string
+  userEmail?: string
+}): Promise<void> {
+  const lines = [
+    `Генерация полностью провалилась`,
+    ``,
+    `Предмет: ${params.subject}`,
+    `Класс: ${params.grade}`,
+    `Тема: ${params.topic}`,
+  ]
+  if (params.userEmail) lines.push(`Пользователь: ${params.userEmail}`)
+  if (params.errorMessage) lines.push(`Ошибка: ${params.errorMessage}`)
+
+  console.log(`[Alerts] Sending instant failure alert: ${params.subject} ${params.grade} class`)
+
+  await sendAdminAlert({
+    message: lines.join('\n'),
+    level: 'critical',
+  })
+}
+
 // --- Internal Functions ---
 
 function cleanOldRecords(): void {

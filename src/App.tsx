@@ -22,6 +22,7 @@ const AdminUsersPage = lazy(() => import('./pages/admin/AdminUsersPage'))
 const AdminUserDetailPage = lazy(() => import('./pages/admin/AdminUserDetailPage'))
 const AdminGenerationsPage = lazy(() => import('./pages/admin/AdminGenerationsPage'))
 const AdminPaymentsPage = lazy(() => import('./pages/admin/AdminPaymentsPage'))
+const AdminSettingsPage = lazy(() => import('./pages/admin/AdminSettingsPage'))
 
 function AdminFallback() {
   return (
@@ -57,6 +58,7 @@ export default function App() {
           <Route path="users/:id" element={<Suspense fallback={<AdminFallback />}><AdminUserDetailPage /></Suspense>} />
           <Route path="generations" element={<Suspense fallback={<AdminFallback />}><AdminGenerationsPage /></Suspense>} />
           <Route path="payments" element={<Suspense fallback={<AdminFallback />}><AdminPaymentsPage /></Suspense>} />
+          <Route path="settings" element={<Suspense fallback={<AdminFallback />}><AdminSettingsPage /></Suspense>} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

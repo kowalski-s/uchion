@@ -214,6 +214,16 @@ app.use(errorHandler)
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`)
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`)
+
+  // Send startup alert to admins (non-blocking)
+  import('./api/_lib/telegram/bot.js').then(({ sendAdminAlert }) => {
+    const env = process.env.NODE_ENV || 'development'
+    const time = new Date().toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })
+    sendAdminAlert({
+      message: `Сервер запущен\n\nПорт: ${PORT}\nОкружение: ${env}\nВремя: ${time}`,
+      level: 'info',
+    }).catch(() => { /* ignore if Telegram unavailable */ })
+  }).catch(() => { /* ignore */ })
 })
 
 export default app

@@ -47,7 +47,7 @@ const MESSAGES = {
   ALERTS_ON: '\u2705 \u0410\u043b\u0435\u0440\u0442\u044b \u0432\u043a\u043b\u044e\u0447\u0435\u043d\u044b',
   ALERTS_OFF: '\u274c \u0410\u043b\u0435\u0440\u0442\u044b \u0432\u044b\u043a\u043b\u044e\u0447\u0435\u043d\u044b',
   NOT_ADMIN: '\u274c \u0422\u043e\u043b\u044c\u043a\u043e \u0430\u0434\u043c\u0438\u043d\u0438\u0441\u0442\u0440\u0430\u0442\u043e\u0440\u044b \u043c\u043e\u0433\u0443\u0442 \u043f\u043e\u0434\u043f\u0438\u0441\u0430\u0442\u044c\u0441\u044f \u043d\u0430 \u0430\u043b\u0435\u0440\u0442\u044b',
-  USER_NOT_FOUND: '\u274c \u041f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044c \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d. \u0421\u043d\u0430\u0447\u0430\u043b\u0430 \u0432\u043e\u0439\u0434\u0438\u0442\u0435 \u043d\u0430 \u0441\u0430\u0439\u0442 \u0447\u0435\u0440\u0435\u0437 Telegram',
+  USER_NOT_FOUND: '\u274c \u041f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044c \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d. \u0423\u043a\u0430\u0436\u0438\u0442\u0435 \u0432\u0430\u0448 Chat ID \u0432 \u043d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0430\u0445 \u0430\u0434\u043c\u0438\u043d-\u043f\u0430\u043d\u0435\u043b\u0438',
   HELP: '\u0414\u043e\u0441\u0442\u0443\u043f\u043d\u044b\u0435 \u043a\u043e\u043c\u0430\u043d\u0434\u044b:\n/subscribe - \u043f\u043e\u0434\u043f\u0438\u0441\u0430\u0442\u044c\u0441\u044f \u043d\u0430 \u0430\u043b\u0435\u0440\u0442\u044b\n/unsubscribe - \u043e\u0442\u043f\u0438\u0441\u0430\u0442\u044c\u0441\u044f \u043e\u0442 \u0430\u043b\u0435\u0440\u0442\u043e\u0432\n/status - \u043f\u0440\u043e\u0432\u0435\u0440\u0438\u0442\u044c \u0441\u0442\u0430\u0442\u0443\u0441 \u043f\u043e\u0434\u043f\u0438\u0441\u043a\u0438',
   ERROR: '\u274c \u041f\u0440\u043e\u0438\u0437\u043e\u0448\u043b\u0430 \u043e\u0448\u0438\u0431\u043a\u0430. \u041f\u043e\u043f\u0440\u043e\u0431\u0443\u0439\u0442\u0435 \u043f\u043e\u0437\u0436\u0435',
 }
@@ -55,10 +55,13 @@ const MESSAGES = {
 // ==================== HELPER FUNCTIONS ====================
 
 /**
- * Find a user by their Telegram ID (providerId where provider='telegram')
+ * Find a user by their Telegram ID.
+ * First tries provider='telegram' + providerId (legacy login).
+ * Falls back to telegramChatId (linked via admin settings).
  */
 async function findUserByTelegramId(telegramId: string) {
-  const [user] = await db
+  // 1. Legacy: user logged in via Telegram OAuth
+  const [byProvider] = await db
     .select({
       id: users.id,
       email: users.email,
@@ -75,7 +78,22 @@ async function findUserByTelegramId(telegramId: string) {
     )
     .limit(1)
 
-  return user || null
+  if (byProvider) return byProvider
+
+  // 2. Fallback: admin linked Chat ID via settings page
+  const [byChatId] = await db
+    .select({
+      id: users.id,
+      email: users.email,
+      role: users.role,
+      wantsAlerts: users.wantsAlerts,
+      telegramChatId: users.telegramChatId,
+    })
+    .from(users)
+    .where(eq(users.telegramChatId, telegramId))
+    .limit(1)
+
+  return byChatId || null
 }
 
 /**

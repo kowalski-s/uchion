@@ -4,6 +4,7 @@ import usersRouter from './users.js'
 import generationsRouter, { generationLogsRouter } from './generations.js'
 import paymentsRouter from './payments.js'
 import alertsRouter from './alerts.js'
+import settingsRouter from './settings.js'
 
 const router = Router()
 
@@ -13,6 +14,7 @@ router.use('/generations', generationsRouter)
 router.use('/generation-logs', generationLogsRouter)
 router.use('/payments', paymentsRouter)
 router.use('/alerts', alertsRouter)
+router.use('/settings', settingsRouter)
 // /test-alert is handled by alertsRouter at root level
 router.use('/', alertsRouter)
 

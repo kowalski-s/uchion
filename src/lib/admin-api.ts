@@ -322,6 +322,71 @@ export async function fetchAdminPayments(options?: FetchAdminPaymentsOptions): P
   return res.json()
 }
 
+// ==================== SETTINGS ====================
+
+export interface AdminSettings {
+  telegramChatId: string | null
+  wantsAlerts: boolean
+}
+
+export async function fetchAdminSettings(): Promise<AdminSettings> {
+  const res = await fetch('/api/admin/settings', {
+    credentials: 'include',
+  })
+
+  if (!res.ok) {
+    if (res.status === 401) throw new Error('Требуется авторизация')
+    if (res.status === 403) throw new Error('Нет доступа к админ-панели')
+    throw new Error('Не удалось загрузить настройки')
+  }
+
+  return res.json()
+}
+
+export async function updateTelegramChatId(chatId: string): Promise<AdminSettings> {
+  const res = await fetch('/api/admin/settings/telegram', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chatId }),
+  })
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error(data.error || 'Не удалось сохранить Chat ID')
+  }
+
+  return res.json()
+}
+
+export async function removeTelegramChatId(): Promise<AdminSettings> {
+  const res = await fetch('/api/admin/settings/telegram', {
+    method: 'DELETE',
+    credentials: 'include',
+  })
+
+  if (!res.ok) {
+    throw new Error('Не удалось отключить Telegram')
+  }
+
+  return res.json()
+}
+
+export async function sendTestAlert(message?: string): Promise<{ success: boolean; sentCount: number; message: string }> {
+  const res = await fetch('/api/admin/test-alert', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ level: 'info', message }),
+  })
+
+  if (!res.ok) {
+    throw new Error('Не удалось отправить тестовый алерт')
+  }
+
+  return res.json()
+}
+
 // ==================== HELPERS ====================
 
 export function formatProviderName(provider: string | null): string {

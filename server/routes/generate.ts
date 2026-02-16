@@ -8,7 +8,7 @@ import { getAIProvider } from '../../api/_lib/ai-provider.js'
 import { buildPdf, type PdfTemplateId } from '../../api/_lib/pdf.js'
 import { withAuth } from '../middleware/auth.js'
 import { checkGenerateRateLimit, checkDailyGenerationLimit, checkRateLimit } from '../middleware/rate-limit.js'
-import { trackGeneration } from '../../api/_lib/alerts/generation-alerts.js'
+import { trackGeneration, sendInstantFailureAlert } from '../../api/_lib/alerts/generation-alerts.js'
 import type { AuthenticatedRequest } from '../types.js'
 import type { GeneratePayload, Worksheet } from '../../shared/types.js'
 import { GenerateSchema, TaskTypeIdSchema, DifficultyLevelSchema, WorksheetSchema } from '../../shared/worksheet.js'
@@ -148,6 +148,13 @@ router.post('/', withAuth(async (req: AuthenticatedRequest, res: Response) => {
       console.error('[API] PDF generation error:', e)
       // Track failed generation for alerts
       trackGeneration(false).catch((err) => console.error('[Alerts] Failed to track generation:', err))
+      sendInstantFailureAlert({
+        subject: input.subject,
+        grade: input.grade,
+        topic: input.topic,
+        errorMessage: 'PDF generation failed: ' + (e instanceof Error ? e.message : String(e)),
+        userEmail: req.user.email || undefined,
+      }).catch((err) => console.error('[Alerts] Failed to send instant failure alert:', err))
       sendEvent({ type: 'error', code: 'PDF_ERROR', message: 'Ошибка генерации PDF.' })
       res.end()
       return
@@ -222,6 +229,15 @@ router.post('/', withAuth(async (req: AuthenticatedRequest, res: Response) => {
 
     // Track failed generation for alerts
     trackGeneration(false).catch((e) => console.error('[Alerts] Failed to track generation:', e))
+
+    // Instant alert to admins
+    sendInstantFailureAlert({
+      subject: input.subject,
+      grade: input.grade,
+      topic: input.topic,
+      errorMessage: err instanceof Error ? err.message : String(err),
+      userEmail: req.user.email || undefined,
+    }).catch((e) => console.error('[Alerts] Failed to send instant failure alert:', e))
 
     const code =
       err instanceof Error && err.message === 'AI_ERROR'
