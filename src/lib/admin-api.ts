@@ -229,21 +229,16 @@ export async function fetchAdminGenerations(options?: FetchAdminGenerationsOptio
   return res.json()
 }
 
-// ==================== GENERATION LOGS ====================
-
-export type GenerationLogStatus = 'pending' | 'processing' | 'completed' | 'failed'
-export type GenerationLogStatusFilter = 'all' | GenerationLogStatus
+// ==================== GENERATION ERROR LOGS ====================
 
 export interface GenerationLog {
   id: string
   userId: string
   userEmail: string | null
   userName: string | null
-  worksheetId: string | null
-  worksheetSubject: 'math' | 'algebra' | 'geometry' | 'russian' | null
-  worksheetGrade: number | null
-  worksheetTopic: string | null
-  status: GenerationLogStatus
+  subject: 'math' | 'algebra' | 'geometry' | 'russian' | null
+  grade: number | null
+  topic: string | null
   errorMessage: string | null
   createdAt: string
 }
@@ -251,7 +246,6 @@ export interface GenerationLog {
 export interface FetchGenerationLogsOptions {
   page?: number
   limit?: number
-  status?: GenerationLogStatusFilter
   search?: string
 }
 
@@ -265,7 +259,6 @@ export async function fetchGenerationLogs(options?: FetchGenerationLogsOptions):
 
   if (options?.page) params.set('page', String(options.page))
   if (options?.limit) params.set('limit', String(options.limit))
-  if (options?.status) params.set('status', options.status)
   if (options?.search) params.set('search', options.search)
 
   const url = `/api/admin/generation-logs${params.toString() ? `?${params}` : ''}`

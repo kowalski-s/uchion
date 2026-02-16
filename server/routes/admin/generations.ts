@@ -107,10 +107,10 @@ router.get('/', withAdminAuth(async (req: AuthenticatedRequest, res: Response) =
 }))
 
 // ==================== GET /api/admin/generation-logs ====================
+// Only failed generations are logged, so no status filter needed
 const GenerationLogsQuerySchema = z.object({
   page: z.string().optional().transform(v => Math.max(1, parseInt(v || '1'))),
   limit: z.string().optional().transform(v => Math.min(100, Math.max(1, parseInt(v || '20')))),
-  status: z.enum(['all', 'pending', 'processing', 'completed', 'failed']).optional().default('all'),
   search: z.string().optional(),
 })
 
@@ -128,17 +128,14 @@ generationLogsRouter.get('/', withAdminAuth(async (req: AuthenticatedRequest, re
     throw ApiError.validation(parse.error.flatten().fieldErrors)
   }
 
-  const { page, limit, status, search } = parse.data
+  const { page, limit, search } = parse.data
   const offset = (page - 1) * limit
 
   const conditions: ReturnType<typeof eq>[] = []
 
-  if (status !== 'all') {
-    conditions.push(eq(generations.status, status))
-  }
-
   if (search && search.trim()) {
     const searchPattern = `%${escapeLike(search.trim())}%`
+
     const matchedUsers = await db
       .select({ id: users.id })
       .from(users)
@@ -146,13 +143,17 @@ generationLogsRouter.get('/', withAdminAuth(async (req: AuthenticatedRequest, re
       .limit(100)
 
     const userIds = matchedUsers.map(u => u.id)
-    if (userIds.length === 0) {
-      return res.status(200).json({
-        logs: [],
-        pagination: { page, limit, total: 0, totalPages: 0 }
-      })
+
+    if (userIds.length > 0) {
+      conditions.push(
+        or(
+          inArray(generations.userId, userIds),
+          like(generations.topic, searchPattern)
+        )!
+      )
+    } else {
+      conditions.push(like(generations.topic, searchPattern))
     }
-    conditions.push(inArray(generations.userId, userIds))
   }
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined
@@ -168,17 +169,14 @@ generationLogsRouter.get('/', withAdminAuth(async (req: AuthenticatedRequest, re
       userId: generations.userId,
       userEmail: users.email,
       userName: users.name,
-      worksheetId: generations.worksheetId,
-      worksheetSubject: worksheets.subject,
-      worksheetGrade: worksheets.grade,
-      worksheetTopic: worksheets.topic,
-      status: generations.status,
+      subject: generations.subject,
+      grade: generations.grade,
+      topic: generations.topic,
       errorMessage: generations.errorMessage,
       createdAt: generations.createdAt,
     })
     .from(generations)
     .leftJoin(users, eq(generations.userId, users.id))
-    .leftJoin(worksheets, eq(generations.worksheetId, worksheets.id))
     .where(whereClause)
     .orderBy(desc(generations.createdAt))
     .limit(limit)

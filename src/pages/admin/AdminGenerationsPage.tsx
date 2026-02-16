@@ -6,10 +6,8 @@ import {
   fetchGenerationLogs,
   formatSubjectName,
   formatDifficulty,
-  formatGenerationStatus,
   formatDateTime,
   type SubjectFilter,
-  type GenerationLogStatusFilter,
 } from '../../lib/admin-api'
 
 // Icon components
@@ -45,13 +43,6 @@ function DocumentIcon({ className = "w-5 h-5" }: { className?: string }) {
   )
 }
 
-function ClipboardDocumentListIcon({ className = "w-5 h-5" }: { className?: string }) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25ZM6.75 12h.008v.008H6.75V12Zm0 3h.008v.008H6.75V15Zm0 3h.008v.008H6.75V18Z" />
-    </svg>
-  )
-}
 
 function ExclamationTriangleIcon({ className = "w-5 h-5" }: { className?: string }) {
   return (
@@ -71,13 +62,6 @@ const subjectTabs: { value: SubjectFilter; label: string; color: string }[] = [
   { value: 'russian', label: 'Русский язык', color: 'bg-emerald-500' },
 ]
 
-const logStatusTabs: { value: GenerationLogStatusFilter; label: string; color: string }[] = [
-  { value: 'all', label: 'Все', color: 'bg-slate-700' },
-  { value: 'completed', label: 'Успешные', color: 'bg-emerald-500' },
-  { value: 'processing', label: 'В процессе', color: 'bg-blue-500' },
-  { value: 'pending', label: 'Ожидание', color: 'bg-amber-500' },
-  { value: 'failed', label: 'Ошибки', color: 'bg-red-500' },
-]
 
 function getSubjectBadgeStyle(subject: string) {
   switch (subject) {
@@ -103,20 +87,6 @@ function getDifficultyBadgeStyle(difficulty: string) {
   }
 }
 
-function getLogStatusBadgeStyle(status: string) {
-  switch (status) {
-    case 'completed':
-      return 'bg-emerald-100 text-emerald-700'
-    case 'processing':
-      return 'bg-blue-100 text-blue-700'
-    case 'pending':
-      return 'bg-amber-100 text-amber-700'
-    case 'failed':
-      return 'bg-red-100 text-red-700'
-    default:
-      return 'bg-slate-100 text-slate-600'
-  }
-}
 
 export default function AdminGenerationsPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('worksheets')
@@ -124,7 +94,6 @@ export default function AdminGenerationsPage() {
   const [search, setSearch] = useState('')
   const [searchInput, setSearchInput] = useState('')
   const [subjectFilter, setSubjectFilter] = useState<SubjectFilter>('all')
-  const [logStatusFilter, setLogStatusFilter] = useState<GenerationLogStatusFilter>('all')
   const [expandedError, setExpandedError] = useState<string | null>(null)
   const limit = 20
 
@@ -136,10 +105,10 @@ export default function AdminGenerationsPage() {
     enabled: viewMode === 'worksheets',
   })
 
-  // Query for logs
+  // Query for error logs
   const logsQuery = useQuery({
-    queryKey: ['admin-generation-logs', page, search, logStatusFilter],
-    queryFn: () => fetchGenerationLogs({ page, limit, search, status: logStatusFilter }),
+    queryKey: ['admin-generation-logs', page, search],
+    queryFn: () => fetchGenerationLogs({ page, limit, search }),
     staleTime: 30 * 1000,
     enabled: viewMode === 'logs',
   })
@@ -158,11 +127,6 @@ export default function AdminGenerationsPage() {
 
   const handleSubjectChange = (subject: SubjectFilter) => {
     setSubjectFilter(subject)
-    setPage(1)
-  }
-
-  const handleLogStatusChange = (status: GenerationLogStatusFilter) => {
-    setLogStatusFilter(status)
     setPage(1)
   }
 
@@ -210,8 +174,8 @@ export default function AdminGenerationsPage() {
               : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
-          <ClipboardDocumentListIcon className="w-5 h-5" />
-          Логи
+          <ExclamationTriangleIcon className="w-5 h-5" />
+          Ошибки
         </button>
       </div>
 
@@ -391,40 +355,23 @@ export default function AdminGenerationsPage() {
         </>
       )}
 
-      {/* Logs View */}
+      {/* Error Logs View */}
       {viewMode === 'logs' && (
         <>
           {/* Summary */}
           {logsQuery.data && (
             <div className="glass-container p-4 flex items-center gap-4">
-              <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center">
-                <ClipboardDocumentListIcon className="w-6 h-6 text-slate-600" />
+              <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center">
+                <ExclamationTriangleIcon className="w-6 h-6 text-red-600" />
               </div>
               <div>
-                <p className="text-sm text-slate-500">Всего записей в логе</p>
+                <p className="text-sm text-slate-500">Всего ошибок генерации</p>
                 <p className="text-xl font-bold text-slate-700">
                   {logsQuery.data.pagination.total}
                 </p>
               </div>
             </div>
           )}
-
-          {/* Status Tabs */}
-          <div className="flex flex-wrap gap-2">
-            {logStatusTabs.map((tab) => (
-              <button
-                key={tab.value}
-                onClick={() => handleLogStatusChange(tab.value)}
-                className={`px-4 py-2 rounded-xl font-medium transition-colors ${
-                  logStatusFilter === tab.value
-                    ? `${tab.color} text-white`
-                    : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
 
           {/* Search */}
           <div className="glass-container p-4">
@@ -435,7 +382,7 @@ export default function AdminGenerationsPage() {
                   type="text"
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
-                  placeholder="Поиск по email пользователя..."
+                  placeholder="Поиск по email пользователя или теме..."
                   className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#8C52FF]/20 focus:border-[#8C52FF]"
                 />
               </div>
@@ -457,7 +404,7 @@ export default function AdminGenerationsPage() {
             </form>
           </div>
 
-          {/* Logs Table */}
+          {/* Error Logs Table */}
           <div className="glass-container overflow-hidden">
             {logsQuery.isLoading ? (
               <div className="flex justify-center py-12">
@@ -469,13 +416,13 @@ export default function AdminGenerationsPage() {
             ) : !logsQuery.data?.logs.length ? (
               <div className="text-center py-12">
                 <div className="mb-4">
-                  <ClipboardDocumentListIcon className="w-12 h-12 text-slate-300 mx-auto" />
+                  <ExclamationTriangleIcon className="w-12 h-12 text-slate-300 mx-auto" />
                 </div>
                 <p className="text-slate-500">
-                  {search || logStatusFilter !== 'all' ? 'Логи не найдены' : 'Нет записей в логе'}
+                  {search ? 'Ошибки не найдены' : 'Нет ошибок генерации'}
                 </p>
                 <p className="text-sm text-slate-400 mt-1">
-                  Логи появятся после генерации листов
+                  Здесь будут отображаться провалившиеся генерации
                 </p>
               </div>
             ) : (
@@ -486,7 +433,6 @@ export default function AdminGenerationsPage() {
                       <tr className="border-b border-slate-200">
                         <th className="text-left px-6 py-4 text-sm font-semibold text-slate-600">Дата</th>
                         <th className="text-left px-6 py-4 text-sm font-semibold text-slate-600">Пользователь</th>
-                        <th className="text-left px-6 py-4 text-sm font-semibold text-slate-600">Статус</th>
                         <th className="text-left px-6 py-4 text-sm font-semibold text-slate-600">Предмет</th>
                         <th className="text-left px-6 py-4 text-sm font-semibold text-slate-600">Тема</th>
                         <th className="text-center px-6 py-4 text-sm font-semibold text-slate-600">Ошибка</th>
@@ -495,7 +441,7 @@ export default function AdminGenerationsPage() {
                     <tbody>
                       {logsQuery.data.logs.map((log) => (
                         <React.Fragment key={log.id}>
-                          <tr className={`border-b border-slate-100 hover:bg-slate-50/50 ${log.status === 'failed' ? 'bg-red-50/30' : ''}`}>
+                          <tr className="border-b border-slate-100 hover:bg-slate-50/50 bg-red-50/30">
                             <td className="px-6 py-4">
                               <span className="text-sm text-slate-600">
                                 {formatDateTime(log.createdAt)}
@@ -513,21 +459,16 @@ export default function AdminGenerationsPage() {
                               )}
                             </td>
                             <td className="px-6 py-4">
-                              <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getLogStatusBadgeStyle(log.status)}`}>
-                                {formatGenerationStatus(log.status)}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4">
                               <span className="text-sm text-slate-600">
-                                {log.worksheetSubject ? formatSubjectName(log.worksheetSubject) : '—'}
+                                {log.subject ? formatSubjectName(log.subject) : '—'}
                               </span>
-                              {log.worksheetGrade && (
-                                <p className="text-xs text-slate-500">{log.worksheetGrade} класс</p>
+                              {log.grade && (
+                                <p className="text-xs text-slate-500">{log.grade} класс</p>
                               )}
                             </td>
                             <td className="px-6 py-4">
-                              <span className="text-sm text-slate-600 max-w-[200px] truncate block" title={log.worksheetTopic || undefined}>
-                                {log.worksheetTopic || '—'}
+                              <span className="text-sm text-slate-600 max-w-[200px] truncate block" title={log.topic || undefined}>
+                                {log.topic || '—'}
                               </span>
                             </td>
                             <td className="px-6 py-4 text-center">
@@ -547,7 +488,7 @@ export default function AdminGenerationsPage() {
                           </tr>
                           {expandedError === log.id && log.errorMessage && (
                             <tr className="bg-red-50">
-                              <td colSpan={6} className="px-6 py-4">
+                              <td colSpan={5} className="px-6 py-4">
                                 <div className="text-sm text-red-700 font-mono whitespace-pre-wrap break-all">
                                   {log.errorMessage}
                                 </div>

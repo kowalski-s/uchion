@@ -90,6 +90,9 @@ export const generations = pgTable('generations', {
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   worksheetId: uuid('worksheet_id').references(() => worksheets.id, { onDelete: 'set null' }),
   status: generationStatusEnum('status').notNull().default('pending'),
+  subject: subjectEnum('subject'),
+  grade: integer('grade'),
+  topic: varchar('topic', { length: 200 }),
   errorMessage: text('error_message'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({

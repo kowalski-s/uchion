@@ -2,8 +2,8 @@ import { Router } from 'express'
 import type { Response } from 'express'
 import { z } from 'zod'
 import { db } from '../../db/index.js'
-import { users, worksheets, subscriptions } from '../../db/schema.js'
-import { eq, sql, and, gt } from 'drizzle-orm'
+import { users, worksheets, subscriptions, generations } from '../../db/schema.js'
+import { eq, sql, and, gt, lt } from 'drizzle-orm'
 import { getAIProvider } from '../../api/_lib/ai-provider.js'
 import { buildPdf, type PdfTemplateId } from '../../api/_lib/pdf.js'
 import { withAuth } from '../middleware/auth.js'
@@ -146,6 +146,15 @@ router.post('/', withAuth(async (req: AuthenticatedRequest, res: Response) => {
       pdfBase64 = await buildPdf(worksheet, input as GeneratePayload)
     } catch (e) {
       console.error('[API] PDF generation error:', e)
+      // Log failed generation to DB
+      db.insert(generations).values({
+        userId,
+        status: 'failed',
+        subject: input.subject,
+        grade: input.grade,
+        topic: input.topic,
+        errorMessage: 'PDF generation failed: ' + (e instanceof Error ? e.message : String(e)),
+      }).catch(dbErr => console.error('[API] Failed to log generation error:', dbErr))
       // Track failed generation for alerts
       trackGeneration(false).catch((err) => console.error('[Alerts] Failed to track generation:', err))
       sendInstantFailureAlert({
@@ -216,6 +225,23 @@ router.post('/', withAuth(async (req: AuthenticatedRequest, res: Response) => {
 
   } catch (err: unknown) {
     console.error('[API] Generate error:', err)
+
+    // Log failed generation to DB
+    db.insert(generations).values({
+      userId,
+      status: 'failed',
+      subject: input.subject,
+      grade: input.grade,
+      topic: input.topic,
+      errorMessage: err instanceof Error ? err.message : String(err),
+    }).catch(dbErr => console.error('[API] Failed to log generation error:', dbErr))
+
+    // Probabilistic cleanup: ~1/50 chance, delete logs older than 30 days
+    if (Math.random() < 0.02) {
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+      db.delete(generations).where(lt(generations.createdAt, thirtyDaysAgo))
+        .catch(e => console.error('[API] Failed to cleanup old generation logs:', e))
+    }
 
     // Rollback: generation failed, restore the decremented limit
     await db
