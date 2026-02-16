@@ -67,7 +67,7 @@ export default function Header() {
       <div className="mx-auto max-w-6xl px-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Link to="/" className="flex items-center hover:opacity-80 transition-opacity">
-            <img src="/logo.jpg" alt="УчиОн" className="h-14" />
+            <img src="/logo.png" alt="УчиОн" className="h-24" />
           </Link>
 
           {/* Create button with dropdown */}
