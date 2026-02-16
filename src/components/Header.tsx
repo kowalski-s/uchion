@@ -68,7 +68,7 @@ export default function Header() {
           <div className="flex items-center gap-2 sm:gap-3">
             {/* Logo */}
             <Link to="/" className="flex-shrink-0 hover:opacity-80 transition-opacity mr-1 sm:mr-2">
-              <img src="/logo.png" alt="УчиОн" className="h-10 sm:h-12" />
+              <img src="/logo.png" alt="УчиОн" className="h-14 sm:h-16" />
             </Link>
 
             {/* Create button with dropdown */}
