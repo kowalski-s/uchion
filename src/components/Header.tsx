@@ -63,18 +63,17 @@ export default function Header() {
   }, [createOpen])
 
   return (
-    <header className="relative z-10 pt-6 pb-4">
-      <div className="mx-auto max-w-6xl px-6 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link to="/" className="flex items-center hover:opacity-80 transition-opacity">
-            <span className="text-2xl font-bold">
-              <span className="text-slate-800">Учи</span>
-              <span className="text-[#8C52FF]">Он</span>
-            </span>
-          </Link>
+    <>
+      {/* Logo — fixed top-left, independent of header */}
+      <Link to="/" className="fixed top-2 left-3 z-20 hover:opacity-80 transition-opacity">
+        <img src="/logo.png" alt="УчиОн" className="h-16" />
+      </Link>
 
-          {/* Create button with dropdown */}
-          {user && (
+      <header className="relative z-10 pt-6 pb-4">
+        <div className="mx-auto max-w-6xl px-6 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            {/* Create button with dropdown */}
+            {user && (
             <div className="relative" ref={createRef}>
               <button
                 onClick={() => setCreateOpen(!createOpen)}
@@ -144,5 +143,6 @@ export default function Header() {
         </div>
       </div>
     </header>
+    </>
   )
 }
