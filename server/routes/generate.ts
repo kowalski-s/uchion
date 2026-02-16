@@ -10,6 +10,7 @@ import { withAuth } from '../middleware/auth.js'
 import { checkGenerateRateLimit, checkDailyGenerationLimit, checkRateLimit } from '../middleware/rate-limit.js'
 import { trackGeneration, sendInstantFailureAlert } from '../../api/_lib/alerts/generation-alerts.js'
 import type { AuthenticatedRequest } from '../types.js'
+import { withAIContext } from '../../api/_lib/ai-usage.js'
 import type { GeneratePayload, Worksheet } from '../../shared/types.js'
 import { GenerateSchema, TaskTypeIdSchema, DifficultyLevelSchema, WorksheetSchema } from '../../shared/worksheet.js'
 
@@ -135,9 +136,14 @@ router.post('/', withAuth(async (req: AuthenticatedRequest, res: Response) => {
       variantIndex: input.variantIndex,
       isPaid,
     }
-    const worksheet = await ai.generateWorksheet(generateParams as GeneratePayload, (percent) => {
-      sendEvent({ type: 'progress', percent })
-    })
+
+    const aiSessionId = crypto.randomUUID()
+    const worksheet = await withAIContext(
+      { sessionId: aiSessionId, userId, subject: input.subject, grade: input.grade },
+      () => ai.generateWorksheet(generateParams as GeneratePayload, (percent) => {
+        sendEvent({ type: 'progress', percent })
+      })
+    )
 
     sendEvent({ type: 'progress', percent: 97 })
 
@@ -350,15 +356,19 @@ router.post('/regenerate-task', withAuth(async (req: AuthenticatedRequest, res: 
     const isPaid = (sub && sub.plan !== 'free' && sub.status === 'active') || req.user.role === 'admin'
 
     const ai = getAIProvider()
-    const result = await ai.regenerateTask({
-      subject: input.context.subject,
-      grade: input.context.grade,
-      topic: input.context.topic,
-      difficulty: input.context.difficulty,
-      taskType: input.taskType,
-      isTest: input.isTest,
-      isPaid,
-    })
+    const aiSessionId = crypto.randomUUID()
+    const result = await withAIContext(
+      { sessionId: aiSessionId, userId, subject: input.context.subject, grade: input.context.grade },
+      () => ai.regenerateTask({
+        subject: input.context.subject,
+        grade: input.context.grade,
+        topic: input.context.topic,
+        difficulty: input.context.difficulty,
+        taskType: input.taskType,
+        isTest: input.isTest,
+        isPaid,
+      })
+    )
 
     return res.json({
       status: 'ok',

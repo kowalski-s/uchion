@@ -1,5 +1,6 @@
 import OpenAI from 'openai'
 import { getFixerModelConfig } from '../../../ai-models.js'
+import { trackFromContext } from '../../../ai-usage.js'
 import { safeJsonParse } from './safe-json-parse.js'
 import type { TaskTypeId } from '../../config/task-types.js'
 import type { DifficultyLevel } from '../../config/difficulty.js'
@@ -114,6 +115,16 @@ ${issue.message}${suggestionLine}
       temperature: 0.2,
       ...({ reasoning } as Record<string, unknown>),
     })
+
+    if (completion.usage) {
+      trackFromContext({
+        callType: 'fixer',
+        model: completion.model || model,
+        promptTokens: completion.usage.prompt_tokens,
+        completionTokens: completion.usage.completion_tokens,
+        durationMs: Date.now() - start,
+      })
+    }
 
     const content = completion.choices[0]?.message?.content || ''
 

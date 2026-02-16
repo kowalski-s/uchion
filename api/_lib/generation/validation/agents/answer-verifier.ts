@@ -1,5 +1,6 @@
 import OpenAI from 'openai'
 import { getVerifierModelConfig } from '../../../ai-models.js'
+import { trackFromContext } from '../../../ai-usage.js'
 import { safeJsonParse } from './safe-json-parse.js'
 import type { TaskTypeId } from '../../config/task-types.js'
 import type { AgentResult, AgentTaskResult, AgentIssue } from './index.js'
@@ -140,6 +141,16 @@ ${tasksText}
       temperature: 0.1,
       ...({ reasoning } as Record<string, unknown>),
     })
+
+    if (completion.usage) {
+      trackFromContext({
+        callType: 'verifier',
+        model: completion.model || model,
+        promptTokens: completion.usage.prompt_tokens,
+        completionTokens: completion.usage.completion_tokens,
+        durationMs: Date.now() - start,
+      })
+    }
 
     const content = completion.choices[0]?.message?.content || ''
     const jsonMatch = content.match(/\{[\s\S]*\}/)

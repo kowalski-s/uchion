@@ -227,6 +227,35 @@ export const presentations = pgTable('presentations', {
   createdAtIdx: index('presentations_created_at_idx').on(table.createdAt),
 }))
 
+// ==================== AI USAGE TABLE ====================
+// Tracks AI API calls and costs for analytics
+
+export const aiUsage = pgTable('ai_usage', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  sessionId: varchar('session_id', { length: 36 }).notNull(), // Groups all calls from one generation
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+
+  callType: varchar('call_type', { length: 30 }).notNull(),
+  // 'generation' | 'retry' | 'verifier' | 'content_checker' | 'quality_checker' | 'fixer' | 'presentation' | 'regenerate_task'
+
+  model: varchar('model', { length: 100 }).notNull(),
+  promptTokens: integer('prompt_tokens').notNull().default(0),
+  completionTokens: integer('completion_tokens').notNull().default(0),
+
+  costKopecks: integer('cost_kopecks').notNull().default(0),
+  durationMs: integer('duration_ms'),
+
+  subject: varchar('subject', { length: 20 }),
+  grade: integer('grade'),
+
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  sessionIdIdx: index('ai_usage_session_id_idx').on(table.sessionId),
+  userIdIdx: index('ai_usage_user_id_idx').on(table.userId),
+  createdAtIdx: index('ai_usage_created_at_idx').on(table.createdAt),
+  modelIdx: index('ai_usage_model_idx').on(table.model),
+}))
+
 // ==================== RELATIONS ====================
 
 export const usersRelations = relations(users, ({ many, one }) => ({

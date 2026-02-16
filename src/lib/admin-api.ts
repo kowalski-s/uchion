@@ -380,6 +380,65 @@ export async function sendTestAlert(message?: string): Promise<{ success: boolea
   return res.json()
 }
 
+// ==================== AI COSTS ====================
+
+export interface AICostsByModel {
+  model: string
+  costRubles: number
+  calls: number
+  promptTokens: number
+  completionTokens: number
+}
+
+export interface AICostsByCallType {
+  callType: string
+  costRubles: number
+  calls: number
+}
+
+export interface AICostsSummary {
+  totalCostRubles: number
+  totalCalls: number
+  totalPromptTokens: number
+  totalCompletionTokens: number
+  costByModel: AICostsByModel[]
+  costByCallType: AICostsByCallType[]
+}
+
+export interface AICostsDaily {
+  date: string
+  costRubles: number
+  calls: number
+}
+
+export async function fetchAICostsSummary(period: 'today' | 'week' | 'month' | 'all' = 'month'): Promise<AICostsSummary> {
+  const res = await fetch(`/api/admin/ai-costs/summary?period=${period}`, {
+    credentials: 'include',
+  })
+
+  if (!res.ok) {
+    if (res.status === 401) throw new Error('Требуется авторизация')
+    if (res.status === 403) throw new Error('Нет доступа к админ-панели')
+    throw new Error('Не удалось загрузить данные о расходах AI')
+  }
+
+  return res.json()
+}
+
+export async function fetchAICostsDaily(days: number = 30): Promise<{ daily: AICostsDaily[] }> {
+  const res = await fetch(`/api/admin/ai-costs/daily?days=${days}`, {
+    credentials: 'include',
+  })
+
+  if (!res.ok) {
+    if (res.status === 401) throw new Error('Требуется авторизация')
+    if (res.status === 403) throw new Error('Нет доступа к админ-панели')
+    throw new Error('Не удалось загрузить данные о расходах AI')
+  }
+
+  return res.json()
+}
+
 // ==================== HELPERS ====================
 
 export function formatProviderName(provider: string | null): string {

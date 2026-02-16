@@ -1,6 +1,7 @@
 import type { WorksheetJson, ValidationResult, ValidationIssueAnalysis, Subject } from '../../../shared/types'
 import { SUBJECT_CONFIG } from './prompts.js'
 import { trackAICall } from '../alerts/generation-alerts.js'
+import { trackFromContext } from '../ai-usage.js'
 import type OpenAI from 'openai'
 
 // OpenAI response types
@@ -45,6 +46,17 @@ export async function timedLLMCall<T extends ChatCompletionResponse>(label: stri
     trackAICall({ success: true, isTimeout: false }).catch((e) =>
       console.error('[Alerts] Failed to track AI call:', e)
     )
+
+    // Track AI usage for cost analytics
+    if (res?.usage) {
+      trackFromContext({
+        callType: label,
+        model: res.model || 'unknown',
+        promptTokens: res.usage.prompt_tokens,
+        completionTokens: res.usage.completion_tokens,
+        durationMs: end - start,
+      })
+    }
 
     return res
   } catch (error) {

@@ -4,6 +4,7 @@ import { getPresentationSubjectConfig } from '../generation/config/presentations
 import { getSubjectConfig } from '../generation/config/index.js'
 import { getPresentationModel } from '../ai-models.js'
 import { sanitizeUserInput } from '../generation/sanitize.js'
+import { trackFromContext } from '../ai-usage.js'
 import type { GeneratePresentationParams } from '../ai-provider.js'
 
 /**
@@ -171,6 +172,15 @@ ${curriculumContext}
         console.error('[УчиОн] Message:', error.message)
       }
       throw new Error('AI_ERROR')
+    }
+
+    if (completion.usage) {
+      trackFromContext({
+        callType: 'presentation',
+        model: completion.model || model,
+        promptTokens: completion.usage.prompt_tokens,
+        completionTokens: completion.usage.completion_tokens,
+      })
     }
 
     onProgress?.(65)

@@ -21,6 +21,7 @@ import { validateWorksheet as validateTasksDeterministic } from '../generation/v
 import { runMultiAgentValidation } from '../generation/validation/agents/index.js'
 import { getPresentationSubjectConfig } from '../generation/config/presentations/index.js'
 import { getGenerationModel } from '../ai-models.js'
+import { trackFromContext } from '../ai-usage.js'
 import type { AIProvider, GenerateParams, GeneratePresentationParams, RegenerateTaskParams, RegenerateTaskResult, GeneratedTask, GeneratedWorksheetJson } from '../ai-provider.js'
 import { getCircuitBreaker } from './circuit-breaker.js'
 
@@ -791,6 +792,15 @@ ${jsonExamples.join(',\n')}
       max_tokens: 4000,
       temperature: 0.4
     })
+
+    if (completion.usage) {
+      trackFromContext({
+        callType: 'retry',
+        model: completion.model || generationModel,
+        promptTokens: completion.usage.prompt_tokens,
+        completionTokens: completion.usage.completion_tokens,
+      })
+    }
 
     const retryContent = completion.choices[0]?.message?.content || ''
     const jsonMatch = retryContent.match(/\{[\s\S]*\}/)

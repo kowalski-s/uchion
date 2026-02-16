@@ -8,6 +8,7 @@ import { getAIProvider, getClaudeProvider } from '../../api/_lib/ai-provider.js'
 import { generatePptx } from '../../api/_lib/presentations/generator.js'
 import { generatePresentationPdf } from '../../api/_lib/presentations/pdf-generator.js'
 import { sanitizePresentationStructure } from '../../api/_lib/presentations/sanitize.js'
+import { withAIContext } from '../../api/_lib/ai-usage.js'
 import { withAuth } from '../middleware/auth.js'
 import { checkGenerateRateLimit } from '../middleware/rate-limit.js'
 import type { AuthenticatedRequest } from '../types.js'
@@ -124,17 +125,21 @@ router.post('/generate', withAuth(async (req: AuthenticatedRequest, res: Respons
     const provider = claudeProvider || fallbackProvider
     console.log(`[API] Using ${claudeProvider ? 'Claude' : 'OpenAI'} provider for presentation generation`)
 
-    const structure = await provider.generatePresentation({
-      subject: input.subject,
-      grade: input.grade,
-      topic: input.topic,
-      themeType: 'preset',
-      themePreset: input.themePreset,
-      slideCount: input.slideCount as 12 | 18 | 24 | undefined,
-      isPaid,
-    }, (percent) => {
-      sendEvent({ type: 'progress', percent })
-    })
+    const aiSessionId = crypto.randomUUID()
+    const structure = await withAIContext(
+      { sessionId: aiSessionId, userId, subject: input.subject, grade: input.grade },
+      () => provider.generatePresentation({
+        subject: input.subject,
+        grade: input.grade,
+        topic: input.topic,
+        themeType: 'preset',
+        themePreset: input.themePreset,
+        slideCount: input.slideCount as 12 | 18 | 24 | undefined,
+        isPaid,
+      }, (percent) => {
+        sendEvent({ type: 'progress', percent })
+      })
+    )
 
     sendEvent({ type: 'progress', percent: 80 })
 
