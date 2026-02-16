@@ -117,7 +117,7 @@ export default function Header() {
             <>
               <Link
                 to="/dashboard"
-                className={`glass-btn-neon flex items-center gap-2 px-4 py-2 text-sm font-semibold ${isDashboard ? 'glass-btn-neon-active' : ''}`}
+                className={`flex items-center gap-2 px-4 py-2 text-[#8C52FF] text-sm font-semibold rounded-xl transition-all hover:scale-105 bg-purple-50/80 hover:bg-purple-100 border border-purple-200/60 shadow-[0_0_8px_rgba(140,82,255,0.15)] ${isDashboard ? 'bg-purple-100 border-purple-300/80' : ''}`}
               >
                 <UserIcon className="w-4 h-4" />
                 <span>Личный кабинет</span>
@@ -125,7 +125,7 @@ export default function Header() {
               {user.role === 'admin' && (
                 <Link
                   to="/admin"
-                  className={`glass-btn-neon flex items-center justify-center w-10 h-10 ${location.pathname.startsWith('/admin') ? 'glass-btn-neon-active' : ''}`}
+                  className={`flex items-center justify-center w-10 h-10 text-[#8C52FF] rounded-xl transition-all hover:scale-105 bg-purple-50/80 hover:bg-purple-100 border border-purple-200/60 shadow-[0_0_8px_rgba(140,82,255,0.15)] ${location.pathname.startsWith('/admin') ? 'bg-purple-100 border-purple-300/80' : ''}`}
                   title="Админ-панель"
                 >
                   <ShieldIcon className="w-5 h-5" />
