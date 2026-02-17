@@ -99,7 +99,7 @@ router.get('/subscriber-trend', withAdminAuth(async (req: AuthenticatedRequest, 
   const rows = await db.execute<{ date: string; count: number }>(sql`
     SELECT DATE(created_at) as date, COUNT(*)::int as count
     FROM subscriptions
-    WHERE plan != 'free' AND created_at >= ${since}
+    WHERE plan != 'free' AND created_at >= ${since.toISOString()}
     GROUP BY DATE(created_at)
     ORDER BY date
   `)
@@ -132,7 +132,7 @@ router.get('/revenue-trend', withAdminAuth(async (req: AuthenticatedRequest, res
   const rows = await db.execute<{ date: string; revenue: number; transactions: number }>(sql`
     SELECT DATE(paid_at) as date, COALESCE(SUM(amount), 0)::int as revenue, COUNT(*)::int as transactions
     FROM payment_intents
-    WHERE status = 'paid' AND paid_at >= ${since}
+    WHERE status = 'paid' AND paid_at >= ${since.toISOString()}
     GROUP BY DATE(paid_at)
     ORDER BY date
   `)
