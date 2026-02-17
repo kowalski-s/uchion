@@ -97,14 +97,15 @@ interface LLMTaskResult {
 
 export async function verifyAnswers(
   tasks: GeneratedTask[],
-  subject: string
+  subject: string,
+  grade?: number
 ): Promise<AgentResult> {
   const agentName = 'answer-verifier'
   const start = Date.now()
 
   const apiKey = process.env.OPENAI_API_KEY
   const baseURL = process.env.AI_BASE_URL
-  const { model, reasoning } = getVerifierModelConfig(subject)
+  const { model, reasoning } = getVerifierModelConfig(subject, grade)
   console.log(`[${agentName}] Verifier model: ${model}, reasoning:`, JSON.stringify(reasoning))
 
   if (!apiKey) {
@@ -137,7 +138,7 @@ ${tasksText}
     const completion = await client.chat.completions.create({
       model,
       messages: [{ role: 'user', content: userPrompt }],
-      max_tokens: 4000,
+      max_tokens: 8000, // Gemini counts thinking tokens as output; need headroom
       temperature: 0.1,
       ...({ reasoning } as Record<string, unknown>),
     })

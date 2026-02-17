@@ -12,4 +12,4 @@ export type {
 export { fixTask } from './agents/task-fixer.js'
 export type { FixResult } from './agents/task-fixer.js'
 
-export { checkQuality } from './agents/quality-checker.js'
+export { checkQualityAndContent } from './agents/unified-checker.js'

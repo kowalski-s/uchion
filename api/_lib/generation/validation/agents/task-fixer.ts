@@ -49,7 +49,7 @@ export async function fixTask(
   const start = Date.now()
   const apiKey = process.env.OPENAI_API_KEY
   const baseURL = process.env.AI_BASE_URL
-  const { model, reasoning } = getFixerModelConfig(context.subject)
+  const { model, reasoning } = getFixerModelConfig(context.subject, context.grade)
   console.log(`[task-fixer] Model: ${model}, reasoning:`, JSON.stringify(reasoning))
 
   if (!apiKey) {
@@ -111,7 +111,7 @@ ${issue.message}${suggestionLine}
     const completion = await client.chat.completions.create({
       model,
       messages: [{ role: 'user', content: userPrompt }],
-      max_tokens: 1500,
+      max_tokens: 3000, // Gemini counts thinking tokens as output; need headroom
       temperature: 0.2,
       ...({ reasoning } as Record<string, unknown>),
     })

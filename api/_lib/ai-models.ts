@@ -31,18 +31,32 @@ export function isStemSubject(subject: string): boolean {
 
 export interface VerifierModelConfig {
   model: string
-  reasoning: { effort: 'low' | 'minimal' } | { enabled: false }
+  reasoning: { effort: 'low' | 'minimal'; budget_tokens?: number } | { enabled: false }
 }
 
 /**
- * Model config for answer-verifier and task-fixer agents.
- * - STEM subjects (math, algebra, geometry): Gemini 3 Flash with reasoning effort=low
+ * Model config for answer-verifier agent.
+ * - STEM subjects (math, algebra, geometry): Gemini 3 Flash with reasoning effort=low, budget=1024
  * - Humanities (russian, etc.): Gemini 2.5 Flash Lite with reasoning disabled
+ *
+ * Accepts optional grade for tiered verification:
+ * - Grades 1-6 math: uses cheaper gpt-4.1-mini (no reasoning needed for arithmetic)
+ * - Grades 7-11 STEM: uses Gemini with reasoning
  */
-export function getVerifierModelConfig(subject: string): VerifierModelConfig {
+export function getVerifierModelConfig(subject: string, grade?: number): VerifierModelConfig {
   if (STEM_SUBJECTS.has(subject)) {
+    // Tiered verification: simple grades use cheaper model
+    if (grade && grade <= 6 && subject === 'math') {
+      const model = process.env.AI_MODEL_AGENTS || 'openai/gpt-4.1-mini'
+      return { model, reasoning: { enabled: false } }
+    }
     const model = process.env.AI_MODEL_VERIFIER_STEM || 'google/gemini-3-flash-preview'
-    return { model, reasoning: { effort: 'low' } }
+    return { model, reasoning: { effort: 'low', budget_tokens: 1024 } }
+  }
+  // Russian 1-6: cheaper model
+  if (grade && grade <= 6) {
+    const model = process.env.AI_MODEL_AGENTS || 'openai/gpt-4.1-mini'
+    return { model, reasoning: { enabled: false } }
   }
   const model = process.env.AI_MODEL_VERIFIER_HUMANITIES || 'google/gemini-2.5-flash-lite'
   return { model, reasoning: { enabled: false } }
@@ -50,13 +64,22 @@ export function getVerifierModelConfig(subject: string): VerifierModelConfig {
 
 /**
  * Model config for task-fixer agent (cheaper than verifier).
- * - STEM: same model as verifier but reasoning effort=minimal (saves tokens)
+ * - STEM: same model as verifier but reasoning effort=minimal, budget=512
  * - Humanities: same as verifier (flash-lite, no reasoning)
  */
-export function getFixerModelConfig(subject: string): VerifierModelConfig {
+export function getFixerModelConfig(subject: string, grade?: number): VerifierModelConfig {
   if (STEM_SUBJECTS.has(subject)) {
+    // Tiered: simple grades use cheaper model
+    if (grade && grade <= 6 && subject === 'math') {
+      const model = process.env.AI_MODEL_AGENTS || 'openai/gpt-4.1-mini'
+      return { model, reasoning: { enabled: false } }
+    }
     const model = process.env.AI_MODEL_VERIFIER_STEM || 'google/gemini-3-flash-preview'
-    return { model, reasoning: { effort: 'minimal' } }
+    return { model, reasoning: { effort: 'minimal', budget_tokens: 512 } }
+  }
+  if (grade && grade <= 6) {
+    const model = process.env.AI_MODEL_AGENTS || 'openai/gpt-4.1-mini'
+    return { model, reasoning: { enabled: false } }
   }
   const model = process.env.AI_MODEL_VERIFIER_HUMANITIES || 'google/gemini-2.5-flash-lite'
   return { model, reasoning: { enabled: false } }

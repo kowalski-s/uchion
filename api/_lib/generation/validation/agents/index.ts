@@ -1,6 +1,5 @@
 import { verifyAnswers } from './answer-verifier.js'
-import { checkContent } from './content-checker.js'
-import { checkQuality } from './quality-checker.js'
+import { checkQualityAndContent } from './unified-checker.js'
 import { fixTask, MAX_FIXES_PER_GENERATION, type FixResult } from './task-fixer.js'
 import { isStemSubject } from '../../../ai-models.js'
 import type { TaskTypeId } from '../../config/task-types.js'
@@ -112,14 +111,14 @@ export async function runMultiAgentValidation(
   const start = Date.now()
   console.log(`[УчиОн] Multi-agent validation started for ${tasks.length} tasks`)
 
-  // 1. Run all 3 agents in parallel
-  const [answerResult, contentResult, qualityResult] = await Promise.all([
-    verifyAnswers(tasks, params.subject),
-    checkContent(tasks, params.subject, params.grade, params.topic),
-    checkQuality(tasks, params.subject, params.grade, params.difficulty),
+  // 1. Run answer-verifier + unified quality/content checker in parallel
+  //    (was 3 agents, now 2 — quality-checker + content-checker merged)
+  const [answerResult, unifiedResult] = await Promise.all([
+    verifyAnswers(tasks, params.subject, params.grade),
+    checkQualityAndContent(tasks, params.subject, params.grade, params.topic, params.difficulty),
   ])
 
-  const agents = [answerResult, contentResult, qualityResult]
+  const agents = [answerResult, unifiedResult]
 
   // 2. Collect all issues
   const allIssues: Array<{ taskIndex: number; agent: string; issue: AgentIssue }> = []
@@ -149,8 +148,8 @@ export async function runMultiAgentValidation(
   let fixedTasks = [...tasks]
   const fixResults: FixResult[] = []
 
-  // Also collect tasks with DIFFICULTY_MISMATCH warnings for fixing
-  const tasksWithErrors = collectTasksWithErrors(answerResult, contentResult, qualityResult)
+  // Collect tasks with errors + DIFFICULTY_MISMATCH warnings for fixing
+  const tasksWithErrors = collectTasksWithErrors(answerResult, unifiedResult)
 
   const stem = isStemSubject(params.subject)
 
@@ -170,10 +169,9 @@ export async function runMultiAgentValidation(
         console.log(`[УчиОн] Fixing ${toFix.length} tasks with errors...`)
       }
 
-      let reVerifyPassed = 0
-      let reVerifyReverted = 0
-
       // Fix sequentially to avoid overloading the API
+      const fixedTasksForReVerify: { originalIndex: number; task: GeneratedTask; fixResultIndex: number }[] = []
+
       for (const { taskIndex, issues } of toFix) {
         const result = await fixTask(
           tasks[taskIndex],
@@ -181,32 +179,51 @@ export async function runMultiAgentValidation(
           params
         )
 
-        if (result.success && result.fixedTask) {
-          // Re-verify the fixed task (STEM only — reasoning model is reliable)
-          const reVerification = await verifyAnswers([result.fixedTask], params.subject)
-          const hasErrors = reVerification.tasks.some(t => t.status === 'error')
+        fixResults.push(result)
 
-          if (hasErrors) {
-            // Revert to original — fix introduced new errors
-            result.success = false
-            result.error = 're-verification failed, reverted to original'
-            reVerifyReverted++
-            console.log(`[task-fixer] Task ${taskIndex} re-verification FAILED, reverted`)
-          } else {
-            fixedTasks[taskIndex] = result.fixedTask
-            reVerifyPassed++
-            console.log(`[УчиОн] Task ${taskIndex} fixed: ${result.fixDescription}`)
-          }
+        if (result.success && result.fixedTask) {
+          fixedTasksForReVerify.push({
+            originalIndex: taskIndex,
+            task: result.fixedTask,
+            fixResultIndex: fixResults.length - 1,
+          })
         } else {
           console.log(`[УчиОн] Task ${taskIndex} fix failed: ${result.error}`)
         }
-
-        fixResults.push(result)
       }
 
-      // Summary log
-      const totalAttempted = toFix.length
-      console.log(`[task-fixer] Re-verification: ${reVerifyPassed}/${totalAttempted} passed, ${reVerifyReverted} reverted`)
+      // Batch re-verification: verify ALL fixed tasks in a single call
+      // (was: one verifyAnswers() call per fixed task = up to 10 Gemini calls)
+      if (fixedTasksForReVerify.length > 0) {
+        console.log(`[task-fixer] Batch re-verifying ${fixedTasksForReVerify.length} fixed tasks...`)
+
+        const tasksToVerify = fixedTasksForReVerify.map(f => f.task)
+        const reVerification = await verifyAnswers(tasksToVerify, params.subject, params.grade)
+
+        let reVerifyPassed = 0
+        let reVerifyReverted = 0
+
+        for (let i = 0; i < fixedTasksForReVerify.length; i++) {
+          const { originalIndex, task, fixResultIndex } = fixedTasksForReVerify[i]
+          // Find the result for this task (by index in the batch)
+          const taskReVerify = reVerification.tasks.find(t => t.taskIndex === i)
+          const hasErrors = taskReVerify?.status === 'error'
+
+          if (hasErrors) {
+            // Revert to original — fix introduced new errors
+            fixResults[fixResultIndex].success = false
+            fixResults[fixResultIndex].error = 're-verification failed, reverted to original'
+            reVerifyReverted++
+            console.log(`[task-fixer] Task ${originalIndex} re-verification FAILED, reverted`)
+          } else {
+            fixedTasks[originalIndex] = task
+            reVerifyPassed++
+            console.log(`[УчиОн] Task ${originalIndex} fixed: ${fixResults[fixResultIndex].fixDescription}`)
+          }
+        }
+
+        console.log(`[task-fixer] Re-verification: ${reVerifyPassed}/${fixedTasksForReVerify.length} passed, ${reVerifyReverted} reverted`)
+      }
     }
   }
 
@@ -219,6 +236,9 @@ export async function runMultiAgentValidation(
 }
 
 export { verifyAnswers } from './answer-verifier.js'
-export { checkContent } from './content-checker.js'
-export { checkQuality } from './quality-checker.js'
+export { checkQualityAndContent } from './unified-checker.js'
 export { fixTask, type FixResult } from './task-fixer.js'
+
+// Legacy re-exports for backward compatibility (if anything imports these directly)
+export { checkQualityAndContent as checkContent } from './unified-checker.js'
+export { checkQualityAndContent as checkQuality } from './unified-checker.js'
