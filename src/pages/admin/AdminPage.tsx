@@ -1,8 +1,8 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate, Link, Outlet, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '../../lib/auth'
-import { fetchAdminStats } from '../../lib/admin-api'
+import { fetchAdminStats, fetchSubscriberTrend, fetchRevenueTrend } from '../../lib/admin-api'
 import Header from '../../components/Header'
 
 // Icon components
@@ -162,12 +162,57 @@ export default function AdminPage() {
   )
 }
 
+// Simple CSS bar chart (no external library)
+function SimpleBarChart({ data, valueKey, label, formatValue }: {
+  data: Array<Record<string, any>>
+  valueKey: string
+  label: string
+  formatValue?: (v: number) => string
+}) {
+  if (!data.length) return <p className="text-slate-400 text-sm text-center py-8">Нет данных</p>
+  const maxVal = Math.max(...data.map(d => Number(d[valueKey])), 1)
+  return (
+    <div className="space-y-1">
+      {data.map((d, i) => {
+        const val = Number(d[valueKey])
+        const pct = (val / maxVal) * 100
+        const dateStr = new Date(d.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
+        return (
+          <div key={i} className="flex items-center gap-2 text-sm">
+            <span className="w-16 text-right text-slate-500 text-xs">{dateStr}</span>
+            <div className="flex-1 h-5 bg-slate-100 rounded overflow-hidden">
+              <div className="h-full bg-[#8C52FF] rounded" style={{ width: `${pct}%` }} />
+            </div>
+            <span className="w-16 text-right text-slate-600 text-xs font-medium">
+              {formatValue ? formatValue(val) : val}
+            </span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 // Stats overview component (default view)
 export function AdminOverview() {
+  const [trendDays, setTrendDays] = useState(30)
+
   const { data: stats, isLoading, error } = useQuery({
     queryKey: ['admin-stats'],
     queryFn: fetchAdminStats,
     staleTime: 30 * 1000, // 30 seconds
+  })
+
+  const { data: subscriberTrendData } = useQuery({
+    queryKey: ['admin-subscriber-trend', trendDays],
+    queryFn: () => fetchSubscriberTrend(trendDays),
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const { data: revenueTrendData } = useQuery({
+    queryKey: ['admin-revenue-trend', trendDays],
+    queryFn: () => fetchRevenueTrend(trendDays),
+    staleTime: 5 * 60 * 1000,
   })
 
   if (isLoading) {
@@ -188,6 +233,25 @@ export function AdminOverview() {
       </div>
     )
   }
+
+  // Calculate uptime components
+  const uptimeSeconds = stats?.uptimeSeconds ?? 0
+  const uptimeDays = Math.floor(uptimeSeconds / 86400)
+  const uptimeHours = Math.floor((uptimeSeconds % 86400) / 3600)
+  const uptimeMinutes = Math.floor((uptimeSeconds % 3600) / 60)
+
+  const formattedServerStart = stats?.serverStartedAt
+    ? new Date(stats.serverStartedAt).toLocaleString('ru-RU', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : '—'
+
+  const subscriberTrend = subscriberTrendData?.trend ?? []
+  const revenueTrend = revenueTrendData?.trend ?? []
 
   return (
     <div className="space-y-6">
@@ -219,6 +283,19 @@ export function AdminOverview() {
         />
       </div>
 
+      {/* Uptime Card */}
+      <div className="glass-container p-5 flex items-start gap-3">
+        <div className="mt-0.5">
+          <span className="block w-3 h-3 bg-emerald-500 rounded-full animate-pulse" />
+        </div>
+        <div>
+          <p className="font-medium text-slate-900">
+            Время работы: {uptimeDays} д {uptimeHours} ч {uptimeMinutes} мин
+          </p>
+          <p className="text-sm text-slate-500 mt-0.5">Запущен: {formattedServerStart}</p>
+        </div>
+      </div>
+
       {/* Quick Links */}
       <div className="glass-container p-6">
         <h2 className="text-lg font-bold text-slate-900 mb-4">Быстрые действия</h2>
@@ -247,6 +324,58 @@ export function AdminOverview() {
               <p className="text-sm text-slate-500">Логи и статистика</p>
             </div>
           </Link>
+        </div>
+      </div>
+
+      {/* Trends Section */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold text-slate-900">Тренды</h2>
+          <div className="flex gap-2">
+            {([7, 30] as const).map((days) => (
+              <button
+                key={days}
+                onClick={() => setTrendDays(days)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  trendDays === days
+                    ? 'bg-[#8C52FF] text-white'
+                    : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                }`}
+              >
+                {days}д
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Subscriber trend chart */}
+          <div className="glass-container p-5">
+            <h3 className="text-sm font-semibold text-slate-700 mb-4">Новые подписчики</h3>
+            <SimpleBarChart
+              data={subscriberTrend}
+              valueKey="count"
+              label="Подписчики"
+            />
+          </div>
+
+          {/* Revenue trend chart */}
+          <div className="glass-container p-5">
+            <h3 className="text-sm font-semibold text-slate-700 mb-4">Выручка</h3>
+            <SimpleBarChart
+              data={revenueTrend}
+              valueKey="revenue"
+              label="Выручка"
+              formatValue={(v) =>
+                (v / 100).toLocaleString('ru-RU', {
+                  style: 'currency',
+                  currency: 'RUB',
+                  minimumFractionDigits: 0,
+                  maximumFractionDigits: 0,
+                })
+              }
+            />
+          </div>
         </div>
       </div>
     </div>

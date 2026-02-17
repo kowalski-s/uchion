@@ -6,6 +6,8 @@ export interface AdminStats {
   todayGenerations: number
   activeSubscriptions: number
   totalGenerations: number
+  uptimeSeconds: number
+  serverStartedAt: string
 }
 
 export interface AdminUser {
@@ -315,6 +317,212 @@ export async function fetchAdminPayments(options?: FetchAdminPaymentsOptions): P
   return res.json()
 }
 
+// ==================== STUCK GENERATIONS ====================
+
+export interface StuckGeneration {
+  id: string
+  userId: string
+  userEmail: string | null
+  userName: string | null
+  subject: 'math' | 'algebra' | 'geometry' | 'russian' | null
+  grade: number | null
+  topic: string | null
+  startedAt: string | null
+  createdAt: string
+}
+
+export async function fetchStuckGenerations(): Promise<{ stuckGenerations: StuckGeneration[] }> {
+  const res = await fetch('/api/admin/stuck-generations', {
+    credentials: 'include',
+  })
+
+  if (!res.ok) {
+    if (res.status === 401) throw new Error('Требуется авторизация')
+    if (res.status === 403) throw new Error('Нет доступа к админ-панели')
+    throw new Error('Не удалось загрузить зависшие генерации')
+  }
+
+  return res.json()
+}
+
+export async function forceFailGeneration(id: string, refund: boolean = true): Promise<{ success: boolean; refunded: boolean }> {
+  const res = await fetch(`/api/admin/stuck-generations/${id}/force-fail`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refund }),
+  })
+
+  if (!res.ok) {
+    if (res.status === 401) throw new Error('Требуется авторизация')
+    if (res.status === 403) throw new Error('Нет доступа')
+    if (res.status === 404) throw new Error('Генерация не найдена')
+    const data = await res.json().catch(() => ({}))
+    throw new Error(data.error || data.message || 'Не удалось завершить генерацию')
+  }
+
+  return res.json()
+}
+
+// ==================== PAYMENT INTENTS ====================
+
+export type PaymentIntentStatusFilter = 'all' | 'created' | 'paid' | 'failed' | 'expired'
+
+export interface AdminPaymentIntent {
+  id: string
+  userId: string
+  userEmail: string | null
+  userName: string | null
+  productCode: string
+  amount: number
+  currency: string
+  status: 'created' | 'paid' | 'failed' | 'expired'
+  provider: string
+  providerOrderId: string
+  providerPaymentId: string | null
+  createdAt: string
+  paidAt: string | null
+  expiresAt: string | null
+}
+
+export interface FetchPaymentIntentsOptions {
+  page?: number
+  limit?: number
+  status?: PaymentIntentStatusFilter
+  search?: string
+}
+
+export interface FetchPaymentIntentsResponse {
+  paymentIntents: AdminPaymentIntent[]
+  pagination: Pagination
+}
+
+export async function fetchPaymentIntents(options?: FetchPaymentIntentsOptions): Promise<FetchPaymentIntentsResponse> {
+  const params = new URLSearchParams()
+
+  if (options?.page) params.set('page', String(options.page))
+  if (options?.limit) params.set('limit', String(options.limit))
+  if (options?.status) params.set('status', options.status)
+  if (options?.search) params.set('search', options.search)
+
+  const url = `/api/admin/payment-intents${params.toString() ? `?${params}` : ''}`
+
+  const res = await fetch(url, {
+    credentials: 'include',
+  })
+
+  if (!res.ok) {
+    if (res.status === 401) throw new Error('Требуется авторизация')
+    if (res.status === 403) throw new Error('Нет доступа к админ-панели')
+    throw new Error('Не удалось загрузить платежные интенты')
+  }
+
+  return res.json()
+}
+
+export async function applyPaymentIntent(id: string): Promise<{ success: boolean; message: string }> {
+  const res = await fetch(`/api/admin/payment-intents/${id}/apply`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+  })
+
+  if (!res.ok) {
+    if (res.status === 401) throw new Error('Требуется авторизация')
+    if (res.status === 403) throw new Error('Нет доступа')
+    if (res.status === 404) throw new Error('Платежный интент не найден')
+    const data = await res.json().catch(() => ({}))
+    throw new Error(data.error || data.message || 'Не удалось применить оплату')
+  }
+
+  return res.json()
+}
+
+// ==================== WEBHOOK EVENTS ====================
+
+export interface AdminWebhookEvent {
+  id: string
+  provider: string
+  eventKey: string
+  rawPayloadHash: string
+  processedAt: string
+  createdAt: string
+}
+
+export interface FetchWebhookEventsOptions {
+  page?: number
+  limit?: number
+  provider?: string
+}
+
+export interface FetchWebhookEventsResponse {
+  webhookEvents: AdminWebhookEvent[]
+  pagination: Pagination
+}
+
+export async function fetchWebhookEvents(options?: FetchWebhookEventsOptions): Promise<FetchWebhookEventsResponse> {
+  const params = new URLSearchParams()
+
+  if (options?.page) params.set('page', String(options.page))
+  if (options?.limit) params.set('limit', String(options.limit))
+  if (options?.provider) params.set('provider', options.provider)
+
+  const url = `/api/admin/webhook-events${params.toString() ? `?${params}` : ''}`
+
+  const res = await fetch(url, {
+    credentials: 'include',
+  })
+
+  if (!res.ok) {
+    if (res.status === 401) throw new Error('Требуется авторизация')
+    if (res.status === 403) throw new Error('Нет доступа к админ-панели')
+    throw new Error('Не удалось загрузить вебхук-события')
+  }
+
+  return res.json()
+}
+
+// ==================== TRENDS ====================
+
+export interface TrendPoint {
+  date: string
+  count: number
+}
+
+export interface RevenueTrendPoint {
+  date: string
+  revenue: number
+  transactions: number
+}
+
+export async function fetchSubscriberTrend(days: number = 30): Promise<{ trend: TrendPoint[] }> {
+  const res = await fetch(`/api/admin/stats/subscriber-trend?days=${days}`, {
+    credentials: 'include',
+  })
+
+  if (!res.ok) {
+    if (res.status === 401) throw new Error('Требуется авторизация')
+    if (res.status === 403) throw new Error('Нет доступа к админ-панели')
+    throw new Error('Не удалось загрузить тренд подписчиков')
+  }
+
+  return res.json()
+}
+
+export async function fetchRevenueTrend(days: number = 30): Promise<{ trend: RevenueTrendPoint[] }> {
+  const res = await fetch(`/api/admin/stats/revenue-trend?days=${days}`, {
+    credentials: 'include',
+  })
+
+  if (!res.ok) {
+    if (res.status === 401) throw new Error('Требуется авторизация')
+    if (res.status === 403) throw new Error('Нет доступа к админ-панели')
+    throw new Error('Не удалось загрузить тренд выручки')
+  }
+
+  return res.json()
+}
+
 // ==================== SETTINGS ====================
 
 export interface AdminSettings {
@@ -474,6 +682,16 @@ export function formatPaymentStatus(status: string): string {
     succeeded: 'Успешно',
     failed: 'Ошибка',
     refunded: 'Возврат',
+  }
+  return names[status] || status
+}
+
+export function formatPaymentIntentStatus(status: string): string {
+  const names: Record<string, string> = {
+    created: 'Создан',
+    paid: 'Оплачен',
+    failed: 'Ошибка',
+    expired: 'Истёк',
   }
   return names[status] || status
 }

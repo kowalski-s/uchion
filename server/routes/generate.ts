@@ -119,6 +119,22 @@ router.post('/', withAuth(async (req: AuthenticatedRequest, res: Response) => {
     res.write(`data: ${JSON.stringify(data)}\n\n`)
   }
 
+  // Track generation lifecycle: insert 'processing' record
+  let genRecord: { id: string } | null = null
+  try {
+    const [inserted] = await db.insert(generations).values({
+      userId,
+      status: 'processing',
+      subject: input.subject,
+      grade: input.grade,
+      topic: input.topic,
+      startedAt: new Date(),
+    }).returning({ id: generations.id })
+    genRecord = inserted || null
+  } catch (e) {
+    console.error('[API] Failed to insert generation record:', e)
+  }
+
   try {
     const ai = getAIProvider()
 
@@ -153,14 +169,23 @@ router.post('/', withAuth(async (req: AuthenticatedRequest, res: Response) => {
     } catch (e) {
       console.error('[API] PDF generation error:', e)
       // Log failed generation to DB
-      db.insert(generations).values({
-        userId,
-        status: 'failed',
-        subject: input.subject,
-        grade: input.grade,
-        topic: input.topic,
-        errorMessage: 'PDF generation failed: ' + (e instanceof Error ? e.message : String(e)),
-      }).catch(dbErr => console.error('[API] Failed to log generation error:', dbErr))
+      const pdfErrorMsg = 'PDF generation failed: ' + (e instanceof Error ? e.message : String(e))
+      if (genRecord) {
+        db.update(generations).set({
+          status: 'failed',
+          errorMessage: pdfErrorMsg,
+        }).where(eq(generations.id, genRecord.id))
+          .catch(dbErr => console.error('[API] Failed to update generation error:', dbErr))
+      } else {
+        db.insert(generations).values({
+          userId,
+          status: 'failed',
+          subject: input.subject,
+          grade: input.grade,
+          topic: input.topic,
+          errorMessage: pdfErrorMsg,
+        }).catch(dbErr => console.error('[API] Failed to log generation error:', dbErr))
+      }
       // Track failed generation for alerts
       trackGeneration(false).catch((err) => console.error('[Alerts] Failed to track generation:', err))
       sendInstantFailureAlert({
@@ -223,6 +248,16 @@ router.post('/', withAuth(async (req: AuthenticatedRequest, res: Response) => {
       pdfBase64: pdfBase64 ?? ''
     }
 
+    // Mark generation as completed
+    if (genRecord) {
+      db.update(generations).set({
+        status: 'completed',
+        worksheetId: dbId,
+        completedAt: new Date(),
+      }).where(eq(generations.id, genRecord.id))
+        .catch(e => console.error('[API] Failed to update generation status:', e))
+    }
+
     // Track successful generation for alerts
     trackGeneration(true).catch((e) => console.error('[Alerts] Failed to track generation:', e))
 
@@ -233,19 +268,28 @@ router.post('/', withAuth(async (req: AuthenticatedRequest, res: Response) => {
     console.error('[API] Generate error:', err)
 
     // Log failed generation to DB
-    db.insert(generations).values({
-      userId,
-      status: 'failed',
-      subject: input.subject,
-      grade: input.grade,
-      topic: input.topic,
-      errorMessage: err instanceof Error ? err.message : String(err),
-    }).catch(dbErr => console.error('[API] Failed to log generation error:', dbErr))
+    const errMsg = err instanceof Error ? err.message : String(err)
+    if (genRecord) {
+      db.update(generations).set({
+        status: 'failed',
+        errorMessage: errMsg,
+      }).where(eq(generations.id, genRecord.id))
+        .catch(dbErr => console.error('[API] Failed to update generation error:', dbErr))
+    } else {
+      db.insert(generations).values({
+        userId,
+        status: 'failed',
+        subject: input.subject,
+        grade: input.grade,
+        topic: input.topic,
+        errorMessage: errMsg,
+      }).catch(dbErr => console.error('[API] Failed to log generation error:', dbErr))
+    }
 
-    // Probabilistic cleanup: ~1/50 chance, delete logs older than 30 days
+    // Probabilistic cleanup: ~1/50 chance, delete old failed logs (30 days)
     if (Math.random() < 0.02) {
       const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-      db.delete(generations).where(lt(generations.createdAt, thirtyDaysAgo))
+      db.delete(generations).where(and(eq(generations.status, 'failed'), lt(generations.createdAt, thirtyDaysAgo)))
         .catch(e => console.error('[API] Failed to cleanup old generation logs:', e))
     }
 

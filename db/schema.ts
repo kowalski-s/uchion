@@ -94,6 +94,8 @@ export const generations = pgTable('generations', {
   grade: integer('grade'),
   topic: varchar('topic', { length: 200 }),
   errorMessage: text('error_message'),
+  startedAt: timestamp('started_at', { withTimezone: true }),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
   userIdIdx: index('generations_user_id_idx').on(table.userId),

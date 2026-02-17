@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import type { Response } from 'express'
-import { eq, and, isNull, desc, count, like, gte, inArray, or } from 'drizzle-orm'
+import { eq, and, isNull, desc, count, like, gte, lte, inArray, or, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { db } from '../../../db/index.js'
 import { users, worksheets, generations } from '../../../db/schema.js'
@@ -191,6 +191,101 @@ generationLogsRouter.get('/', withAdminAuth(async (req: AuthenticatedRequest, re
       totalPages: Math.ceil(totalResult.count / limit),
     }
   })
+}))
+
+// ==================== STUCK GENERATIONS ====================
+
+export const stuckGenerationsRouter = Router()
+
+// GET /api/admin/stuck-generations -- list stuck (processing > 5 min) generations
+stuckGenerationsRouter.get('/', withAdminAuth(async (req: AuthenticatedRequest, res: Response) => {
+  await requireRateLimit(req, {
+    maxRequests: 30,
+    windowSeconds: 60,
+    identifier: `admin:stuck-generations:${req.user.id}`,
+  })
+
+  const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000)
+
+  const stuckList = await db
+    .select({
+      id: generations.id,
+      userId: generations.userId,
+      userEmail: users.email,
+      userName: users.name,
+      subject: generations.subject,
+      grade: generations.grade,
+      topic: generations.topic,
+      startedAt: generations.startedAt,
+      createdAt: generations.createdAt,
+    })
+    .from(generations)
+    .leftJoin(users, eq(generations.userId, users.id))
+    .where(and(
+      eq(generations.status, 'processing'),
+      lte(generations.startedAt, fiveMinAgo)
+    ))
+    .orderBy(desc(generations.startedAt))
+    .limit(100)
+
+  return res.status(200).json({ stuckGenerations: stuckList })
+}))
+
+// POST /api/admin/stuck-generations/:id/force-fail -- force fail a stuck generation
+const ForceFailSchema = z.object({
+  refund: z.boolean().optional().default(true),
+})
+
+stuckGenerationsRouter.post('/:id/force-fail', withAdminAuth(async (req: AuthenticatedRequest, res: Response) => {
+  await requireRateLimit(req, {
+    maxRequests: 10,
+    windowSeconds: 60,
+    identifier: `admin:force-fail:${req.user.id}`,
+  })
+
+  const { id } = req.params
+  const parse = ForceFailSchema.safeParse(req.body)
+  if (!parse.success) {
+    throw ApiError.validation(parse.error.flatten().fieldErrors)
+  }
+
+  const { refund } = parse.data
+
+  // Find the generation
+  const [gen] = await db
+    .select({ id: generations.id, userId: generations.userId, status: generations.status })
+    .from(generations)
+    .where(eq(generations.id, id))
+    .limit(1)
+
+  if (!gen) {
+    throw ApiError.notFound('Генерация не найдена')
+  }
+
+  if (gen.status !== 'processing') {
+    throw ApiError.badRequest('Генерация не в статусе processing')
+  }
+
+  // Update to failed
+  await db.update(generations).set({
+    status: 'failed',
+    errorMessage: `Принудительно завершено администратором (${req.user.email})`,
+  }).where(eq(generations.id, id))
+
+  // Refund credit if requested
+  if (refund) {
+    await db
+      .update(users)
+      .set({
+        generationsLeft: sql`${users.generationsLeft} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, gen.userId))
+  }
+
+  console.log(`[Admin] Force-failed generation ${id} by ${req.user.email}, refund=${refund}`)
+
+  return res.status(200).json({ success: true, refunded: refund })
 }))
 
 export default router

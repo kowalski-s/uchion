@@ -1,9 +1,11 @@
 import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   fetchAdminGenerations,
   fetchGenerationLogs,
+  fetchStuckGenerations,
+  forceFailGeneration,
   formatSubjectName,
   formatDifficulty,
   formatDateTime,
@@ -43,7 +45,6 @@ function DocumentIcon({ className = "w-5 h-5" }: { className?: string }) {
   )
 }
 
-
 function ExclamationTriangleIcon({ className = "w-5 h-5" }: { className?: string }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
@@ -52,7 +53,15 @@ function ExclamationTriangleIcon({ className = "w-5 h-5" }: { className?: string
   )
 }
 
-type ViewMode = 'worksheets' | 'logs'
+function ClockIcon({ className = "w-5 h-5" }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+    </svg>
+  )
+}
+
+type ViewMode = 'worksheets' | 'logs' | 'stuck'
 
 const subjectTabs: { value: SubjectFilter; label: string; color: string }[] = [
   { value: 'all', label: 'Все предметы', color: 'bg-slate-700' },
@@ -97,6 +106,8 @@ export default function AdminGenerationsPage() {
   const [expandedError, setExpandedError] = useState<string | null>(null)
   const limit = 20
 
+  const queryClient = useQueryClient()
+
   // Query for worksheets
   const worksheetsQuery = useQuery({
     queryKey: ['admin-generations', page, search, subjectFilter],
@@ -111,6 +122,15 @@ export default function AdminGenerationsPage() {
     queryFn: () => fetchGenerationLogs({ page, limit, search }),
     staleTime: 30 * 1000,
     enabled: viewMode === 'logs',
+  })
+
+  // Query for stuck generations
+  const stuckQuery = useQuery({
+    queryKey: ['admin-stuck-generations'],
+    queryFn: () => fetchStuckGenerations(),
+    staleTime: 30 * 1000,
+    refetchInterval: 60000,
+    enabled: viewMode === 'stuck',
   })
 
   const handleSearch = (e: React.FormEvent) => {
@@ -141,7 +161,19 @@ export default function AdminGenerationsPage() {
     setExpandedError(expandedError === id ? null : id)
   }
 
-  const currentQuery = viewMode === 'worksheets' ? worksheetsQuery : logsQuery
+  const handleForceFailGeneration = async (id: string) => {
+    const confirmed = window.confirm('Завершить генерацию и вернуть кредит пользователю?')
+    if (!confirmed) return
+
+    try {
+      await forceFailGeneration(id, true)
+      queryClient.invalidateQueries({ queryKey: ['admin-stuck-generations'] })
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Не удалось завершить генерацию')
+    }
+  }
+
+  const currentQuery = viewMode === 'worksheets' ? worksheetsQuery : viewMode === 'logs' ? logsQuery : stuckQuery
 
   if (currentQuery.error) {
     return (
@@ -176,6 +208,17 @@ export default function AdminGenerationsPage() {
         >
           <ExclamationTriangleIcon className="w-5 h-5" />
           Ошибки
+        </button>
+        <button
+          onClick={() => handleViewModeChange('stuck')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+            viewMode === 'stuck'
+              ? 'bg-amber-500 text-white'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <ClockIcon className="w-5 h-5" />
+          Зависшие
         </button>
       </div>
 
@@ -529,6 +572,119 @@ export default function AdminGenerationsPage() {
                   </div>
                 )}
               </>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* Stuck Generations View */}
+      {viewMode === 'stuck' && (
+        <>
+          {/* Summary */}
+          {stuckQuery.data && (
+            <div className="glass-container p-4 flex items-center gap-4">
+              <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center">
+                <ClockIcon className="w-6 h-6 text-amber-600" />
+              </div>
+              <div>
+                <p className="text-sm text-slate-500">Зависших генераций</p>
+                <p className="text-xl font-bold text-slate-700">
+                  {stuckQuery.data.stuckGenerations.length}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Stuck Generations Table */}
+          <div className="glass-container overflow-hidden">
+            {stuckQuery.isLoading ? (
+              <div className="flex justify-center py-12">
+                <div className="relative">
+                  <div className="animate-spin rounded-full h-8 w-8 border-2 border-amber-200"></div>
+                  <div className="absolute inset-0 animate-spin rounded-full h-8 w-8 border-t-2 border-amber-500"></div>
+                </div>
+              </div>
+            ) : !stuckQuery.data?.stuckGenerations.length ? (
+              <div className="text-center py-12">
+                <div className="mb-4">
+                  <ClockIcon className="w-12 h-12 text-slate-300 mx-auto" />
+                </div>
+                <p className="text-slate-500">Нет зависших генераций</p>
+                <p className="text-sm text-slate-400 mt-1">
+                  Здесь будут отображаться генерации, застрявшие в обработке
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-slate-200">
+                      <th className="text-left px-6 py-4 text-sm font-semibold text-slate-600">Начало</th>
+                      <th className="text-left px-6 py-4 text-sm font-semibold text-slate-600">Зависло</th>
+                      <th className="text-left px-6 py-4 text-sm font-semibold text-slate-600">Пользователь</th>
+                      <th className="text-left px-6 py-4 text-sm font-semibold text-slate-600">Предмет</th>
+                      <th className="text-left px-6 py-4 text-sm font-semibold text-slate-600">Класс</th>
+                      <th className="text-left px-6 py-4 text-sm font-semibold text-slate-600">Тема</th>
+                      <th className="text-left px-6 py-4 text-sm font-semibold text-slate-600">Действие</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {stuckQuery.data.stuckGenerations.map((gen) => {
+                      const startedAt = gen.startedAt ?? gen.createdAt
+                      const mins = Math.floor((Date.now() - new Date(startedAt).getTime()) / 60000)
+                      return (
+                        <tr key={gen.id} className="border-b border-slate-100 hover:bg-slate-50/50 bg-amber-50/20">
+                          <td className="px-6 py-4">
+                            <span className="text-sm text-slate-600">
+                              {formatDateTime(startedAt)}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="inline-flex items-center gap-1 text-sm font-medium text-amber-700">
+                              <ClockIcon className="w-4 h-4" />
+                              {mins} мин
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <Link
+                              to={`/admin/users/${gen.userId}`}
+                              className="text-sm font-medium text-[#8C52FF] hover:underline"
+                            >
+                              {gen.userEmail || 'Неизвестно'}
+                            </Link>
+                            {gen.userName && (
+                              <p className="text-xs text-slate-500">{gen.userName}</p>
+                            )}
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${gen.subject ? getSubjectBadgeStyle(gen.subject) : 'bg-slate-100 text-slate-600'}`}>
+                              {gen.subject ? formatSubjectName(gen.subject) : '—'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="text-sm font-medium text-slate-700">
+                              {gen.grade != null ? `${gen.grade} класс` : '—'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="text-sm text-slate-600 max-w-[200px] truncate block" title={gen.topic || undefined}>
+                              {gen.topic || '—'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <button
+                              onClick={() => handleForceFailGeneration(gen.id)}
+                              className="px-3 py-1.5 bg-amber-500 text-white text-xs font-medium rounded-lg hover:bg-amber-600 transition-colors whitespace-nowrap"
+                            >
+                              Завершить + вернуть кредит
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         </>
