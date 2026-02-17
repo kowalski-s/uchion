@@ -231,17 +231,17 @@ function buildCurriculumContext(subjectId: string, grade: number, level: Difficu
   const config = getSubjectConfig(subjectId)
   if (!config) return ''
 
-  // Only for medium and hard — easy doesn't need cross-topic synthesis
-  if (level === 'easy') return ''
-
   const gradeRange = config.gradeRange
   const lines: string[] = []
 
-  // Collect prior grades knowledge (promptHints are concise summaries)
-  for (let g = gradeRange.from; g < grade; g++) {
-    const gradeConfig = config.grades[g]
-    if (gradeConfig?.promptHint) {
-      lines.push(`  ${g} класс: ${gradeConfig.promptHint}`)
+  // For easy: only show current grade topics (for context within class)
+  // For medium/hard: also show prior grades
+  if (level !== 'easy') {
+    for (let g = gradeRange.from; g < grade; g++) {
+      const gradeConfig = config.grades[g]
+      if (gradeConfig?.promptHint) {
+        lines.push(`  ${g} класс: ${gradeConfig.promptHint}`)
+      }
     }
   }
 
@@ -266,12 +266,99 @@ function buildCurriculumContext(subjectId: string, grade: number, level: Difficu
 }
 
 // =============================================================================
+// Block 5.6: Grade Cognitive Calibration
+// =============================================================================
+
+/**
+ * Builds a cognitive depth calibration block that ensures tasks match
+ * the intellectual level expected for the grade, regardless of difficulty setting.
+ * Difficulty (easy/medium/hard) adjusts within this level but never below it.
+ */
+function getGradeCalibrationBlock(grade: number, level: DifficultyLevel, subject: string): string {
+  // Determine cognitive tier based on grade
+  let cognitiveTier: string
+  let minCognitiveLevel: string
+  let examContext = ''
+
+  if (grade <= 4) {
+    cognitiveTier = 'НАЧАЛЬНАЯ ШКОЛА (1-4 класс)'
+    minCognitiveLevel = `Минимальный когнитивный уровень: УЗНАВАНИЕ и ПРИМЕНЕНИЕ.
+Ученик должен узнавать изученные понятия и применять правила/формулы напрямую.
+Даже на базовом уровне задания требуют осознанного применения, а не механического повторения.`
+  } else if (grade <= 6) {
+    cognitiveTier = 'СРЕДНИЕ КЛАССЫ (5-6 класс)'
+    minCognitiveLevel = `Минимальный когнитивный уровень: СРАВНЕНИЕ и КЛАССИФИКАЦИЯ.
+Ученик должен уметь сравнивать объекты, классифицировать по признакам, выделять общее и различное.
+Даже на базовом уровне ЗАПРЕЩЕНЫ задания, где нужно просто узнать/определить одно понятие — это уровень 1-4 класса.
+Каждое задание должно требовать хотя бы элементарного сравнения или выбора между несколькими вариантами применения правила.`
+  } else if (grade <= 8) {
+    cognitiveTier = 'ПРЕДПРОФИЛЬНЫЕ КЛАССЫ (7-8 класс)'
+    minCognitiveLevel = `Минимальный когнитивный уровень: АНАЛИЗ и УСТАНОВЛЕНИЕ СВЯЗЕЙ.
+Ученик должен анализировать, видеть причинно-следственные связи, объяснять "почему", а не только "что".
+Даже на базовом уровне ЗАПРЕЩЕНЫ задания типа "определи/назови" без анализа — это уровень 5-6 класса.
+Каждое задание должно требовать хотя бы минимального анализа: "определи и объясни", "найди и докажи", "реши и проверь".`
+  } else {
+    cognitiveTier = 'СТАРШИЕ КЛАССЫ (9-11 класс)'
+    minCognitiveLevel = `Минимальный когнитивный уровень: СИНТЕЗ, ОЦЕНКА и АРГУМЕНТАЦИЯ.
+Ученик должен синтезировать знания из разных тем, оценивать, аргументировать свою позицию.
+Даже на базовом уровне ЗАПРЕЩЕНЫ задания типа "определи тип/вид" по одному примеру — это уровень 5-6 класса.
+Каждое задание должно требовать работы с контекстом: анализ текста/ситуации, обоснование выбора, комбинирование нескольких правил или понятий.`
+
+    // Exam calibration for 9-11 grades
+    if (grade === 9) {
+      examContext = `
+ПРИВЯЗКА К ЭКЗАМЕНУ — ОГЭ:
+Задания должны соответствовать уровню и формату ОГЭ (Основной государственный экзамен).
+- Базовый: уровень заданий 1-й части ОГЭ (с выбором ответа, но осмысленные)
+- Средний: уровень заданий 1-й и 2-й части ОГЭ
+- Повышенный: уровень сложных заданий 2-й части ОГЭ`
+    } else {
+      examContext = `
+ПРИВЯЗКА К ЭКЗАМЕНУ — ЕГЭ:
+Задания должны соответствовать уровню и формату ЕГЭ (Единый государственный экзамен).
+- Базовый: уровень заданий 1-й части ЕГЭ (базовый профиль)
+- Средний: уровень заданий 1-й части ЕГЭ профильного уровня
+- Повышенный: уровень заданий 2-й части ЕГЭ профильного уровня`
+    }
+  }
+
+  // Build the curriculum awareness instruction
+  const curriculumContext = buildCurriculumContext(subject, grade, level)
+
+  let priorKnowledgeInstruction = ''
+  if (grade > 1) {
+    if (level === 'easy') {
+      priorKnowledgeInstruction = `
+ОПОРА НА ПРОЙДЕННЫЙ МАТЕРИАЛ (даже на базовом уровне):
+Задания должны естественно использовать понятия и навыки, освоенные в предыдущих классах.
+Не нужно специально усложнять — просто формулируй задания так, как они звучали бы в реальном учебнике для ${grade} класса,
+где ученик уже владеет всем материалом предыдущих лет.${curriculumContext}`
+    } else {
+      priorKnowledgeInstruction = `
+ОПОРА НА ПРОЙДЕННЫЙ МАТЕРИАЛ:
+Задания ОБЯЗАНЫ комбинировать текущую тему с ранее изученным материалом.
+Используй понятия и навыки из предыдущих тем и классов — именно это отличает ${grade} класс от более младших.${curriculumContext}`
+    }
+  }
+
+  return `
+═══════════════════════════════════════════════════════════════
+КАЛИБРОВКА ПО КЛАССУ — ${cognitiveTier}
+═══════════════════════════════════════════════════════════════
+
+${minCognitiveLevel}
+
+Уровень сложности (${level === 'easy' ? 'базовый' : level === 'medium' ? 'средний' : 'повышенный'}) регулирует сложность ВНУТРИ этого когнитивного уровня, но НИКОГДА не опускает задания ниже минимума для ${grade} класса.
+${examContext}${priorKnowledgeInstruction}
+`.trim()
+}
+
+// =============================================================================
 // Block 6: Difficulty (усиленный, идёт сразу после темы)
 // =============================================================================
 
 function getDifficultyBlock(level: DifficultyLevel, subject: string, grade: number): string {
   const difficultyContent = getDifficultyPrompt(level, subject, grade)
-  const curriculumContext = buildCurriculumContext(subject, grade, level)
 
   // Определяем название уровня для сообщений
   const levelNames: Record<DifficultyLevel, string> = {
@@ -314,7 +401,6 @@ function getDifficultyBlock(level: DifficultyLevel, subject: string, grade: numb
 - ~40% заданий: комбинируют текущую тему с РАНЕЕ пройденными темами этого или предыдущих классов
   (например, для алгебры 8 класса "Квадратные уравнения" — задачи, где нужно сначала упростить выражение с одночленами из 7 класса, а потом решить уравнение)
 - ~20% заданий: усложнённые, требуют нескольких навыков одновременно
-${curriculumContext}
 
 НАРАСТАНИЕ СЛОЖНОСТИ:
 Задания должны идти от менее сложных к более сложным:
@@ -342,7 +428,6 @@ ${curriculumContext}
 • Алгебра 8кл "Квадратные уравнения" → задача, где нужно разложить многочлен (7кл), привести к квадратному уравнению, решить через дискриминант, и проверить через подстановку
 • Геометрия 8кл "Площади" → задача на площадь фигуры, составленной из нескольких четырёхугольников, с использованием теоремы Пифагора и подобия
 • Русский 7кл "Причастный оборот" → предложение со сложной пунктуацией, где нужно учесть и причастный оборот, и однородные члены, и вводные слова
-${curriculumContext}
 
 НАРАСТАНИЕ СЛОЖНОСТИ:
 Каждое следующее задание ДОЛЖНО быть сложнее предыдущего:
@@ -529,7 +614,8 @@ export function buildPrompt(params: PromptParams): string {
     getSubjectBlock(params.subject),
     getGradeBlock(params.subject, params.grade),
     getTopicBlock(params.topic),
-    getDifficultyBlock(params.difficulty, params.subject, params.grade), // Сложность сразу после темы!
+    getGradeCalibrationBlock(params.grade, params.difficulty, params.subject), // Калибровка по классу!
+    getDifficultyBlock(params.difficulty, params.subject, params.grade), // Сложность сразу после калибровки!
     getTaskTypesBlock(params.taskTypes, params.format, params.variantIndex),
     getDiversityBlock(params.subject), // Разнообразие после типов
     getFormatBlock(),
@@ -551,10 +637,11 @@ export function buildSystemPrompt(subjectId: string): string {
  *
  * Порядок блоков оптимизирован:
  * 1. Класс + тема
- * 2. СЛОЖНОСТЬ (сразу после темы!)
- * 3. Типы заданий
- * 4. РАЗНООБРАЗИЕ
- * 5. Формат + антипаттерны
+ * 2. КАЛИБРОВКА ПО КЛАССУ (когнитивная глубина!)
+ * 3. СЛОЖНОСТЬ (внутри когнитивного уровня!)
+ * 4. Типы заданий
+ * 5. РАЗНООБРАЗИЕ
+ * 6. Формат + антипаттерны
  */
 export function buildUserPrompt(
   params: Omit<PromptParams, 'subject'> & { subject: string }
@@ -562,7 +649,8 @@ export function buildUserPrompt(
   const blocks = [
     getGradeBlock(params.subject, params.grade),
     getTopicBlock(params.topic),
-    getDifficultyBlock(params.difficulty, params.subject, params.grade), // Сложность сразу после темы!
+    getGradeCalibrationBlock(params.grade, params.difficulty, params.subject), // Калибровка по классу!
+    getDifficultyBlock(params.difficulty, params.subject, params.grade), // Сложность после калибровки!
     getTaskTypesBlock(params.taskTypes, params.format, params.variantIndex),
     getDiversityBlock(params.subject), // Разнообразие после типов
     getFormatBlock(),
