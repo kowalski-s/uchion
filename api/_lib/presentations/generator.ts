@@ -137,8 +137,8 @@ function addSlideFooter(
 
 function addWatermark(slide: PptxGenJS.Slide, theme: ThemeConfig): void {
   slide.addText('УчиОн', {
-    x: 8.5, y: 0.15, w: 1.5, h: 0.3,
-    fontSize: 9,
+    x: 8.2, y: 0.15, w: 1.8, h: 0.4,
+    fontSize: 12,
     fontFace: theme.fontFace,
     color: 'C0C0C0',
     align: 'right',

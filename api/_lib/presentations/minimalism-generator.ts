@@ -27,8 +27,8 @@ const BODY_FONT = 'Arial'
 
 function addWatermark(slide: PptxGenJS.Slide, isDarkBg: boolean): void {
   slide.addText('УчиОн', {
-    x: 8.5, y: 0.15, w: 1.5, h: 0.3,
-    fontSize: 9,
+    x: 8.2, y: 0.15, w: 1.8, h: 0.4,
+    fontSize: 12,
     fontFace: BODY_FONT,
     color: isDarkBg ? '555555' : 'C0BBB5',
     align: 'right',

@@ -89,8 +89,8 @@ function addSchoolFooter(
 function addWatermark(slide: PptxGenJS.Slide, bgType: 'cream' | 'slate' | 'sage'): void {
   const colorMap = { cream: 'C8C3BD', slate: 'A0AEC0', sage: 'CDD5CD' }
   slide.addText('УчиОн', {
-    x: 8.5, y: 0.15, w: 1.5, h: 0.3,
-    fontSize: 9,
+    x: 8.2, y: 0.15, w: 1.8, h: 0.4,
+    fontSize: 12,
     fontFace: BODY_FONT,
     color: colorMap[bgType],
     align: 'right',

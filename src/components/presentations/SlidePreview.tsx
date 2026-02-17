@@ -1439,7 +1439,7 @@ export default function SlidePreview({ structure, themePreset = 'professional' }
             {renderSlide(slide, currentSlide)}
             {/* Watermark */}
             <div
-              className="absolute top-2 right-3 text-[9px] font-medium pointer-events-none select-none"
+              className="absolute top-2 right-3 text-xs font-medium pointer-events-none select-none"
               style={{ color: theme.muted || theme.accent, opacity: 0.35 }}
             >
               УчиОн
