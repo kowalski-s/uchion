@@ -171,7 +171,7 @@ export default function LoginPage() {
             onClick={() => navigate('/')}
             className="hover:opacity-80 transition-opacity"
           >
-            <img src="/logo.png" alt="УчиОн" className="h-12 sm:h-14" />
+            <img src="/logo.png" alt="УчиОн" className="h-16 sm:h-20" />
           </button>
         </div>
       </header>

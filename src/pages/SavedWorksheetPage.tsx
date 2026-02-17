@@ -366,7 +366,7 @@ export default function SavedWorksheetPage() {
           <div className="flex items-center justify-between">
             {/* Left: Logo + Back button */}
             <div className="flex items-center gap-3">
-              <Link to="/" className="flex-shrink-0 hover:opacity-80 transition-opacity"><img src="/logo.png" alt="УчиОн" className="h-10" /></Link>
+              <Link to="/" className="flex-shrink-0 hover:opacity-80 transition-opacity"><img src="/logo.png" alt="УчиОн" className="h-14" /></Link>
               <button
                 onClick={() => handleNavigate('/worksheets')}
                 className="flex h-9 w-9 items-center justify-center rounded-full border border-indigo-100 bg-white shadow-sm transition-all hover:bg-indigo-50 active:scale-95"

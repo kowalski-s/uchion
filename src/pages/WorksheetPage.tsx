@@ -371,7 +371,7 @@ export default function WorksheetPage() {
         <div className="mx-auto max-w-7xl px-6 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-6">
-              <Link to="/" className="flex-shrink-0 hover:opacity-80 transition-opacity"><img src="/logo.png" alt="УчиОн" className="h-10" /></Link>
+              <Link to="/" className="flex-shrink-0 hover:opacity-80 transition-opacity"><img src="/logo.png" alt="УчиОн" className="h-14" /></Link>
               <div className="hidden sm:block">
                 <div className="text-sm font-medium text-gray-900">{editor.worksheet.topic}</div>
                 <div className="text-xs text-gray-500">
