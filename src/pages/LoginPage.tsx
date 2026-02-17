@@ -169,10 +169,9 @@ export default function LoginPage() {
         <div className="mx-auto max-w-6xl px-6">
           <button
             onClick={() => navigate('/')}
-            className="flex items-center text-2xl font-bold tracking-tight hover:opacity-80 transition-opacity"
+            className="hover:opacity-80 transition-opacity"
           >
-            <span className="text-slate-900">Учи</span>
-            <span className="text-[#8C52FF] drop-shadow-[0_0_12px_rgba(140,82,255,0.4)]">Он</span>
+            <img src="/logo.png" alt="УчиОн" className="h-12 sm:h-14" />
           </button>
         </div>
       </header>
