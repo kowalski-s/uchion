@@ -86,6 +86,17 @@ function addSchoolFooter(
   })
 }
 
+function addWatermark(slide: PptxGenJS.Slide, bgType: 'cream' | 'slate' | 'sage'): void {
+  const colorMap = { cream: 'C8C3BD', slate: 'A0AEC0', sage: 'CDD5CD' }
+  slide.addText('УчиОн', {
+    x: 8.5, y: 0.15, w: 1.5, h: 0.3,
+    fontSize: 9,
+    fontFace: BODY_FONT,
+    color: colorMap[bgType],
+    align: 'right',
+  })
+}
+
 /** Add a gold double-border frame around a region */
 function addGoldFrame(
   pres: PptxGenJS,
@@ -122,16 +133,16 @@ function contentElementsToRows(
         return {
           text: el.text,
           options: {
-            fontSize: 22, fontFace: HEADING_FONT, color: COLORS.text,
+            fontSize: 18, fontFace: HEADING_FONT, color: COLORS.text,
             bold: true, align: 'center' as const, breakLine: true,
-            paraSpaceBefore: 6, paraSpaceAfter: 8,
+            paraSpaceBefore: 6, paraSpaceAfter: 6,
           },
         }
       case 'definition':
         return {
           text: `  ${el.text}`,
           options: {
-            fontSize: 16, fontFace: BODY_FONT, color: COLORS.text,
+            fontSize: 14, fontFace: BODY_FONT, color: COLORS.text,
             italic: true, paraSpaceAfter: 6, breakLine: true,
             bullet: { code: '258E', color: COLORS.gold },
           },
@@ -140,7 +151,7 @@ function contentElementsToRows(
         return {
           text: el.text,
           options: {
-            fontSize: 15, fontFace: BODY_FONT, color: COLORS.text,
+            fontSize: 13, fontFace: BODY_FONT, color: COLORS.text,
             paraSpaceAfter: 6, breakLine: true,
           },
         }
@@ -148,7 +159,7 @@ function contentElementsToRows(
         return {
           text: el.text,
           options: {
-            fontSize: 17, fontFace: BODY_FONT, color: COLORS.gold,
+            fontSize: 15, fontFace: BODY_FONT, color: COLORS.gold,
             bold: true, paraSpaceAfter: 6, breakLine: true,
           },
         }
@@ -156,17 +167,17 @@ function contentElementsToRows(
         return {
           text: `${el.number ?? ''}. ${el.text}`,
           options: {
-            fontSize: 15, fontFace: BODY_FONT, color: COLORS.text,
-            paraSpaceAfter: 8, breakLine: true,
+            fontSize: 13, fontFace: BODY_FONT, color: COLORS.text,
+            paraSpaceAfter: 6, breakLine: true,
           },
         }
       case 'formula':
         return {
           text: el.text,
           options: {
-            fontSize: 20, fontFace: HEADING_FONT, color: COLORS.gold,
+            fontSize: 17, fontFace: HEADING_FONT, color: COLORS.gold,
             bold: true, align: 'center' as const, breakLine: true,
-            paraSpaceBefore: 4, paraSpaceAfter: 8,
+            paraSpaceBefore: 4, paraSpaceAfter: 6,
           },
         }
       case 'bullet':
@@ -174,9 +185,9 @@ function contentElementsToRows(
         return {
           text: el.text,
           options: {
-            fontSize: 15, fontFace: BODY_FONT, color: COLORS.text,
+            fontSize: 13, fontFace: BODY_FONT, color: COLORS.text,
             bullet: { code: '2022' as const, color: COLORS.gold },
-            paraSpaceAfter: 8, breakLine: true,
+            paraSpaceAfter: 6, breakLine: true,
           },
         }
     }
@@ -238,6 +249,8 @@ function addTitleSlide(
     x: 8.0, y: 5.0, w: 0.25, h: 0.25,
     fill: { color: COLORS.gold },
   })
+
+  addWatermark(s, 'cream')
 }
 
 function addContentSlide(
@@ -285,10 +298,11 @@ function addContentSlide(
     const rows = contentElementsToRows(normalizeContent(slide.content))
     s.addText(rows, {
       x: 0.9, y: cardY + 0.3, w: 8.2, h: 6.9 - cardY - 1.0,
-      valign: 'top' as const, lineSpacingMultiple: 1.3,
+      valign: 'top' as const, lineSpacingMultiple: 1.1,
     })
   }
 
+  addWatermark(s, 'slate')
   addSchoolFooter(s, slideNum, total)
 }
 
@@ -376,6 +390,7 @@ function addTwoColumnSlide(
     })
   }
 
+  addWatermark(s, 'slate')
   addSchoolFooter(s, slideNum, total)
 }
 
@@ -436,6 +451,7 @@ function addTableSlide(
     return
   }
 
+  addWatermark(s, 'slate')
   addSchoolFooter(s, slideNum, total)
 }
 
@@ -516,6 +532,7 @@ function addFormulaSlide(
     })
   }
 
+  addWatermark(s, 'sage')
   addSchoolFooter(s, slideNum, total)
 }
 
@@ -559,10 +576,11 @@ function addExampleSlide(
     const rows = contentElementsToRows(normalizeContent(slide.content))
     s.addText(rows, {
       x: 0.9, y: 1.8, w: 8.2, h: 4.5,
-      valign: 'top' as const, lineSpacingMultiple: 1.3,
+      valign: 'top' as const, lineSpacingMultiple: 1.1,
     })
   }
 
+  addWatermark(s, 'sage')
   addSchoolFooter(s, slideNum, total)
 }
 
@@ -615,10 +633,11 @@ function addPracticeSlide(
     const rows = contentElementsToRows(normalizeContent(slide.content))
     s.addText(rows, {
       x: 0.9, y: cardY + 0.3, w: 8.2, h: 6.7 - cardY - 1.1,
-      valign: 'top' as const, lineSpacingMultiple: 1.3,
+      valign: 'top' as const, lineSpacingMultiple: 1.1,
     })
   }
 
+  addWatermark(s, 'sage')
   addSchoolFooter(s, slideNum, total)
 }
 
@@ -675,6 +694,7 @@ function addDiagramSlide(
     })
   }
 
+  addWatermark(s, 'sage')
   addSchoolFooter(s, slideNum, total)
 }
 
@@ -718,6 +738,7 @@ function addChartSlide(
     return
   }
 
+  addWatermark(s, 'slate')
   addSchoolFooter(s, slideNum, total)
 }
 
@@ -760,6 +781,8 @@ function addEndSlide(
     x: 4.75, y: 5.6, w: 0.5, h: 0.5,
     fill: { color: COLORS.gold },
   })
+
+  addWatermark(s, 'cream')
 }
 
 // =============================================================================

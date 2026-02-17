@@ -58,6 +58,16 @@ function addKidsFooter(
   })
 }
 
+function addWatermark(slide: PptxGenJS.Slide): void {
+  slide.addText('УчиОн', {
+    x: 8.5, y: 0.15, w: 1.5, h: 0.3,
+    fontSize: 9,
+    fontFace: BODY_FONT,
+    color: 'D0C9B5',
+    align: 'right',
+  })
+}
+
 // =============================================================================
 // Rich Content → PptxGenJS text rows (kids sizing)
 // =============================================================================
@@ -72,16 +82,16 @@ function contentElementsToRows(
         return {
           text: el.text,
           options: {
-            fontSize: 24, fontFace: BODY_FONT, color: COLORS.text,
+            fontSize: 20, fontFace: BODY_FONT, color: COLORS.text,
             bold: true, align: 'center' as const, breakLine: true,
-            paraSpaceBefore: 6, paraSpaceAfter: 8,
+            paraSpaceBefore: 6, paraSpaceAfter: 6,
           },
         }
       case 'definition':
         return {
           text: `  ${el.text}`,
           options: {
-            fontSize: 18, fontFace: BODY_FONT, color: COLORS.text,
+            fontSize: 15, fontFace: BODY_FONT, color: COLORS.text,
             italic: true, paraSpaceAfter: 6, breakLine: true,
             bullet: { code: '258E', color: COLORS.teal },
           },
@@ -90,7 +100,7 @@ function contentElementsToRows(
         return {
           text: el.text,
           options: {
-            fontSize: 16, fontFace: BODY_FONT, color: COLORS.text,
+            fontSize: 14, fontFace: BODY_FONT, color: COLORS.text,
             paraSpaceAfter: 6, breakLine: true,
           },
         }
@@ -98,7 +108,7 @@ function contentElementsToRows(
         return {
           text: el.text,
           options: {
-            fontSize: 18, fontFace: BODY_FONT, color: COLORS.teal,
+            fontSize: 16, fontFace: BODY_FONT, color: COLORS.teal,
             bold: true, paraSpaceAfter: 6, breakLine: true,
           },
         }
@@ -106,15 +116,15 @@ function contentElementsToRows(
         return {
           text: `${el.number ?? ''}. ${el.text}`,
           options: {
-            fontSize: 16, fontFace: BODY_FONT, color: COLORS.text,
-            paraSpaceAfter: 8, breakLine: true,
+            fontSize: 14, fontFace: BODY_FONT, color: COLORS.text,
+            paraSpaceAfter: 6, breakLine: true,
           },
         }
       case 'formula':
         return {
           text: el.text,
           options: {
-            fontSize: 22, fontFace: BODY_FONT, color: COLORS.teal,
+            fontSize: 18, fontFace: BODY_FONT, color: COLORS.teal,
             bold: true, align: 'center' as const, breakLine: true,
             paraSpaceBefore: 4, paraSpaceAfter: 8,
           },
@@ -124,9 +134,9 @@ function contentElementsToRows(
         return {
           text: el.text,
           options: {
-            fontSize: 17, fontFace: BODY_FONT, color: COLORS.text,
+            fontSize: 15, fontFace: BODY_FONT, color: COLORS.text,
             bullet: { code: '2022' as const, color: COLORS.teal },
-            paraSpaceAfter: 8, breakLine: true,
+            paraSpaceAfter: 6, breakLine: true,
           },
         }
     }
@@ -211,6 +221,7 @@ function addTitleSlide(
     fill: { color: COLORS.purple },
     rectRadius: 0.08,
   })
+  addWatermark(s)
 }
 
 function addContentSlide(
@@ -258,10 +269,11 @@ function addContentSlide(
     const rows = contentElementsToRows(normalizeContent(slide.content))
     s.addText(rows, {
       x: 0.9, y: cardY + 0.3, w: 8.2, h: 4.5 - (cardY - 1.5),
-      valign: 'top' as const, lineSpacingMultiple: 1.3,
+      valign: 'top' as const, lineSpacingMultiple: 1.1,
     })
   }
 
+  addWatermark(s)
   addKidsFooter(s, slideNum, total)
 }
 
@@ -344,6 +356,7 @@ function addTwoColumnSlide(
     })
   }
 
+  addWatermark(s)
   addKidsFooter(s, slideNum, total)
 }
 
@@ -403,6 +416,7 @@ function addTableSlide(
     return
   }
 
+  addWatermark(s)
   addKidsFooter(s, slideNum, total)
 }
 
@@ -482,6 +496,7 @@ function addFormulaSlide(
     })
   }
 
+  addWatermark(s)
   addKidsFooter(s, slideNum, total)
 }
 
@@ -525,10 +540,11 @@ function addExampleSlide(
     const rows = contentElementsToRows(normalizeContent(slide.content))
     s.addText(rows, {
       x: 0.9, y: 1.9, w: 8.2, h: 4.4,
-      valign: 'top' as const, lineSpacingMultiple: 1.3,
+      valign: 'top' as const, lineSpacingMultiple: 1.1,
     })
   }
 
+  addWatermark(s)
   addKidsFooter(s, slideNum, total)
 }
 
@@ -581,10 +597,11 @@ function addPracticeSlide(
     const rows = contentElementsToRows(normalizeContent(slide.content))
     s.addText(rows, {
       x: 0.9, y: cardY + 0.3, w: 8.2, h: 4.5 - (cardY - 1.4),
-      valign: 'top' as const, lineSpacingMultiple: 1.3,
+      valign: 'top' as const, lineSpacingMultiple: 1.1,
     })
   }
 
+  addWatermark(s)
   addKidsFooter(s, slideNum, total)
 }
 
@@ -641,6 +658,7 @@ function addDiagramSlide(
     })
   }
 
+  addWatermark(s)
   addKidsFooter(s, slideNum, total)
 }
 
@@ -684,6 +702,7 @@ function addChartSlide(
     return
   }
 
+  addWatermark(s)
   addKidsFooter(s, slideNum, total)
 }
 
@@ -741,6 +760,7 @@ function addEndSlide(
       fill: { color },
     })
   })
+  addWatermark(s)
 }
 
 // =============================================================================

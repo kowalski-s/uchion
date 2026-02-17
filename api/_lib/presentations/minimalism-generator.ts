@@ -22,6 +22,20 @@ const HEADING_FONT = 'Georgia'
 const BODY_FONT = 'Arial'
 
 // =============================================================================
+// Watermark
+// =============================================================================
+
+function addWatermark(slide: PptxGenJS.Slide, isDarkBg: boolean): void {
+  slide.addText('УчиОн', {
+    x: 8.5, y: 0.15, w: 1.5, h: 0.3,
+    fontSize: 9,
+    fontFace: BODY_FONT,
+    color: isDarkBg ? '555555' : 'C0BBB5',
+    align: 'right',
+  })
+}
+
+// =============================================================================
 // Slide Generators
 // =============================================================================
 
@@ -51,16 +65,16 @@ function contentElementsToRows(
         return {
           text: el.text,
           options: {
-            fontSize: 24, fontFace: HEADING_FONT, color: COLORS.primary,
+            fontSize: 20, fontFace: HEADING_FONT, color: COLORS.primary,
             bold: true, align: 'center' as const, breakLine: true,
-            paraSpaceBefore: 6, paraSpaceAfter: 8,
+            paraSpaceBefore: 6, paraSpaceAfter: 6,
           },
         }
       case 'definition':
         return {
           text: `  ${el.text}`,
           options: {
-            fontSize: 18, fontFace: BODY_FONT, color: COLORS.text,
+            fontSize: 15, fontFace: BODY_FONT, color: COLORS.text,
             italic: true, paraSpaceAfter: 6, breakLine: true,
             bullet: { code: '258E', color: COLORS.accent },
           },
@@ -69,7 +83,7 @@ function contentElementsToRows(
         return {
           text: el.text,
           options: {
-            fontSize: 16, fontFace: BODY_FONT, color: COLORS.text,
+            fontSize: 14, fontFace: BODY_FONT, color: COLORS.text,
             paraSpaceAfter: 6, breakLine: true,
           },
         }
@@ -77,7 +91,7 @@ function contentElementsToRows(
         return {
           text: el.text,
           options: {
-            fontSize: 18, fontFace: BODY_FONT, color: COLORS.accent,
+            fontSize: 16, fontFace: BODY_FONT, color: COLORS.accent,
             bold: true, paraSpaceAfter: 6, breakLine: true,
           },
         }
@@ -85,7 +99,7 @@ function contentElementsToRows(
         return {
           text: `${el.number ?? ''}. ${el.text}`,
           options: {
-            fontSize: 16, fontFace: BODY_FONT, color: COLORS.text,
+            fontSize: 14, fontFace: BODY_FONT, color: COLORS.text,
             paraSpaceAfter: 8, breakLine: true,
           },
         }
@@ -93,7 +107,7 @@ function contentElementsToRows(
         return {
           text: el.text,
           options: {
-            fontSize: 22, fontFace: HEADING_FONT, color: COLORS.accent,
+            fontSize: 18, fontFace: HEADING_FONT, color: COLORS.accent,
             bold: true, align: 'center' as const, breakLine: true,
             paraSpaceBefore: 4, paraSpaceAfter: 8,
           },
@@ -103,9 +117,9 @@ function contentElementsToRows(
         return {
           text: el.text,
           options: {
-            fontSize: 18, fontFace: BODY_FONT, color: COLORS.text,
+            fontSize: 15, fontFace: BODY_FONT, color: COLORS.text,
             bullet: { code: '2022' as const, color: COLORS.accent },
-            paraSpaceAfter: 8, breakLine: true,
+            paraSpaceAfter: 6, breakLine: true,
           },
         }
     }
@@ -172,6 +186,8 @@ function addTitleSlide(
     x: 7, y: 1.3, w: 2, h: 2.5,
     fill: { color: COLORS.white },
   })
+
+  addWatermark(s, true)
 }
 
 // --- Content Slide (bullets with section number) ---
@@ -212,10 +228,11 @@ function addContentSlide(
     const rows = contentElementsToRows(normalizeContent(slide.content))
     s.addText(rows, {
       x: 0.9, y: sectionNum ? 1.9 : 1.5, w: 8.4, h: 4.5,
-      valign: 'top' as const, lineSpacingMultiple: 1.25,
+      valign: 'top' as const, lineSpacingMultiple: 1.1,
     })
   }
 
+  addWatermark(s, false)
   addMinimalismFooter(s, slideNum, total)
 }
 
@@ -295,6 +312,7 @@ function addTwoColumnSlide(
     })
   }
 
+  addWatermark(s, false)
   addMinimalismFooter(s, slideNum, total)
 }
 
@@ -354,6 +372,7 @@ function addTableSlide(
     return
   }
 
+  addWatermark(s, false)
   addMinimalismFooter(s, slideNum, total)
 }
 
@@ -423,6 +442,7 @@ function addFormulaSlide(
     }
   }
 
+  addWatermark(s, false)
   addMinimalismFooter(s, slideNum, total)
 }
 
@@ -463,10 +483,11 @@ function addExampleSlide(
     const rows = contentElementsToRows(normalizeContent(slide.content))
     s.addText(rows, {
       x: 1.0, y: 1.9, w: 8.0, h: 4.2,
-      valign: 'top' as const, lineSpacingMultiple: 1.3,
+      valign: 'top' as const, lineSpacingMultiple: 1.1,
     })
   }
 
+  addWatermark(s, false)
   addMinimalismFooter(s, slideNum, total)
 }
 
@@ -504,10 +525,11 @@ function addPracticeSlide(
     const rows = contentElementsToRows(normalizeContent(slide.content))
     s.addText(rows, {
       x: 0.9, y: sectionNum ? 1.8 : 1.5, w: 8.2, h: 4.8,
-      valign: 'top' as const, lineSpacingMultiple: 1.3,
+      valign: 'top' as const, lineSpacingMultiple: 1.1,
     })
   }
 
+  addWatermark(s, false)
   addMinimalismFooter(s, slideNum, total)
 }
 
@@ -569,6 +591,7 @@ function addDiagramSlide(
     })
   }
 
+  addWatermark(s, false)
   addMinimalismFooter(s, slideNum, total)
 }
 
@@ -613,6 +636,7 @@ function addChartSlide(
     return
   }
 
+  addWatermark(s, false)
   addMinimalismFooter(s, slideNum, total)
 }
 
@@ -661,6 +685,8 @@ function addEndSlide(
     x: 7.5, y: 2.5, w: 2, h: 2,
     fill: { color: COLORS.accent },
   })
+
+  addWatermark(s, true)
 }
 
 // =============================================================================

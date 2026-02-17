@@ -135,6 +135,16 @@ function addSlideFooter(
   })
 }
 
+function addWatermark(slide: PptxGenJS.Slide, theme: ThemeConfig): void {
+  slide.addText('УчиОн', {
+    x: 8.5, y: 0.15, w: 1.5, h: 0.3,
+    fontSize: 9,
+    fontFace: theme.fontFace,
+    color: 'C0C0C0',
+    align: 'right',
+  })
+}
+
 // =============================================================================
 // Rich Content → PptxGenJS text rows
 // =============================================================================
@@ -150,17 +160,17 @@ function contentElementsToRows(
         return {
           text: el.text,
           options: {
-            fontSize: 28, fontFace: theme.titleFontFace, color: theme.titleColor,
+            fontSize: 22, fontFace: theme.titleFontFace, color: theme.titleColor,
             bold: true, align: 'center' as const, breakLine: true,
-            paraSpaceBefore: 8, paraSpaceAfter: 10,
+            paraSpaceBefore: 6, paraSpaceAfter: 8,
           },
         }
       case 'definition':
         return {
           text: `  ${el.text}`,
           options: {
-            fontSize: 22, fontFace: theme.fontFace, color: theme.textColor,
-            italic: true, paraSpaceAfter: 8, breakLine: true,
+            fontSize: 17, fontFace: theme.fontFace, color: theme.textColor,
+            italic: true, paraSpaceAfter: 6, breakLine: true,
             bullet: { code: '258E', color: theme.accentColor },
           },
         }
@@ -168,33 +178,33 @@ function contentElementsToRows(
         return {
           text: el.text,
           options: {
-            fontSize: 20, fontFace: theme.fontFace, color: theme.textColor,
-            paraSpaceAfter: 8, breakLine: true,
+            fontSize: 16, fontFace: theme.fontFace, color: theme.textColor,
+            paraSpaceAfter: 6, breakLine: true,
           },
         }
       case 'highlight':
         return {
           text: el.text,
           options: {
-            fontSize: 22, fontFace: theme.fontFace, color: theme.accentColor,
-            bold: true, paraSpaceAfter: 8, breakLine: true,
+            fontSize: 18, fontFace: theme.fontFace, color: theme.accentColor,
+            bold: true, paraSpaceAfter: 6, breakLine: true,
           },
         }
       case 'task':
         return {
           text: `${el.number ?? ''}. ${el.text}`,
           options: {
-            fontSize: 20, fontFace: theme.fontFace, color: theme.textColor,
-            paraSpaceAfter: 10, breakLine: true,
+            fontSize: 16, fontFace: theme.fontFace, color: theme.textColor,
+            paraSpaceAfter: 8, breakLine: true,
           },
         }
       case 'formula':
         return {
           text: el.text,
           options: {
-            fontSize: 26, fontFace: theme.titleFontFace, color: theme.accentColor,
+            fontSize: 20, fontFace: theme.titleFontFace, color: theme.accentColor,
             bold: true, align: 'center' as const, breakLine: true,
-            paraSpaceBefore: 6, paraSpaceAfter: 10,
+            paraSpaceBefore: 4, paraSpaceAfter: 8,
           },
         }
       case 'bullet':
@@ -202,9 +212,9 @@ function contentElementsToRows(
         return {
           text: el.text,
           options: {
-            fontSize: 22, fontFace: theme.fontFace, color: theme.textColor,
+            fontSize: 17, fontFace: theme.fontFace, color: theme.textColor,
             bullet: { code: '2022', color: theme.accentColor },
-            paraSpaceAfter: 12, breakLine: true,
+            paraSpaceAfter: 8, breakLine: true,
           },
         }
     }
@@ -253,6 +263,8 @@ function addTitleSlide(
     })
   }
 
+  addWatermark(slide, theme)
+
   // Footer
   slide.addText('Создано в УчиОн', {
     x: 0.5, y: 7.0, w: 12, h: 0.3,
@@ -283,10 +295,11 @@ function addContentSlide(
     const rows = contentElementsToRows(normalizeContent(content), theme)
     slide.addText(rows, {
       x: 0.8, y: 1.5, w: 11.4, h: 4.8,
-      valign: 'top', lineSpacingMultiple: 1.3,
+      valign: 'top', lineSpacingMultiple: 1.1,
     })
   }
 
+  addWatermark(slide, theme)
   addSlideFooter(slide, slideNumber, totalSlides, theme)
 }
 
@@ -353,6 +366,7 @@ function addTwoColumnSlide(
     })
   }
 
+  addWatermark(slide, theme)
   addSlideFooter(slide, slideNumber, totalSlides, theme)
 }
 
@@ -410,6 +424,7 @@ function addTableSlide(
     })
   }
 
+  addWatermark(slide, theme)
   addSlideFooter(slide, slideNumber, totalSlides, theme)
 }
 
@@ -441,10 +456,11 @@ function addExampleSlide(
     const rows = contentElementsToRows(elements, theme)
     slide.addText(rows, {
       x: 1.0, y: 1.7, w: 11.0, h: 4.6,
-      valign: 'top', lineSpacingMultiple: 1.3,
+      valign: 'top', lineSpacingMultiple: 1.1,
     })
   }
 
+  addWatermark(slide, theme)
   addSlideFooter(slide, slideNumber, totalSlides, theme)
 }
 
@@ -480,10 +496,11 @@ function addFormulaSlide(
     }))
     slide.addText(rows, {
       x: 1.5, y: 3.5, w: 10, h: 3.0,
-      valign: 'top', lineSpacingMultiple: 1.3,
+      valign: 'top', lineSpacingMultiple: 1.1,
     })
   }
 
+  addWatermark(slide, theme)
   addSlideFooter(slide, slideNumber, totalSlides, theme)
 }
 
@@ -530,6 +547,7 @@ function addDiagramSlide(
     })
   }
 
+  addWatermark(slide, theme)
   addSlideFooter(slide, slideNumber, totalSlides, theme)
 }
 
@@ -573,6 +591,7 @@ function addChartSlide(
     })
   }
 
+  addWatermark(slide, theme)
   addSlideFooter(slide, slideNumber, totalSlides, theme)
 }
 
@@ -609,10 +628,11 @@ function addPracticeSlide(
     const rows = contentElementsToRows(normalizeContent(slideData.content), theme)
     slide.addText(rows, {
       x: 0.8, y: 1.8, w: 11.4, h: 4.5,
-      valign: 'top', lineSpacingMultiple: 1.3,
+      valign: 'top', lineSpacingMultiple: 1.1,
     })
   }
 
+  addWatermark(slide, theme)
   addSlideFooter(slide, slideNumber, totalSlides, theme)
 }
 
@@ -649,9 +669,9 @@ function addConclusionSlide(
         return {
           text: el.text,
           options: {
-            fontSize: 20, fontFace: theme.fontFace, color: theme.textColor,
+            fontSize: 16, fontFace: theme.fontFace, color: theme.textColor,
             bullet: { code: '2713', color: theme.accentColor },
-            paraSpaceAfter: 10,
+            paraSpaceAfter: 8,
           },
         }
       }
@@ -660,10 +680,11 @@ function addConclusionSlide(
     })
     slide.addText(summaryRows, {
       x: 1.5, y: 2.2, w: 10, h: 4.0,
-      valign: 'top', lineSpacingMultiple: 1.3,
+      valign: 'top', lineSpacingMultiple: 1.1,
     })
   }
 
+  addWatermark(slide, theme)
   addSlideFooter(slide, slideNumber, totalSlides, theme)
 }
 

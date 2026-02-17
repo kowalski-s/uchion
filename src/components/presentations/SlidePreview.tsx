@@ -1437,6 +1437,13 @@ export default function SlidePreview({ structure, themePreset = 'professional' }
             style={{ background: theme.bg }}
           >
             {renderSlide(slide, currentSlide)}
+            {/* Watermark */}
+            <div
+              className="absolute top-2 right-3 text-[9px] font-medium pointer-events-none select-none"
+              style={{ color: theme.muted || theme.accent, opacity: 0.35 }}
+            >
+              УчиОн
+            </div>
             {/* Slide number */}
             <div
               className="absolute bottom-3 right-4 text-xs font-medium px-2 py-1 rounded"
