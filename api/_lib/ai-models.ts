@@ -31,7 +31,7 @@ export function isStemSubject(subject: string): boolean {
 
 export interface VerifierModelConfig {
   model: string
-  reasoning: { effort: 'low' | 'minimal'; budget_tokens?: number } | { enabled: false }
+  reasoning: { effort: 'low' | 'minimal' } | { enabled: false }
 }
 
 /**
@@ -51,7 +51,7 @@ export function getVerifierModelConfig(subject: string, grade?: number): Verifie
       return { model, reasoning: { enabled: false } }
     }
     const model = process.env.AI_MODEL_VERIFIER_STEM || 'google/gemini-3-flash-preview'
-    return { model, reasoning: { effort: 'low', budget_tokens: 1024 } }
+    return { model, reasoning: { effort: 'low' } }
   }
   // Russian 1-6: cheaper model
   if (grade && grade <= 6) {
@@ -75,7 +75,7 @@ export function getFixerModelConfig(subject: string, grade?: number): VerifierMo
       return { model, reasoning: { enabled: false } }
     }
     const model = process.env.AI_MODEL_VERIFIER_STEM || 'google/gemini-3-flash-preview'
-    return { model, reasoning: { effort: 'minimal', budget_tokens: 512 } }
+    return { model, reasoning: { effort: 'minimal' } }
   }
   if (grade && grade <= 6) {
     const model = process.env.AI_MODEL_AGENTS || 'openai/gpt-4.1-mini'
