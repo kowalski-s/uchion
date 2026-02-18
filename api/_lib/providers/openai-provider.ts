@@ -118,28 +118,27 @@ export class OpenAIProvider implements AIProvider {
         generatedJson = JSON.parse(jsonStr)
       } catch {
         console.warn('[УчиОн] JSON parse failed, attempting to fix truncated JSON...')
-        let fixed = jsonStr
 
-        // Remove last incomplete task object if truncated mid-object
-        // Find the last complete object boundary ("},") before the truncation point
-        if (finishReason === 'length') {
-          const lastCompleteObj = fixed.lastIndexOf('},')
-          const lastCompleteArr = fixed.lastIndexOf('}]')
-          const lastComplete = Math.max(lastCompleteObj, lastCompleteArr)
-          if (lastComplete > 0) {
-            // Cut after the last complete object, re-close the structure
-            fixed = fixed.substring(0, lastComplete + 1) + ']}'
-            console.log('[УчиОн] Truncated response: removed last incomplete task, keeping up to char', lastComplete)
-          }
+        // Strategy: find the last complete task object and cut everything after it.
+        // A complete task ends with "}" followed by "," or "]".
+        // We try progressively: clean cut -> bracket closing -> regex extraction.
+        generatedJson = null as unknown as GeneratedWorksheetJson
+
+        // Attempt 1: Cut at last complete task object boundary
+        const lastCompleteObj = jsonStr.lastIndexOf('},')
+        const lastCompleteArr = jsonStr.lastIndexOf('}]')
+        const lastComplete = Math.max(lastCompleteObj, lastCompleteArr)
+        if (lastComplete > 0) {
+          const cut = jsonStr.substring(0, lastComplete + 1) + ']}'
+          try {
+            generatedJson = JSON.parse(cut)
+            console.log('[УчиОн] Fixed by cutting at last complete task (char', lastComplete, ')')
+          } catch { /* try next strategy */ }
         }
 
-        // Fallback: try to close unclosed arrays and objects
-        try {
-          generatedJson = JSON.parse(fixed)
-        } catch {
-          // Remove trailing comma if present
-          fixed = fixed.replace(/,\s*$/, '')
-
+        // Attempt 2: Close unclosed brackets/braces
+        if (!generatedJson) {
+          let fixed = jsonStr.replace(/,\s*$/, '')
           const openBrackets = (fixed.match(/\[/g) || []).length
           const closeBrackets = (fixed.match(/\]/g) || []).length
           const openBraces = (fixed.match(/\{/g) || []).length
@@ -148,8 +147,31 @@ export class OpenAIProvider implements AIProvider {
           for (let i = 0; i < openBrackets - closeBrackets; i++) fixed += ']'
           for (let i = 0; i < openBraces - closeBraces; i++) fixed += '}'
 
-          console.log('[УчиОн] Fixed JSON with bracket closing, attempting parse again...')
-          generatedJson = JSON.parse(fixed)
+          try {
+            generatedJson = JSON.parse(fixed)
+            console.log('[УчиОн] Fixed by closing brackets')
+          } catch { /* try next strategy */ }
+        }
+
+        // Attempt 3: Extract individual task objects via regex
+        if (!generatedJson) {
+          console.warn('[УчиОн] Bracket fix failed, extracting tasks via regex...')
+          const taskRegex = /\{[^{}]*"type"\s*:\s*"[^"]+?"[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g
+          const taskMatches = jsonStr.match(taskRegex) || []
+          if (taskMatches.length > 0) {
+            const tasks: GeneratedTask[] = []
+            for (const m of taskMatches) {
+              try { tasks.push(JSON.parse(m)) } catch { /* skip broken */ }
+            }
+            if (tasks.length > 0) {
+              generatedJson = { tasks }
+              console.log(`[УчиОн] Extracted ${tasks.length} tasks via regex`)
+            }
+          }
+        }
+
+        if (!generatedJson) {
+          throw new Error('Could not parse or fix JSON')
         }
       }
     } catch (e) {
