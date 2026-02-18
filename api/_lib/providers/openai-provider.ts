@@ -98,7 +98,11 @@ export class OpenAIProvider implements AIProvider {
     onProgress?.(60)
 
     const content = completion.choices[0]?.message?.content || ''
-    console.log('[УчиОн] Raw AI response length:', content.length)
+    const finishReason = completion.choices[0]?.finish_reason
+    console.log('[УчиОн] Raw AI response length:', content.length, 'finish_reason:', finishReason)
+    if (finishReason === 'length') {
+      console.warn('[УчиОн] Response was TRUNCATED (hit max_tokens). Last task may be incomplete.')
+    }
 
     let generatedJson: GeneratedWorksheetJson
     try {
@@ -114,22 +118,39 @@ export class OpenAIProvider implements AIProvider {
         generatedJson = JSON.parse(jsonStr)
       } catch {
         console.warn('[УчиОн] JSON parse failed, attempting to fix truncated JSON...')
-        // Try to close unclosed arrays and objects
         let fixed = jsonStr
-        const openBrackets = (fixed.match(/\[/g) || []).length
-        const closeBrackets = (fixed.match(/\]/g) || []).length
-        const openBraces = (fixed.match(/\{/g) || []).length
-        const closeBraces = (fixed.match(/\}/g) || []).length
 
-        // Remove trailing comma if present
-        fixed = fixed.replace(/,\s*$/, '')
+        // Remove last incomplete task object if truncated mid-object
+        // Find the last complete object boundary ("},") before the truncation point
+        if (finishReason === 'length') {
+          const lastCompleteObj = fixed.lastIndexOf('},')
+          const lastCompleteArr = fixed.lastIndexOf('}]')
+          const lastComplete = Math.max(lastCompleteObj, lastCompleteArr)
+          if (lastComplete > 0) {
+            // Cut after the last complete object, re-close the structure
+            fixed = fixed.substring(0, lastComplete + 1) + ']}'
+            console.log('[УчиОн] Truncated response: removed last incomplete task, keeping up to char', lastComplete)
+          }
+        }
 
-        // Close arrays and objects
-        for (let i = 0; i < openBrackets - closeBrackets; i++) fixed += ']'
-        for (let i = 0; i < openBraces - closeBraces; i++) fixed += '}'
+        // Fallback: try to close unclosed arrays and objects
+        try {
+          generatedJson = JSON.parse(fixed)
+        } catch {
+          // Remove trailing comma if present
+          fixed = fixed.replace(/,\s*$/, '')
 
-        console.log('[УчиОн] Fixed JSON, attempting parse again...')
-        generatedJson = JSON.parse(fixed)
+          const openBrackets = (fixed.match(/\[/g) || []).length
+          const closeBrackets = (fixed.match(/\]/g) || []).length
+          const openBraces = (fixed.match(/\{/g) || []).length
+          const closeBraces = (fixed.match(/\}/g) || []).length
+
+          for (let i = 0; i < openBrackets - closeBrackets; i++) fixed += ']'
+          for (let i = 0; i < openBraces - closeBraces; i++) fixed += '}'
+
+          console.log('[УчиОн] Fixed JSON with bracket closing, attempting parse again...')
+          generatedJson = JSON.parse(fixed)
+        }
       }
     } catch (e) {
       console.error('[УчиОн] JSON parse error:', e)
@@ -242,6 +263,32 @@ export class OpenAIProvider implements AIProvider {
       console.log(`[УчиОн] Validation warnings (${validationResult.warnings.length}):`,
         validationResult.warnings.map(w => `  [${w.taskIndex}] ${w.code}: ${w.message}`).join('\n')
       )
+    }
+
+    // Post-validation backfill: if validation removed tasks, retry to fill the gap
+    const postValMissingOpen = openTasks - openTasksList.length
+    const postValMissingTest = testQuestions - testTasks.length
+    if ((postValMissingOpen > 0 || postValMissingTest > 0) && !circuitBreaker.isOpen()) {
+      console.log(`[УчиОн] Post-validation backfill: need ${postValMissingOpen} open + ${postValMissingTest} test`)
+      try {
+        const backfillTasks = await this.generateMissingTasks(
+          params,
+          Math.max(0, postValMissingOpen),
+          Math.max(0, postValMissingTest),
+          taskTypes,
+          difficulty
+        )
+        for (const task of backfillTasks) {
+          if (task.type === 'single_choice' || task.type === 'multiple_choice') {
+            testTasks.push(task)
+          } else {
+            openTasksList.push(task)
+          }
+        }
+        console.log(`[УчиОн] After backfill: testTasks=${testTasks.length}, openTasksList=${openTasksList.length}`)
+      } catch (e) {
+        console.warn('[УчиОн] Post-validation backfill failed:', e)
+      }
     }
 
     // Multi-agent validation (LLM-based, parallel) + auto-fix
