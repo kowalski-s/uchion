@@ -37,7 +37,7 @@ curl http://localhost:3000/api/auth/me
 
 ---
 
-## Testing OAuth (Optional)
+## Testing Auth Providers (Optional)
 
 ### Yandex OAuth
 
@@ -50,17 +50,15 @@ curl http://localhost:3000/api/auth/me
 3. Add callback URL in Yandex: `http://localhost:5173/api/auth/yandex/callback`
 4. Open `http://localhost:5173` and click "Login with Yandex"
 
-### Telegram Login
+### Email OTP
 
-1. Create bot via [@BotFather](https://t.me/BotFather)
+1. Get API key from [Unisender Go](https://go.unisender.ru/)
 2. Add to `.env.local`:
    ```bash
-   TELEGRAM_BOT_TOKEN=123:ABC...
-   TELEGRAM_BOT_USERNAME=YourBot
-   VITE_TELEGRAM_BOT_USERNAME=YourBot
+   UNISENDER_GO_API_KEY=your-api-key
    ```
-3. Set domain in BotFather: `/setdomain` → `localhost`
-4. Open `http://localhost:5173` and use Telegram widget
+3. Open `http://localhost:5173`, enter email, receive 6-digit code
+4. Enter code to complete login
 
 ---
 
@@ -73,7 +71,8 @@ curl http://localhost:3000/api/auth/me
 | `/api/auth/logout` | POST | Yes | Logout |
 | `/api/auth/refresh` | POST | Cookie | Refresh token |
 | `/api/auth/yandex/redirect` | GET | No | Start Yandex OAuth |
-| `/api/auth/telegram/callback` | GET | No | Telegram callback |
+| `/api/auth/email/send-code` | POST | No | Send OTP code |
+| `/api/auth/email/verify-code` | POST | No | Verify OTP code |
 
 ---
 

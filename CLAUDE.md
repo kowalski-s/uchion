@@ -10,7 +10,7 @@ Uchion -- AI-генератор рабочих листов и презента�
 
 **Типы заданий**: единственный выбор, множественный выбор, открытый вопрос, соотнесение, вставка пропущенного.
 
-**Презентации**: 4 темы оформления (professional, educational, minimal, scientific), 3 варианта объема (12/18/24 слайдов).
+**Презентации**: 3 активных темы оформления (professional, kids, school), 3 варианта объема (12/18/24 слайдов).
 
 ## Development Commands
 
@@ -54,23 +54,24 @@ npm run db:studio        # Open Drizzle Studio
   - State: Zustand (sessions) + React Query (async)
   - Forms: React Hook Form + Zod validation
   - Math rendering: KaTeX
-  - Presentations: pptxgenjs (PPTX) + SlidePreview (HTML preview)
+  - Presentations: pptxgenjs (PPTX)
 - **Backend**: Express.js 5 (Node.js 20+)
   - REST API + SSE для стриминга прогресса генерации
-  - Auth: Custom OAuth 2.0 (Yandex, Telegram)
+  - Auth: Yandex OAuth (PKCE) + Email OTP (passwordless)
   - Database: PostgreSQL + Drizzle ORM
   - PDF: Puppeteer + @sparticuz/chromium (HTML -> PDF)
   - Payments: Prodamus (webhook-based)
   - Alerts: Telegram Bot для админов
+  - Email: Unisender Go (OTP коды)
 - **Shared Layer**: `shared/` -- единый источник типов/схем
 
 ### Key Directories
 ```
 /server                 # Express server
   /routes              # API route handlers
-    auth.ts            # Authentication (OAuth, JWT)
+    auth.ts            # Authentication (Yandex OAuth, Email OTP, JWT)
     generate.ts        # Worksheet generation (SSE)
-    presentations.ts   # Presentation generation (SSE)
+    presentations.ts   # Presentation generation + CRUD (SSE)
     worksheets.ts      # Worksheet CRUD
     folders.ts         # Folder CRUD
     admin/             # Admin panel API (subdirectory)
@@ -80,29 +81,37 @@ npm run db:studio        # Open Drizzle Studio
       generations.ts   # Generation logs
       payments.ts      # Payment logs
       alerts.ts        # Alert settings
+      settings.ts      # Admin settings (Telegram chat ID)
+      ai-costs.ts      # AI usage analytics
     billing.ts         # Prodamus payments
     telegram.ts        # Telegram bot webhook
     health.ts          # Health check
   /middleware          # Auth, rate-limit, cookies, audit-log, error-handler
-  /lib                 # Server utilities (prodamus.ts, redis.ts)
 /api                   # Backend utilities
   /_lib
     /generation        # Config-driven generation system
       /config
         /subjects      # Per-subject configs (math, algebra, geometry, russian)
+          /math        # prompt.ts, grade-tiers.ts, difficulty.ts, index.ts
+          /algebra     # prompt.ts, grade-tiers.ts, difficulty.ts, index.ts
+          /geometry    # prompt.ts, grade-tiers.ts, difficulty.ts, index.ts
+          /russian     # prompt.ts, grade-tiers.ts, difficulty.ts, index.ts
         /presentations # Presentation configs (subjects, templates)
           /subjects    # Presentation subject configs
-          /templates   # Slide templates (minimalism.ts)
+          /templates   # Slide templates (minimalism, kids, school, types)
         task-types.ts
         worksheet-formats.ts
         difficulty.ts
         task-distribution.ts
+        types.ts       # Config type definitions
       /validation      # Multi-agent validation system
         /agents        # Validation agents
           answer-verifier.ts
           task-fixer.ts
           quality-checker.ts
           content-checker.ts
+          unified-checker.ts
+          safe-json-parse.ts
         deterministic.ts  # Deterministic validation (counts, formats)
       prompts.ts       # Prompt builder
       sanitize.ts      # Content sanitization
@@ -113,7 +122,9 @@ npm run db:studio        # Open Drizzle Studio
       circuit-breaker.ts
     /presentations     # Presentation generation
       generator.ts     # Main presentation generator
-      minimalism-generator.ts  # Minimalism template generator
+      minimalism-generator.ts  # Minimalism template
+      kids-generator.ts        # Kids template
+      school-generator.ts      # School template
       pdf-generator.ts # Presentation PDF (Puppeteer)
       sanitize.ts      # HTML sanitization
     /ai                # AI modules (validator, schema, prompts)
@@ -122,10 +133,42 @@ npm run db:studio        # Open Drizzle Studio
     /telegram          # Telegram Bot API (bot, commands)
     pdf.ts             # Worksheet PDF generation (Puppeteer)
     ai-provider.ts     # AI provider orchestrator
-    ai-models.ts       # Model selection logic (per subject, per tier)
+    ai-models.ts       # Model selection logic (per subject, per tier, per grade)
+    ai-usage.ts        # AI token usage and cost tracking
+    email.ts           # Email sending (Unisender Go, OTP codes)
 /src                   # Frontend React app
-  /components          # UI components (EditableWorksheetContent, SlidePreview, etc.)
-  /pages               # React Router pages (15 pages incl. admin)
+  /components          # UI components
+    EditableWorksheetContent.tsx  # All 5 task types editing
+    MathRenderer.tsx              # KaTeX rendering
+    Header.tsx
+    WorksheetManager.tsx
+    EditModeToolbar.tsx
+    UnsavedChangesDialog.tsx
+    BuyGenerationsModal.tsx
+    CookieConsent.tsx
+    PdfTemplateModal.tsx
+    /ui                # Reusable UI (CustomSelect)
+    /presentations     # Presentation components (SlidePreview)
+  /pages               # React Router pages (18 total)
+    GeneratePage.tsx                  # Worksheet generation form
+    GeneratePresentationPage.tsx      # Presentation generation form
+    WorksheetPage.tsx                 # Session worksheet view/edit
+    SavedWorksheetPage.tsx            # DB-backed worksheet view/edit
+    WorksheetsListPage.tsx            # Saved worksheets list
+    SavedPresentationPage.tsx         # Presentation view
+    PresentationsListPage.tsx         # Saved presentations list
+    DashboardPage.tsx                 # User dashboard
+    LoginPage.tsx                     # Login (Yandex OAuth + Email OTP)
+    PaymentSuccessPage.tsx
+    PaymentCancelPage.tsx
+    /admin                            # Admin panel (7 pages)
+      AdminPage.tsx                   # Dashboard overview
+      AdminUsersPage.tsx
+      AdminUserDetailPage.tsx
+      AdminGenerationsPage.tsx
+      AdminPaymentsPage.tsx
+      AdminSettingsPage.tsx           # Telegram alerts settings
+      AdminAICostsPage.tsx            # AI usage analytics
   /hooks               # Custom hooks (useWorksheetEditor)
   /lib                 # Frontend utilities (api, auth, pdf-client, admin-api, etc.)
   /store               # Zustand state management
@@ -139,6 +182,8 @@ npm run db:studio        # Open Drizzle Studio
   /e2e                 # Playwright E2E tests
 /docs                  # Documentation
   /subject             # Reference materials per subject
+  /presexample         # Presentation examples
+  /alerts              # Alert system docs
 /scripts               # Utility scripts (smoke tests, DB migrations, admin tools)
 /fixtures              # Test fixtures (sample-worksheet.json)
 /public/fonts          # Inter font files (TTF, WOFF2)
@@ -149,11 +194,13 @@ npm run db:studio        # Open Drizzle Studio
 Система генерации полностью config-driven (`api/_lib/generation/`).
 
 ### 1. Конфигурация предметов (`api/_lib/generation/config/subjects/`)
-Каждый предмет имеет:
-- Диапазон классов (math: 1-6, algebra: 7-11, geometry: 7-11, russian: 1-11)
-- Темы по классам (из ФГОС)
-- Ограничения (что можно/нельзя для каждого класса)
-- Системный промпт
+Каждый предмет имеет отдельную директорию с файлами:
+- `index.ts` -- основной конфиг
+- `prompt.ts` -- системный промпт
+- `grade-tiers.ts` -- темы по классам (из ФГОС)
+- `difficulty.ts` -- настройки сложности
+
+Диапазон классов: math: 1-6, algebra: 7-11, geometry: 7-11, russian: 1-11.
 
 ### 2. Типы заданий (`api/_lib/generation/config/task-types.ts`)
 5 типов с Zod-валидацией:
@@ -175,20 +222,24 @@ npm run db:studio        # Open Drizzle Studio
 2. LLM генерирует JSON с массивом `tasks` (каждый task имеет type)
 3. Задания разделяются на тестовые (single/multiple_choice) и открытые (остальные)
 4. Если заданий не хватает -- запускается **retry** (догенерация недостающих)
-5. **Мульти-агентная валидация** (answer-verifier, task-fixer, quality-checker)
+5. **Мульти-агентная валидация** (answer-verifier, task-fixer, quality-checker, unified-checker)
 6. Конвертация в формат `Worksheet` (assignments + test + answers)
 7. PDF генерация через Puppeteer (HTML -> PDF)
+8. **AI usage tracking** -- логирование токенов и стоимости в таблицу `ai_usage`
 
 ### 5. Модели по типам (`api/_lib/ai-models.ts`)
 
 | Назначение | Платные пользователи | Бесплатные пользователи |
 |------------|---------------------|------------------------|
-| Генерация листов | `gpt-4.1` (`AI_MODEL_PAID`) | `deepseek/deepseek-chat` (`AI_MODEL_FREE`) |
+| Генерация листов | `gpt-4.1` (`AI_MODEL_PAID`) | `deepseek/deepseek-v3.2` (`AI_MODEL_FREE`) |
 | Агенты валидации | `gpt-4.1-mini` (`AI_MODEL_AGENTS`) | -- |
-| Верификатор (STEM) | `gemini-3-flash-preview` (reasoning: low) | -- |
-| Верификатор (гуманитарные) | `gemini-2.5-flash-lite` (reasoning: off) | -- |
-| Фиксер (STEM) | `gemini-3-flash-preview` (reasoning: minimal) | -- |
+| Верификатор (STEM 7-11) | `gemini-3-flash-preview` (reasoning: low) | -- |
+| Верификатор (гуманитарные 7-11) | `gemini-2.5-flash-lite` (reasoning: off) | -- |
+| Верификатор (1-6 классы) | `gpt-4.1-mini` (reasoning: off, дешевле) | -- |
+| Фиксер (STEM 7-11) | `gemini-3-flash-preview` (reasoning: minimal) | -- |
 | Презентации | `claude-sonnet-4.5` | -- |
+
+**Grade-tiered verification**: Для математики 1-6 классов и русского 1-6 классов используется дешевая модель gpt-4.1-mini вместо Gemini (арифметика и базовая грамматика не требуют reasoning).
 
 **Token limit**: `max_tokens: 16000` (генерация), `temperature: 0.5`
 
@@ -203,11 +254,12 @@ npm run db:studio        # Open Drizzle Studio
 
 ### 7. Презентации (`api/_lib/presentations/`)
 - Генерация через Claude (`claude-sonnet-4.5`)
-- 4 темы: professional, educational, minimal, scientific
+- 3 активных темы: professional, kids, school
 - 10 типов слайдов: title, content, twoColumn, table, example, formula, diagram, chart, practice, conclusion
 - PPTX генерация через `pptxgenjs`
 - PDF генерация через Puppeteer
 - SSE стриминг прогресса
+- Max 15 презентаций на пользователя
 
 ## Environment Variables
 
@@ -222,7 +274,7 @@ AI_BASE_URL=https://api.polza.ai/api/v1    # polza.ai endpoint
 
 # Models (все опциональны, есть дефолты)
 AI_MODEL_PAID=openai/gpt-4.1              # Генерация для платных
-AI_MODEL_FREE=deepseek/deepseek-chat      # Генерация для бесплатных
+AI_MODEL_FREE=deepseek/deepseek-v3.2      # Генерация для бесплатных
 AI_MODEL_AGENTS=openai/gpt-4.1-mini       # Агенты валидации
 AI_MODEL_VERIFIER_STEM=google/gemini-3-flash-preview    # Верификатор STEM
 AI_MODEL_VERIFIER_HUMANITIES=google/gemini-2.5-flash-lite # Верификатор гуманитарных
@@ -234,9 +286,12 @@ AUTH_SECRET=your-dev-secret-min-32-chars
 # OAuth (optional for local dev)
 YANDEX_CLIENT_ID=xxx
 YANDEX_CLIENT_SECRET=xxx
+
+# Email OTP (optional for local dev)
+UNISENDER_GO_API_KEY=xxx
+
+# Telegram Bot (optional, for admin alerts)
 TELEGRAM_BOT_TOKEN=xxx
-TELEGRAM_BOT_USERNAME=xxx
-VITE_TELEGRAM_BOT_USERNAME=xxx
 
 # Payments (optional)
 PRODAMUS_SECRET=xxx
@@ -249,36 +304,48 @@ APP_URL=http://localhost:3000
 
 ### Provider Selection Logic (`api/_lib/ai-provider.ts`)
 - `OpenAIProvider` если: `AI_PROVIDER=polza` или `=openai` (prod) или `=neuroapi`
+- `ClaudeProvider` для презентаций (используется предпочтительно)
 - Иначе `DummyProvider` (hardcoded ответ для разработки)
 
 ## Authentication
 
-Custom OAuth 2.0:
-- **Yandex OAuth** -- основной метод (PKCE)
-- **Telegram Login Widget** -- вторичный метод
-- **JWT tokens** -- Access (1h) + Refresh (7d) с ротацией
+Два метода входа:
+- **Yandex OAuth** -- OAuth 2.0 с PKCE
+- **Email OTP** -- Passwordless вход через 6-значный код на email (Unisender Go)
+
+Общая инфраструктура:
+- **JWT tokens** -- Access (1h) + Refresh (7d) с ротацией и family tracking
 - **httpOnly cookies** -- безопасное хранение
-- **Rate limiting** -- in-memory (по endpoint)
+- **Rate limiting** -- Redis-backed с in-memory fallback
 
 Key files:
 - `api/_lib/auth/tokens.ts` -- JWT
-- `api/_lib/auth/oauth.ts` -- PKCE, state validation
+- `api/_lib/auth/oauth.ts` -- PKCE, state validation (Yandex)
+- `api/_lib/email.ts` -- Отправка OTP через Unisender Go
 - `server/middleware/auth.ts` -- route protection
 - `server/routes/auth.ts` -- auth endpoints
 
+### Email OTP Flow
+1. `POST /api/auth/email/send-code` -- отправляет 6-значный код на email
+2. Код хранится в таблице `email_codes` (срок: 10 мин, max 5 попыток)
+3. `POST /api/auth/email/verify-code` -- проверяет код (timing-safe comparison)
+4. При успехе: создает/находит пользователя, выдает JWT токены
+
 ## Database Schema (`db/schema.ts`)
 
-Таблицы:
-- `users` -- пользователи (role, provider, generationsLeft, telegramChatId, wantsAlerts)
-- `folders` -- папки для листов (вложенность, цвет, сортировка)
+12 таблиц:
+- `users` -- пользователи (role, provider: 'yandex'|'email', generationsLeft, telegramChatId, wantsAlerts)
+- `folders` -- папки для листов и презентаций (вложенность, цвет, сортировка)
 - `worksheets` -- рабочие листы (subject, grade, topic, difficulty, content JSON)
-- `generations` -- лог генераций (status, errorMessage)
+- `generations` -- лог генераций (status, errorMessage, startedAt, completedAt)
 - `subscriptions` -- подписки (plan: free/basic/premium, status)
 - `payments` -- платежи (amount в копейках, status)
 - `payment_intents` -- интенты Prodamus (productCode, providerOrderId, metadata)
 - `webhook_events` -- идемпотентность вебхуков (eventKey, rawPayloadHash)
 - `refresh_tokens` -- JWT refresh tokens (jti, familyId, revokedAt)
+- `email_codes` -- OTP коды (email, code, expiresAt, attempts, usedAt)
 - `presentations` -- презентации (subject, grade, topic, themeType, themePreset, slideCount, structure JSON, pptxBase64)
+- `ai_usage` -- трекинг AI вызовов (sessionId, callType, model, promptTokens, completionTokens, costKopecks, durationMs)
 
 ## Important Patterns
 
@@ -288,7 +355,7 @@ Key files:
 - `TaskTypeId` = `'single_choice' | 'multiple_choice' | 'open_question' | 'matching' | 'fill_blank'`
 - `DifficultyLevel` = `'easy' | 'medium' | 'hard'`
 - `WorksheetFormatId` = `'open_only' | 'test_only' | 'test_and_open'`
-- `PresentationThemePreset` = `'professional' | 'educational' | 'minimal' | 'scientific'`
+- `PresentationThemePreset` = `'professional' | 'educational' | 'minimal' | 'scientific' | 'kids' | 'school'`
 - `GenerateSchema` -- валидация формы (subject, grade 1-11, topic, taskTypes, difficulty, format, variantIndex)
 - `GeneratePresentationPayload` -- валидация формы презентации
 
@@ -300,11 +367,22 @@ Key files:
 
 ### Protected Routes
 ```typescript
-import { withAuth, withAdminAuth, withOptionalAuth } from '../middleware/auth.js'
+import { withAuth, withAdminAuth } from '../middleware/auth.js'
 
 router.get('/protected', withAuth, (req, res) => { req.user!.id })
 router.get('/admin', withAdminAuth, (req, res) => { })
-router.get('/public', withOptionalAuth, (req, res) => { })
+```
+
+### Error Handling
+```typescript
+import { ApiError } from '../middleware/error-handler.js'
+
+throw ApiError.badRequest('Invalid input')
+throw ApiError.unauthorized('Not authenticated')
+throw ApiError.forbidden('Access denied')
+throw ApiError.notFound('Resource not found')
+throw ApiError.tooManyRequests('Rate limit exceeded')
+throw ApiError.internal('Server error')
 ```
 
 ### API Endpoints Summary
@@ -312,11 +390,20 @@ router.get('/public', withOptionalAuth, (req, res) => { })
 - `POST /api/generate/regenerate-task` -- перегенерация одного задания
 - `POST /api/generate/rebuild-pdf` -- пересборка PDF без AI
 - `POST /api/presentations/generate` -- генерация презентации (SSE)
+- `GET/PATCH/DELETE /api/presentations/:id` -- CRUD презентаций
+- `GET /api/presentations` -- список презентаций
 - `GET/PATCH/DELETE /api/worksheets/:id` -- CRUD листов
+- `GET /api/worksheets` -- список листов
 - `GET/POST/PATCH/DELETE /api/folders` -- CRUD папок
-- `/api/auth/*` -- аутентификация (Yandex, Telegram, refresh, logout)
-- `/api/admin/*` -- админ-панель (stats, users, generations, payments, alerts)
-- `/api/billing/*` -- платежи (create-link, webhook, payment-intent status)
+- `/api/auth/me` -- текущий пользователь
+- `/api/auth/logout` -- выход
+- `/api/auth/refresh` -- обновление токена
+- `/api/auth/yandex/redirect` -- начало Yandex OAuth
+- `/api/auth/yandex/callback` -- callback Yandex OAuth
+- `/api/auth/email/send-code` -- отправка OTP кода
+- `/api/auth/email/verify-code` -- проверка OTP кода
+- `/api/admin/*` -- админ-панель (stats, users, generations, payments, alerts, settings, ai-costs)
+- `/api/billing/*` -- платежи (products, create-link, webhook, payment-status)
 - `POST /api/telegram/webhook` -- Telegram bot webhook
 - `GET /api/health` -- healthcheck
 
@@ -337,7 +424,7 @@ router.get('/public', withOptionalAuth, (req, res) => { })
 ## Common Modifications
 
 ### Adding a New Subject
-1. Создать конфиг `api/_lib/generation/config/subjects/newsubject.ts` (по образцу math.ts)
+1. Создать директорию `api/_lib/generation/config/subjects/newsubject/` с файлами: index.ts, prompt.ts, grade-tiers.ts, difficulty.ts
 2. Зарегистрировать в `api/_lib/generation/config/subjects/index.ts`
 3. Добавить в `api/_lib/generation/config/index.ts`
 4. Добавить в `SubjectSchema` в `shared/worksheet.ts`
@@ -353,14 +440,13 @@ router.get('/public', withOptionalAuth, (req, res) => { })
 4. Конвертация в Worksheet: `api/_lib/ai-provider.ts` (convertToWorksheet)
 5. PDF layout: `api/_lib/pdf.ts` (HTML шаблон)
 6. Модели: `api/_lib/ai-models.ts`
-7. Валидация: `api/_lib/ai/validator.ts`
+7. Валидация: `api/_lib/generation/validation/`
 
 ### Modifying Presentations
 1. Конфиги предметов: `api/_lib/generation/config/presentations/subjects/`
 2. Шаблоны слайдов: `api/_lib/generation/config/presentations/templates/`
-3. Генератор: `api/_lib/presentations/generator.ts`
+3. Генераторы тем: `api/_lib/presentations/` (kids-generator, school-generator, minimalism-generator)
 4. PDF презентации: `api/_lib/presentations/pdf-generator.ts`
-5. Frontend preview: `src/components/SlidePreview.tsx`
 
 ## Deployment
 
@@ -378,11 +464,12 @@ router.get('/public', withOptionalAuth, (req, res) => { })
 - `openai/gpt-4.1` (~0.7 rub/лист)
 
 **Генерация листов (бесплатные пользователи):**
-- `deepseek/deepseek-chat` (дешевле)
+- `deepseek/deepseek-v3.2` (дешевле)
 
 **Валидация/верификация:**
-- STEM: `google/gemini-3-flash-preview` (с reasoning)
-- Гуманитарные: `google/gemini-2.5-flash-lite` (без reasoning)
+- STEM 7-11: `google/gemini-3-flash-preview` (с reasoning)
+- Гуманитарные 7-11: `google/gemini-2.5-flash-lite` (без reasoning)
+- 1-6 классы (все предметы): `openai/gpt-4.1-mini` (дешевый, без reasoning)
 
 **Презентации:**
 - `anthropic/claude-sonnet-4.5`
@@ -404,6 +491,9 @@ router.get('/public', withOptionalAuth, (req, res) => { })
 6. **5 типов заданий** -- single_choice, multiple_choice, open_question, matching, fill_blank
 7. **Prodamus для платежей** -- webhook idempotency через webhook_events table
 8. **PDF через Puppeteer** -- не pdfkit, HTML-шаблон конвертируется в PDF
-9. **Разные модели для платных/бесплатных** -- gpt-4.1 vs deepseek-chat
+9. **Разные модели для платных/бесплатных** -- gpt-4.1 vs deepseek-v3.2
 10. **Мульти-агентная валидация** -- разные модели для STEM и гуманитарных предметов
-11. **Презентации** -- отдельная подсистема с Claude, PPTX через pptxgenjs
+11. **Презентации** -- отдельная подсистема с Claude, PPTX через pptxgenjs, 3 активных темы
+12. **Email OTP** -- passwordless вход через Unisender Go, не Telegram Login Widget
+13. **Grade-tiered verification** -- 1-6 классы используют дешевую модель
+14. **AI usage tracking** -- все AI вызовы логируются в таблицу ai_usage с токенами и стоимостью

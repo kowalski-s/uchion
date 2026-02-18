@@ -36,9 +36,12 @@ AUTH_SECRET=your-secret-min-32-chars
 # OAuth (optional for local dev)
 YANDEX_CLIENT_ID=...
 YANDEX_CLIENT_SECRET=...
+
+# Email OTP (optional for local dev)
+UNISENDER_GO_API_KEY=...
+
+# Telegram Bot (optional, for admin alerts)
 TELEGRAM_BOT_TOKEN=...
-TELEGRAM_BOT_USERNAME=...
-VITE_TELEGRAM_BOT_USERNAME=...
 
 # Payments (optional)
 PRODAMUS_SECRET=...
@@ -47,7 +50,7 @@ APP_URL=http://localhost:3000
 
 # AI Models (optional, all have defaults)
 # AI_MODEL_PAID=openai/gpt-4.1
-# AI_MODEL_FREE=deepseek/deepseek-chat
+# AI_MODEL_FREE=deepseek/deepseek-v3.2
 # AI_MODEL_AGENTS=openai/gpt-4.1-mini
 # AI_MODEL_VERIFIER_STEM=google/gemini-3-flash-preview
 # AI_MODEL_VERIFIER_HUMANITIES=google/gemini-2.5-flash-lite
@@ -134,7 +137,11 @@ kill -9 <PID>
 ### OAuth не работает
 Callback URLs должны совпадать:
 - Yandex: `http://localhost:5173/api/auth/yandex/callback`
-- Telegram: Login Widget, domain = `localhost`
+
+### Email OTP не отправляется
+- Проверьте `UNISENDER_GO_API_KEY` в `.env.local`
+- Без ключа Email OTP не работает в dev-mode
+- Yandex OAuth работает без Email OTP
 
 ### Puppeteer/Chrome не запускается
 - Windows: Chrome/Chromium должен быть установлен
@@ -148,28 +155,30 @@ uchion/
 ├── server.ts           # Express entry point
 ├── server/
 │   ├── routes/         # API handlers (auth, generate, presentations, worksheets, folders, admin, billing, telegram, health)
-│   ├── middleware/     # Auth, rate-limit, cookies
-│   └── lib/            # Server utilities (prodamus)
+│   ├── middleware/     # Auth, rate-limit, cookies, error-handler, audit-log
+│   └── lib/            # Server utilities (prodamus, redis)
 ├── api/_lib/           # Backend utilities
 │   ├── generation/     # Config-driven generation system
 │   │   └── config/
-│   │       ├── subjects/        # Worksheet subject configs
+│   │       ├── subjects/        # Worksheet subject configs (math/, algebra/, geometry/, russian/)
 │   │       └── presentations/   # Presentation configs (subjects, templates)
-│   ├── presentations/  # Presentation generation (generator, pdf, sanitize)
-│   ├── ai/             # AI modules (validator, schema, prompts)
-│   ├── auth/           # Auth utilities (tokens, oauth, cookies)
+│   ├── presentations/  # Presentation generation (3 generators + pdf + sanitize)
+│   ├── providers/      # AI providers (openai, claude, dummy, circuit-breaker)
+│   ├── auth/           # Auth utilities (tokens, oauth, cookies, encryption, audit-log)
 │   ├── alerts/         # Generation alerts
-│   ├── telegram/       # Telegram Bot API
+│   ├── telegram/       # Telegram Bot API (admin alerts)
 │   ├── ai-provider.ts  # AI provider abstraction
-│   ├── ai-models.ts    # Model selection per subject/tier
+│   ├── ai-models.ts    # Model selection per subject/tier/grade
+│   ├── ai-usage.ts     # Token + cost tracking
+│   ├── email.ts        # Unisender Go (OTP emails)
 │   └── pdf.ts          # PDF generation (Puppeteer)
 ├── src/                # React frontend
-│   ├── pages/          # 15 pages (+ 5 admin pages)
+│   ├── pages/          # 18 pages (11 main + 7 admin)
 │   ├── components/     # UI components
 │   ├── hooks/          # Custom hooks (useWorksheetEditor)
 │   ├── store/          # Zustand stores
 │   └── lib/            # Utilities (api, auth, pdf-client, admin-api, etc.)
 ├── shared/             # Shared types (worksheet.ts, types.ts)
-├── db/                 # Database schema (10 tables)
+├── db/                 # Database schema (12 tables)
 └── docs/               # Documentation
 ```

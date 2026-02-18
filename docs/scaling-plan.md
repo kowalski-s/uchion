@@ -6,27 +6,29 @@
 - **Frontend**: SPA (React 18 / Vite 7)
 - **Backend**: Express.js 5
 - **AI**: Multiple models через polza.ai
-  - Генерация: gpt-4.1 (платные) / deepseek-chat (бесплатные)
-  - Валидация: gemini-3-flash (STEM) / gemini-2.5-flash-lite (гуманитарные)
+  - Генерация: gpt-4.1 (платные) / deepseek-v3.2 (бесплатные)
+  - Валидация: gemini-3-flash (STEM 7-11) / gemini-2.5-flash-lite (гуманитарные 7-11) / gpt-4.1-mini (1-6 классы)
   - Презентации: claude-sonnet-4.5
-- **Database**: PostgreSQL + Drizzle ORM
+- **Database**: PostgreSQL + Drizzle ORM (12 таблиц)
 - **Hosting**: VPS via Dokploy
 - **Payments**: Prodamus
 - **PDF**: Puppeteer + @sparticuz/chromium
 
 ### Implemented
-- Auth (Yandex OAuth PKCE, Telegram)
+- Auth (Yandex OAuth PKCE, Email OTP)
 - Worksheet generation (4 предмета, 1-11 классы, 5 типов заданий)
-- Presentation generation (4 темы, PPTX + PDF)
-- Multi-agent validation (answer-verifier, task-fixer, quality-checker)
+- Presentation generation (3 активных темы, PPTX + PDF)
+- Multi-agent validation (answer-verifier, task-fixer, quality-checker, unified-checker)
+- Grade-tiered verification (дешевые модели для 1-6 классов)
 - PDF generation (Puppeteer, HTML -> PDF)
-- Personal cabinet (worksheets, folders)
+- Personal cabinet (worksheets, presentations, folders)
 - Rate limiting (in-memory, rate-limiter-flexible)
-- Admin panel (stats, users, generations, payments, alerts)
+- Admin panel (stats, users, generations, payments, alerts, settings, ai-costs)
 - Prodamus payment integration (webhook idempotency)
 - Telegram alerts for admins
 - Different models per tier (paid vs free)
 - Different models per subject type (STEM vs humanities)
+- AI usage tracking (tokens, costs per call)
 
 ---
 
@@ -88,21 +90,22 @@
 - Health check endpoint (`GET /api/health`)
 - Console logging
 - Telegram alerts (admins)
-- Admin panel (stats, generations, payments)
+- Admin panel (stats, generations, payments, ai-costs)
+- AI usage tracking (таблица `ai_usage`)
 
 ### Planned
 1. **Metrics**: Prometheus + Grafana
 2. **Alerting**: расширение Telegram alerts
 3. **Logging**: Structured JSON logs, log aggregation
-4. **AI Cost Tracking**: per-generation cost logging
 
 ---
 
 ## 7. Cost Optimization
 
 ### AI
-- **Tiered models**: gpt-4.1 для платных, deepseek-chat для бесплатных
+- **Tiered models**: gpt-4.1 для платных, deepseek-v3.2 для бесплатных
 - **Subject-optimized verifiers**: Gemini Flash с reasoning для STEM, Gemini Lite без reasoning для гуманитарных
+- **Grade-tiered verification**: gpt-4.1-mini для 1-6 классов (дешевле чем Gemini)
 - **Token optimization**: reasoning effort=minimal для фиксеров, отключение фиксов для гуманитарных
 - `max_tokens: 16000` (генерация)
 - Кеширование популярных тем (planned)

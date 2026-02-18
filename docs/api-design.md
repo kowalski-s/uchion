@@ -17,11 +17,25 @@
 ### `GET /api/auth/yandex/callback`
 Callback после Yandex OAuth. Устанавливает cookies и redirect на frontend.
 
-### `GET /api/auth/telegram/redirect`
-Начать Telegram OAuth flow.
+### `POST /api/auth/email/send-code`
+Отправить 6-значный OTP код на email через Unisender Go.
 
-### `POST /api/auth/telegram/callback`
-Callback от Telegram Login Widget. Проверяет HMAC-SHA256 подпись.
+**Request (JSON)**:
+```json
+{ "email": "user@example.com" }
+```
+
+**Rate limit**: 3 per 10 min per email.
+
+### `POST /api/auth/email/verify-code`
+Проверить OTP код. При успехе -- создает/находит пользователя и устанавливает JWT cookies.
+
+**Request (JSON)**:
+```json
+{ "email": "user@example.com", "code": "123456" }
+```
+
+**Rate limit**: 10 per 10 min per IP + per email.
 
 ### `GET /api/auth/me`
 Текущий пользователь с подпиской. Требует `access_token` cookie.
@@ -161,7 +175,7 @@ data: { "type": "error", "code": "AI_ERROR", "message": "..." }
   grade: number (1-11),
   topic: string,
   themeType: "preset" | "custom",
-  themePreset?: "professional" | "educational" | "minimal" | "scientific",
+  themePreset?: "professional" | "kids" | "school",
   themeCustom?: string,
   slideCount: 12 | 18 | 24
 }
@@ -193,7 +207,27 @@ data: {
 - Стоимость: 1 генерация
 - Генерация через Claude (claude-sonnet-4.5)
 - PPTX через pptxgenjs, PDF через Puppeteer
-- Сохраняется в БД (таблица `presentations`)
+- Сохраняется в БД (таблица `presentations`, max 15 на пользователя)
+
+### `GET /api/presentations`
+Список презентаций пользователя. Auth required.
+
+**Rate limit**: 30/min per user.
+
+### `GET /api/presentations/:id`
+Одна презентация с контентом. Auth required (owner only).
+
+**Rate limit**: 60/min per user.
+
+### `PATCH /api/presentations/:id`
+Обновить презентацию (title). Auth required (owner only).
+
+**Rate limit**: 30/min per user.
+
+### `DELETE /api/presentations/:id`
+Soft delete. Auth required (owner only).
+
+**Rate limit**: 10/min per user.
 
 ---
 
@@ -272,6 +306,12 @@ Soft delete (листы перемещаются в корень).
 ### `POST /api/admin/test-alert`
 Отправить тестовый Telegram alert.
 
+### `GET /api/admin/settings`
+Настройки системы.
+
+### `GET /api/admin/ai-costs`
+Аналитика стоимости AI по моделям и провайдерам.
+
 ---
 
 ## 8. Billing Endpoints
@@ -327,7 +367,9 @@ type TaskTypeId = "single_choice" | "multiple_choice" | "open_question" | "match
 
 ### PresentationThemePreset
 ```typescript
-type PresentationThemePreset = "professional" | "educational" | "minimal" | "scientific"
+// Active on site:
+type PresentationThemePreset = "professional" | "kids" | "school"
+// Also in DB enum: "educational" | "minimal" | "scientific"
 ```
 
 ### Worksheet

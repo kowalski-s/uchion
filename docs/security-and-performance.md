@@ -7,6 +7,7 @@
 - Клиент не содержит секретов
 - `AUTH_SECRET` разный для dev/prod
 - `PRODAMUS_SECRET` только на сервере
+- `UNISENDER_GO_API_KEY` только на сервере
 - Dev: `DummyProvider` по умолчанию (без API ключей)
 
 ### 1.2 Input Validation
@@ -24,11 +25,14 @@
 
 ### 1.4 Authentication
 - JWT: HMAC-SHA256 с timing-safe comparison
-- OAuth: PKCE (Yandex), HMAC-SHA256 signature (Telegram)
+- OAuth: PKCE (Yandex)
+- Email OTP: 6-значный код через Unisender Go, timing-safe comparison
 - Cookies: httpOnly, Secure (prod), SameSite=Lax
 - Refresh token rotation с family tracking в БД (детекция кражи)
 - Rate limiting по endpoint (auth, generate, worksheets, billing)
 - Token revocation: revokeRefreshToken, revokeAllUserTokens
+- OTP: max 5 попыток на код, 10 мин срок действия
+- Atomic attempt increment (предотвращение race condition)
 
 ### 1.5 Payments (Prodamus)
 - Webhook signature verification (HMAC-SHA256)
@@ -57,18 +61,21 @@
 - rate-limiter-flexible для производительного rate limiting
 
 ### 2.3 AI Optimization
-- **Разные модели по тарифам**: gpt-4.1 для платных, deepseek-chat для бесплатных
+- **Разные модели по тарифам**: gpt-4.1 для платных, deepseek-v3.2 для бесплатных
 - **Разные модели по предметам**: Gemini Flash с reasoning для STEM, Gemini Lite без reasoning для гуманитарных
+- **Grade-tiered verification**: 1-6 классы используют дешевую модель (gpt-4.1-mini), 7-11 -- Gemini
 - **Оптимизация токенов**: reasoning effort=minimal для task-fixer, отключение фиксов для гуманитарных
 - `max_tokens: 16000` -- достаточно для больших листов
 - `temperature: 0.5` -- более точное следование инструкциям
 - Config-driven промпты -- минимум лишнего текста
 - **Презентации**: Claude (claude-sonnet-4.5) -- оптимален для структурированного контента
+- **AI Usage Tracking**: логирование токенов и стоимости в таблицу `ai_usage`
 
 ### 2.4 Database
 - Индексы на часто запрашиваемых полях (userId, createdAt, status, subject, grade)
 - Soft delete (deletedAt) вместо физического удаления
 - Max 20 листов на пользователя (автоочистка старых)
+- Max 15 презентаций на пользователя
 - Connection через `postgres` driver (без ORM overhead для критических запросов)
 
 ---
@@ -101,6 +108,7 @@ Content-Security-Policy: default-src 'self'; ...
 - **Alerts**: Telegram Bot для админов (генерация, ошибки, качество)
 - **Audit Logs**: события авторизации (auth.login, security.*, rate_limit)
 - **Generation Alerts**: отслеживание качества генерации (validation scores)
+- **AI Usage Tracking**: стоимость и токены каждого AI-вызова (таблица `ai_usage`)
 
 ---
 
@@ -112,7 +120,7 @@ Content-Security-Policy: default-src 'self'; ...
 - [x] Refresh token rotation + family tracking + DB revocation
 - [x] httpOnly, Secure, SameSite cookies
 - [x] PKCE для Yandex OAuth
-- [x] HMAC-SHA256 для Telegram auth
+- [x] Email OTP с timing-safe comparison и atomic attempt increment
 - [x] Rate limiting на auth endpoints
 - [x] Audit logging
 

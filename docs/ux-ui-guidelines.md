@@ -37,7 +37,7 @@ Dual-mode страница (листы + презентации):
    - CTA: "Сгенерировать"
 3. **Presentation Form** (переключение на вкладку Презентации):
    - Предмет, Класс, Тема
-   - Тема оформления: 4 пресета (professional, educational, minimal, scientific) или custom
+   - Тема оформления: 3 пресета (professional, kids, school)
    - Количество слайдов: 12 / 18 / 24
 4. **Loading**: прогресс-бар с этапами (SSE streaming)
 
@@ -46,7 +46,7 @@ Dual-mode страница (листы + презентации):
 1. Форма: предмет, класс, тема, тема оформления, количество слайдов
 2. Превью слайдов: интерактивный HTML-рендер (SlidePreview компонент)
 3. Download: PPTX + PDF кнопки
-4. 4 визуальных темы оформления с уникальными цветовыми схемами
+4. 3 визуальных темы оформления с уникальными цветовыми схемами
 
 ### 3.3 Worksheet Page (`/worksheet/:sessionId`)
 Session-based (не сохранён в БД):
@@ -65,38 +65,47 @@ DB-backed лист (идентичный функционал + сохранен
 3. Save/Discard changes flow
 4. Persistent PDF storage
 
-### 3.5 Dashboard (`/dashboard`)
+### 3.5 Saved Presentation (`/presentations/:id`) -- SavedPresentationPage
+DB-backed презентация:
+1. Полный просмотр слайдов (SlidePreview)
+2. Download PPTX + PDF
+3. Metadata (предмет, класс, тема, дата создания)
+
+### 3.6 Dashboard (`/dashboard`)
 - Статистика пользователя
 - Лимиты генераций (сколько осталось)
 - Статус подписки
-- Ссылки на списки листов
+- Ссылки на списки листов и презентаций
 
-### 3.6 Worksheets List (`/worksheets`)
+### 3.7 Worksheets List (`/worksheets`)
 - Список сохраненных листов
 - Организация по папкам (вложенные, цветные)
 - CRUD операции с папками (лимиты по подписке: free=2, basic/premium=10)
 - Grid/list view
 - Bulk operations
 
-### 3.7 Login (`/login`)
+### 3.8 Presentations List (`/presentations`)
+- Список сохраненных презентаций
+- Grid/list view
+
+### 3.9 Login (`/login`)
 - Вход через Яндекс (OAuth)
-- Вход через Telegram Widget
+- Вход через Email OTP (6-значный код)
 - Redirect handling
 
-### 3.8 Payment pages
+### 3.10 Payment pages
 - `/payment/success` -- успешная оплата (PaymentSuccessPage)
 - `/payment/cancel` -- отмена оплаты (PaymentCancelPage)
 
-### 3.9 Telegram Callback (`/auth/telegram/callback`)
-- Обработка OAuth callback от Telegram
-
-### 3.10 Admin Panel (`/admin/*`)
+### 3.11 Admin Panel (`/admin/*`)
 Доступен только для пользователей с ролью `admin`:
 - `/admin` -- обзор статистики (AdminPage)
 - `/admin/users` -- список пользователей (AdminUsersPage)
 - `/admin/users/:id` -- детали пользователя с историей генераций (AdminUserDetailPage)
 - `/admin/generations` -- мониторинг генераций (AdminGenerationsPage)
 - `/admin/payments` -- отслеживание платежей (AdminPaymentsPage)
+- `/admin/settings` -- настройки (AdminSettingsPage)
+- `/admin/ai-costs` -- аналитика стоимости AI (AdminAICostsPage)
 
 ---
 
@@ -106,14 +115,15 @@ DB-backed лист (идентичный функционал + сохранен
 - **Header** -- навигация с auth state
 - **EditableWorksheetContent** -- рендер и inline-редактирование всех 5 типов заданий
 - **MathRenderer** -- KaTeX рендеринг формул
-- **SlidePreview** -- HTML preview презентаций (4 темы оформления)
+- **SlidePreview** -- HTML preview презентаций (3 темы оформления)
 - **WorksheetManager** -- save/load/delete логика
 - **EditModeToolbar** -- панель управления в режиме редактирования
+- **PdfTemplateModal** -- выбор шаблона PDF
 
 ### UI
 - **Button**: Default, Outline, Ghost
 - **Input / Select**: Tailwind + Headless UI
-- **CustomSelect** -- кастомный dropdown
+- **CustomSelect** -- кастомный dropdown (`components/ui/`)
 - **Card**: группировка блоков заданий
 - **Progress**: статус генерации
 - **BuyGenerationsModal** -- модальное окно покупки генераций

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Custom OAuth 2.0 implementation for Uchion with JWT tokens, supporting Yandex and Telegram login.
+Custom OAuth 2.0 implementation for Uchion with JWT tokens, supporting Yandex OAuth and Email OTP (passwordless) login.
 
 ## Providers
 
@@ -11,17 +11,21 @@ Custom OAuth 2.0 implementation for Uchion with JWT tokens, supporting Yandex an
 - Callback: `/api/auth/yandex/callback`
 - Requires: `YANDEX_CLIENT_ID`, `YANDEX_CLIENT_SECRET`
 
-### 2. Telegram Login Widget
-- Widget-based authentication
-- Callback: `/api/auth/telegram/callback`
-- Requires: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`
+### 2. Email OTP (Passwordless)
+- 6-значный код отправляется на email через Unisender Go
+- Endpoints: `/api/auth/email/send-code`, `/api/auth/email/verify-code`
+- Requires: `UNISENDER_GO_API_KEY`
+- Срок действия кода: 10 минут
+- Max 5 попыток на код
+- Rate limit: 3 отправки / 10 мин на email
 
 ## Endpoints
 
 ### Authentication Flow
 - `GET /api/auth/yandex/redirect` - Start Yandex OAuth
 - `GET /api/auth/yandex/callback` - Yandex OAuth callback
-- `GET /api/auth/telegram/callback` - Telegram login callback
+- `POST /api/auth/email/send-code` - Send OTP code to email
+- `POST /api/auth/email/verify-code` - Verify OTP code
 - `POST /api/auth/logout` - Logout (revokes tokens)
 - `POST /api/auth/refresh` - Refresh access token
 
@@ -40,15 +44,18 @@ Custom OAuth 2.0 implementation for Uchion with JWT tokens, supporting Yandex an
 - Stored in: httpOnly cookie (`refresh_token`)
 - Tracked in database for revocation
 - Rotated on each refresh
+- Family tracking для детекции кражи токенов
 
 ## Security Features
 
-1. **PKCE**: Code challenge/verifier for OAuth
+1. **PKCE**: Code challenge/verifier for Yandex OAuth
 2. **State Validation**: Timestamped, timing-safe comparison
 3. **JWT Signing**: HMAC-SHA256 with timing-safe verification
 4. **Secure Cookies**: httpOnly, Secure (prod), SameSite=Lax
 5. **Token Revocation**: Database tracking for refresh tokens
 6. **Rate Limiting**: Per-endpoint limits
+7. **Email OTP**: Timing-safe comparison, atomic attempt increment
+8. **Audit Logging**: All auth events logged
 
 ## Middleware
 
@@ -92,11 +99,12 @@ DATABASE_URL=postgresql://...          # Token storage
 
 ### OAuth Providers
 ```bash
+# Yandex OAuth
 YANDEX_CLIENT_ID=...
 YANDEX_CLIENT_SECRET=...
-TELEGRAM_BOT_TOKEN=...
-TELEGRAM_BOT_USERNAME=...
-VITE_TELEGRAM_BOT_USERNAME=...  # For frontend widget
+
+# Email OTP
+UNISENDER_GO_API_KEY=...
 ```
 
 ## File Structure
@@ -104,17 +112,20 @@ VITE_TELEGRAM_BOT_USERNAME=...  # For frontend widget
 ```
 server/
 ├── routes/
-│   └── auth.ts           # Auth endpoints
+│   └── auth.ts           # Auth endpoints (Yandex, Email OTP, refresh, logout)
 └── middleware/
-    ├── auth.ts           # Auth middleware
-    └── cookies.ts        # Cookie handling
+    ├── auth.ts           # Auth middleware (withAuth, withAdminAuth)
+    ├── cookies.ts        # Cookie handling
+    └── audit-log.ts      # Security event logging
 
 api/_lib/auth/
 ├── tokens.ts             # JWT creation/verification
 ├── oauth.ts              # PKCE, state management
 ├── cookies.ts            # Cookie configuration
-├── rate-limit.ts         # Rate limiting
 └── audit-log.ts          # Security event logging
+
+api/_lib/
+└── email.ts              # Unisender Go (OTP email sending)
 ```
 
 ## Database Tables
@@ -124,7 +135,7 @@ api/_lib/auth/
 - `email` (unique)
 - `name`
 - `role` (user/admin)
-- `provider` (yandex/telegram)
+- `provider` ('yandex' | 'email')
 - `providerId`
 - `createdAt`, `updatedAt`, `deletedAt`
 
@@ -132,6 +143,16 @@ api/_lib/auth/
 - `id` (UUID)
 - `userId`
 - `jti` (token ID)
+- `familyId` (for family tracking)
 - `expiresAt`
 - `revokedAt`
+- `createdAt`
+
+### email_codes
+- `id` (UUID)
+- `email`
+- `code` (6-digit)
+- `expiresAt` (10 min)
+- `attempts` (max 5)
+- `usedAt`
 - `createdAt`

@@ -10,7 +10,7 @@
 - [x] PDF Generation (Server: Puppeteer + Client: pdf-lib)
 
 ### Frontend
-- [x] SPA Routing (15 страниц + 5 admin)
+- [x] SPA Routing (18 страниц: 11 main + 7 admin)
 - [x] Генерация через SSE (Progress Streaming)
 - [x] Просмотр и скачивание PDF
 - [x] Inline-редактирование заданий
@@ -26,7 +26,7 @@
 ## Фаза 1: База данных
 
 - [x] PostgreSQL + Drizzle ORM
-- [x] Спроектировать схему БД (10 таблиц)
+- [x] Спроектировать схему БД (12 таблиц)
 - [x] Написать и провести миграции
 - [ ] Бэкапы БД (автоматические, hourly)
 - [ ] 30 дней retention для backups
@@ -38,7 +38,7 @@
 
 - [x] Самописный OAuth 2.0
 - [x] Яндекс OAuth (PKCE)
-- [x] Вход через Telegram (HMAC-SHA256)
+- [x] Email OTP (passwordless, Unisender Go)
 - [x] Защита роутов (middleware: withAuth, withAdminAuth, withOptionalAuth)
 - [x] Ревью безопасности (timing-safe comparisons, security headers, rate limiting)
 - [x] Логика сессий/токенов (refresh token rotation + family tracking, 1h access / 7d refresh)
@@ -76,9 +76,9 @@
 
 ### AI Cost Management
 - [x] Бесплатные лимиты: 5 генераций для новых юзеров
-- [x] Разные модели для платных/бесплатных (gpt-4.1 vs deepseek-chat)
-- [ ] AI cost мониторинг (логирование стоимости каждой генерации)
-- [ ] Dashboard с AI spending analytics (для админа)
+- [x] Разные модели для платных/бесплатных (gpt-4.1 vs deepseek-v3.2)
+- [x] AI cost мониторинг (таблица `ai_usage`: модель, токены, стоимость, длительность)
+- [x] Dashboard с AI spending analytics (админ-панель `/admin/ai-costs`)
 
 ### Платежная логика
 - [x] Логика лимитов (атомарный декремент generationsLeft)
@@ -87,7 +87,6 @@
 - [x] Начисление генераций
 - [x] Проверка статуса payment intent
 - [ ] Реферальная система
-- [ ] Бонус за подписку на Telegram
 
 ---
 
@@ -100,14 +99,15 @@
 - [x] Детальные логи генераций
 - [x] Список платежей
 - [x] Telegram alerts для админов
+- [x] Настройки (AdminSettingsPage)
+- [x] AI cost analytics по провайдерам (AdminAICostsPage)
 
 ### Расширенные функции
 - [x] Перезапуск зависшей генерации (возвращение кредитов + отслеживание зависших)
-- [ ] Просмотр низкокачественных генераций (validation score <8) (отложим, обдумать надо ли)
 - [x] Ручная обработка webhook
-- [x] AI cost analytics по провайдерам
 - [x] Reporting (uptime, активные подписчики, costs)
-- [ ] User reports система (отложим, обдумать надо ли)
+- [ ] Просмотр низкокачественных генераций (validation score <8)
+- [ ] User reports система
 
 ---
 
@@ -117,19 +117,21 @@
 - [x] 3 уровня сложности (easy / medium / hard)
 - [x] Перегенерация отдельного задания
 - [x] Выбор типов заданий через UI
-- [x] Мульти-агентная валидация (answer-verifier, task-fixer, quality-checker)
+- [x] Мульти-агентная валидация (answer-verifier, task-fixer, quality-checker, unified-checker)
 - [x] Разные модели для STEM vs гуманитарных
+- [x] Grade-tiered verification (дешевые модели для 1-6 классов)
 - [x] Оптимизация токенов (reasoning effort, отключение фиксов)
 - [ ] Компоновка листа (5 заданий = новая страница)
 
 ### Презентации
 - [x] Генерация PPTX презентаций
-- [x] 4 темы оформления (professional, educational, minimal, scientific)
+- [x] 3 активных темы оформления (professional, kids, school)
 - [x] 3 варианта объема (12/18/24 слайдов)
 - [x] HTML preview слайдов
 - [x] PDF экспорт презентаций
 - [x] Claude (claude-sonnet-4.5) для генерации
 - [x] Inter шрифты, layout, sanitize
+- [x] Сохранение в БД, список презентаций
 
 ### Множественные AI провайдеры
 - [x] Разные модели для разных задач (generation, validation, presentation)

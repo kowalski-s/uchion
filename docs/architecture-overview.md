@@ -8,7 +8,7 @@ Uchion -- веб-сервис генерации рабочих листов и 
 
 **Продукты**:
 - **Рабочие листы** -- задания разных типов с ответами (PDF)
-- **Презентации** -- учебные PPTX-презентации с 4 темами оформления
+- **Презентации** -- учебные PPTX-презентации с 3 темами оформления
 
 ## 2. Архитектура системы
 
@@ -20,22 +20,23 @@ Uchion -- веб-сервис генерации рабочих листов и 
   - `/worksheet/:sessionId` -- просмотр/редактирование (WorksheetPage, session-based)
   - `/worksheets` -- список сохраненных листов (WorksheetsListPage)
   - `/worksheets/:id` -- сохраненный лист (SavedWorksheetPage, DB-backed)
+  - `/presentations` -- список презентаций (PresentationsListPage)
+  - `/presentations/:id` -- сохраненная презентация (SavedPresentationPage)
   - `/dashboard` -- личный кабинет (DashboardPage)
-  - `/login` -- вход (LoginPage)
-  - `/auth/telegram/callback` -- Telegram OAuth callback
+  - `/login` -- вход (LoginPage: Yandex OAuth + Email OTP)
   - `/payment/success`, `/payment/cancel` -- результат оплаты
-  - `/admin/*` -- админ-панель (overview, users, users/:id, generations, payments)
+  - `/admin/*` -- админ-панель (overview, users, users/:id, generations, payments, settings, ai-costs)
 - **State**: Zustand (глобальный) + React Query (async)
 - **API**: `fetch` + SSE для стриминга прогресса
 - **Math**: KaTeX для рендеринга формул
-- **Presentations**: pptxgenjs (PPTX), SlidePreview компонент (HTML preview)
+- **Presentations**: pptxgenjs (PPTX)
 - **PDF (client)**: `pdf-lib` (fallback если серверный PDF недоступен)
 
 ### 2.2 Backend
 - **Tech**: Express.js 5 (Node.js 20+)
 - **API**: REST JSON + SSE streaming
-- **Database**: PostgreSQL + Drizzle ORM
-- **Auth**: Custom OAuth 2.0 (Yandex, Telegram)
+- **Database**: PostgreSQL + Drizzle ORM (12 таблиц)
+- **Auth**: Yandex OAuth (PKCE) + Email OTP (Unisender Go)
 - **Payments**: Prodamus (webhook-based)
 - **PDF**: Puppeteer + @sparticuz/chromium (HTML -> PDF)
 - **Alerts**: Telegram Bot для админов
@@ -44,11 +45,12 @@ Uchion -- веб-сервис генерации рабочих листов и 
   - `POST /api/generate/regenerate-task` -- перегенерация одного задания
   - `POST /api/generate/rebuild-pdf` -- пересборка PDF без AI
   - `POST /api/presentations/generate` -- генерация презентации (SSE)
+  - `GET/PATCH/DELETE /api/presentations/:id` -- CRUD презентаций
   - `GET/PATCH/DELETE /api/worksheets/:id` -- CRUD листов
   - `GET/POST/PATCH/DELETE /api/folders` -- папки
-  - `/api/auth/*` -- аутентификация
-  - `/api/admin/*` -- админ-панель (stats, users, generations, generation-logs, payments, alerts)
-  - `/api/billing/*` -- платежи (create-link, webhook, payment-intent/:id)
+  - `/api/auth/*` -- аутентификация (Yandex, Email OTP, refresh, logout)
+  - `/api/admin/*` -- админ-панель (stats, users, generations, payments, alerts, settings, ai-costs)
+  - `/api/billing/*` -- платежи (products, create-link, webhook, payment-status)
   - `POST /api/telegram/webhook` -- Telegram bot webhook
 
 ### 2.3 Shared Layer
@@ -66,20 +68,24 @@ Uchion -- веб-сервис генерации рабочих листов и 
 1. **Запрос**: Пользователь заполняет форму (предмет, класс, тема, тип заданий, сложность, формат) -> `POST /api/generate`
 2. **Генерация**:
    - Собираются промпты из config-driven системы (`api/_lib/generation/`)
-   - Выбирается модель на основе тарифа (платный: gpt-4.1, бесплатный: deepseek-chat)
+   - Выбирается модель на основе тарифа (платный: gpt-4.1, бесплатный: deepseek-v3.2)
    - LLM генерирует JSON с массивом `tasks` (5 типов заданий)
    - Задания разделяются на тестовые и открытые
 3. **Догенерация** (retry):
    - Если заданий не хватает, запускается retry для недостающих
 4. **Мульти-агентная валидация**:
-   - **answer-verifier**: проверка корректности ответов (Gemini для STEM, Gemini Lite для гуманитарных)
+   - **answer-verifier**: проверка корректности ответов
+     - STEM 7-11: Gemini Flash с reasoning
+     - Гуманитарные 7-11: Gemini Lite без reasoning
+     - 1-6 классы: gpt-4.1-mini (дешевый)
    - **task-fixer**: автоисправление ошибок
    - **quality-checker**: оценка образовательной ценности
 5. **Сборка**:
    - Конвертация в формат `Worksheet` (assignments + test + answers)
    - PDF генерация через Puppeteer (HTML -> PDF, Base64)
-6. **Ответ**: SSE стрим (Progress -> Result) клиенту
-7. **Сохранение**: Лист сохраняется в БД (если пользователь авторизован)
+6. **AI Usage**: Логирование токенов и стоимости в таблицу `ai_usage`
+7. **Ответ**: SSE стрим (Progress -> Result) клиенту
+8. **Сохранение**: Лист сохраняется в БД (если пользователь авторизован, max 20 листов)
 
 ### 3.2 Генерация презентаций
 
@@ -87,7 +93,7 @@ Uchion -- веб-сервис генерации рабочих листов и 
 2. **Генерация**: Claude (claude-sonnet-4.5) генерирует структуру слайдов (JSON)
 3. **Сборка**: Структура конвертируется в PPTX (pptxgenjs) и PDF (Puppeteer)
 4. **Ответ**: SSE стрим с прогрессом, затем результат (pptxBase64, pdfBase64)
-5. **Сохранение**: Презентация сохраняется в БД
+5. **Сохранение**: Презентация сохраняется в БД (max 15 презентаций)
 
 ---
 
@@ -95,9 +101,9 @@ Uchion -- веб-сервис генерации рабочих листов и 
 
 ### Generation Config (`api/_lib/generation/config/`)
 Config-driven система генерации:
-- **subjects/** -- конфиги предметов (math, algebra, geometry, russian) с темами по классам
+- **subjects/** -- конфиги предметов (math, algebra, geometry, russian), каждый в своей директории с prompt.ts, grade-tiers.ts, difficulty.ts
 - **presentations/subjects/** -- конфиги презентаций по предметам
-- **presentations/templates/** -- шаблоны слайдов (minimalism)
+- **presentations/templates/** -- шаблоны слайдов (minimalism, kids, school)
 - **task-types.ts** -- 5 типов заданий с Zod-валидацией и промпт-инструкциями
 - **worksheet-formats.ts** -- форматы листов (open_only, test_only, test_and_open) с вариантами
 - **difficulty.ts** -- уровни сложности (easy, medium, hard)
@@ -106,12 +112,20 @@ Config-driven система генерации:
 ### AI Provider (`api/_lib/ai-provider.ts`, `ai-models.ts`)
 - **DummyProvider**: локальный стаб для разработки
 - **OpenAIProvider**: продакшн. Генерация + retry + мульти-агентная валидация
-- **Модели**: разные для платных/бесплатных, для STEM/гуманитарных, для презентаций
+- **ClaudeProvider**: для презентаций (Claude-специфичный)
+- **Модели**: разные для платных/бесплатных, для STEM/гуманитарных, для разных классов
+
+### AI Usage Tracking (`api/_lib/ai-usage.ts`)
+- Логирует каждый AI-вызов: sessionId, callType, model, tokens, cost, duration
+- Данные в таблице `ai_usage`
+- Аналитика доступна в админ-панели (`/admin/ai-costs`)
 
 ### Presentations (`api/_lib/presentations/`)
 - **generator.ts** -- основной генератор
 - **minimalism-generator.ts** -- генератор для темы "минимализм"
-- **pdf-generator.ts** -- PDF для презентаций (Puppeteer)
+- **kids-generator.ts** -- генератор для детской темы
+- **school-generator.ts** -- генератор для школьной темы
+- **pdf-generator.ts** -- PDF из HTML через Puppeteer
 - **sanitize.ts** -- очистка HTML-контента
 
 ### PDF Generator (`api/_lib/pdf.ts`)
@@ -122,15 +136,16 @@ Config-driven система генерации:
 
 ### Authentication (`server/routes/auth.ts`)
 - Yandex OAuth (PKCE)
-- Telegram Login Widget (HMAC-SHA256)
+- Email OTP (6-значный код через Unisender Go)
 - JWT tokens (access 1h + refresh 7d) с ротацией, family tracking
 - Rate limiting
 
-### Admin Panel (`server/routes/admin.ts`)
+### Admin Panel (`server/routes/admin/`)
 - Статистика (пользователи, генерации, платежи)
 - Списки пользователей, генераций, ошибок
-- Логи генераций
-- Управление пользователями
+- Управление пользователями (блокировка, разблокировка)
+- AI cost analytics (трекинг расходов по моделям)
+- Настройки Telegram алертов
 
 ### Billing (`server/routes/billing.ts`)
 - Prodamus integration
@@ -140,7 +155,7 @@ Config-driven система генерации:
 
 ### Alerts (`api/_lib/alerts/`, `api/_lib/telegram/`)
 - Telegram Bot для уведомлений админов
-- Алерты о качестве генерации
+- Алерты: провал генерации, высокий error rate, AI таймауты, низкое качество, старт сервера
 
 ---
 
@@ -148,7 +163,7 @@ Config-driven система генерации:
 
 - **Hosting**: VPS via Dokploy
 - **CI/CD**: Git push -> Dokploy auto-deploy
-- **Database**: PostgreSQL
+- **Database**: PostgreSQL (12 таблиц)
 - **Environment**:
   - `dev`: Vite + Express, DummyProvider
   - `prod`: Express server, AI через polza.ai
@@ -162,97 +177,52 @@ uchion/
 ├── server.ts              # Express entry point
 ├── server/
 │   ├── routes/
-│   │   ├── auth.ts        # Authentication (OAuth, JWT)
+│   │   ├── auth.ts        # Authentication (Yandex OAuth, Email OTP)
 │   │   ├── generate.ts    # Worksheet generation (SSE)
-│   │   ├── presentations.ts # Presentation generation (SSE)
+│   │   ├── presentations.ts # Presentation generation + CRUD
 │   │   ├── worksheets.ts  # Worksheet CRUD
 │   │   ├── folders.ts     # Folder CRUD
-│   │   ├── admin.ts       # Admin panel API
+│   │   ├── admin/         # Admin panel (8 files)
+│   │   │   ├── index.ts, stats.ts, users.ts, generations.ts
+│   │   │   ├── payments.ts, alerts.ts, settings.ts, ai-costs.ts
 │   │   ├── billing.ts     # Prodamus payments
 │   │   ├── telegram.ts    # Telegram bot webhook
 │   │   └── health.ts      # Health check
 │   ├── middleware/
-│   │   ├── auth.ts        # Auth middleware (withAuth, withAdminAuth, withOptionalAuth)
+│   │   ├── auth.ts        # withAuth, withAdminAuth
 │   │   ├── cookies.ts     # Cookie handling
-│   │   └── rate-limit.ts  # Rate limiting
+│   │   ├── rate-limit.ts  # Rate limiting (Redis + in-memory)
+│   │   ├── error-handler.ts # ApiError + global handler
+│   │   └── audit-log.ts   # Auth event logging
 │   └── lib/
 │       └── prodamus.ts    # Prodamus helpers
-├── api/
-│   └── _lib/
-│       ├── generation/    # Config-driven generation
-│       │   ├── config/
-│       │   │   ├── subjects/        # math, algebra, geometry, russian
-│       │   │   ├── presentations/   # Presentation configs
-│       │   │   │   ├── subjects/    # Per-subject presentation configs
-│       │   │   │   └── templates/   # Slide templates (minimalism)
-│       │   │   ├── task-types.ts
-│       │   │   ├── worksheet-formats.ts
-│       │   │   ├── difficulty.ts
-│       │   │   └── task-distribution.ts
-│       │   └── prompts.ts
-│       ├── presentations/ # Presentation generation
-│       │   ├── generator.ts
-│       │   ├── minimalism-generator.ts
-│       │   ├── pdf-generator.ts
-│       │   └── sanitize.ts
-│       ├── ai/            # AI modules
-│       │   ├── schema.ts
-│       │   ├── validator.ts
-│       │   └── prompts.ts
-│       ├── auth/          # Auth utilities
-│       ├── alerts/        # Generation alerts
-│       ├── telegram/      # Telegram Bot API
-│       ├── ai-provider.ts # AI provider abstraction
-│       ├── ai-models.ts   # Model selection per subject/tier
-│       └── pdf.ts         # PDF generation (Puppeteer)
+├── api/_lib/
+│   ├── generation/        # Config-driven generation
+│   │   ├── config/
+│   │   │   ├── subjects/  # math/, algebra/, geometry/, russian/
+│   │   │   └── presentations/  # subjects/, templates/
+│   │   ├── validation/    # Multi-agent validation (6 agents)
+│   │   └── prompts.ts
+│   ├── presentations/     # 3 theme generators + PDF + sanitize
+│   ├── providers/         # OpenAI, Claude, Dummy, circuit-breaker
+│   ├── auth/              # tokens, oauth, cookies, encryption, audit-log
+│   ├── alerts/            # Generation alerts
+│   ├── telegram/          # Bot API + commands
+│   ├── ai-provider.ts     # AI provider abstraction
+│   ├── ai-models.ts       # Model selection (subject, tier, grade)
+│   ├── ai-usage.ts        # Token + cost tracking
+│   ├── email.ts           # Unisender Go (OTP emails)
+│   └── pdf.ts             # Worksheet PDF (Puppeteer)
 ├── src/                   # React frontend
-│   ├── pages/
-│   │   ├── GeneratePage.tsx           # Main worksheet generation
-│   │   ├── GeneratePresentationPage.tsx # Presentation generation
-│   │   ├── WorksheetPage.tsx          # Session worksheet view/edit
-│   │   ├── SavedWorksheetPage.tsx     # DB-backed worksheet view/edit
-│   │   ├── WorksheetsListPage.tsx     # Saved worksheets list
-│   │   ├── DashboardPage.tsx          # User dashboard
-│   │   ├── LoginPage.tsx              # Auth page
-│   │   ├── TelegramCallbackPage.tsx   # Telegram auth callback
-│   │   ├── PaymentSuccessPage.tsx     # Payment success
-│   │   ├── PaymentCancelPage.tsx      # Payment cancel
-│   │   └── admin/                     # Admin panel pages
-│   │       ├── AdminPage.tsx
-│   │       ├── AdminUsersPage.tsx
-│   │       ├── AdminUserDetailPage.tsx
-│   │       ├── AdminGenerationsPage.tsx
-│   │       └── AdminPaymentsPage.tsx
-│   ├── components/
-│   │   ├── EditableWorksheetContent.tsx  # All 5 task types editing
-│   │   ├── SlidePreview.tsx              # Presentation slide preview (4 themes)
-│   │   ├── MathRenderer.tsx              # KaTeX rendering
-│   │   ├── Header.tsx
-│   │   ├── WorksheetManager.tsx
-│   │   ├── EditModeToolbar.tsx
-│   │   ├── UnsavedChangesDialog.tsx
-│   │   ├── BuyGenerationsModal.tsx
-│   │   ├── CookieConsent.tsx
-│   │   └── CustomSelect.tsx
-│   ├── hooks/
-│   │   └── useWorksheetEditor.ts      # Central editing logic
-│   ├── store/
-│   │   └── session.ts                 # Zustand session store
-│   └── lib/
-│       ├── api.ts                     # REST/SSE API client
-│       ├── presentation-api.ts        # Presentation SSE client
-│       ├── auth.tsx                    # Auth hook & OAuth
-│       ├── dashboard-api.ts           # Dashboard endpoints
-│       ├── admin-api.ts               # Admin panel API
-│       ├── pdf-client.ts              # Client PDF fallback (pdf-lib)
-│       ├── limits.ts                  # Generation limits
-│       └── schemas.ts                 # Zod exports
+│   ├── pages/             # 11 main + 7 admin = 18 pages
+│   ├── components/        # UI components (9 + subdirs)
+│   ├── hooks/             # useWorksheetEditor
+│   ├── store/             # Zustand session store
+│   └── lib/               # API clients, auth, pdf-client
 ├── shared/
-│   ├── worksheet.ts       # Zod schemas (Subject, Worksheet, GenerateSchema...)
-│   └── types.ts           # Presentation types, dashboard types, error codes
+│   ├── worksheet.ts       # Zod schemas
+│   └── types.ts           # Presentation types, error codes
 ├── db/
-│   └── schema.ts          # Drizzle ORM schema (10 tables)
+│   └── schema.ts          # Drizzle ORM (12 tables)
 └── docs/                  # Documentation
-    ├── subject/           # Reference materials per subject
-    └── presexample/       # Presentation examples
 ```
