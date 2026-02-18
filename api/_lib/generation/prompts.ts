@@ -6,11 +6,62 @@ import {
   type DifficultyLevel,
   getDifficultyPrompt,
   type WorksheetFormatId,
-  getWorksheetFormat,
   getFormatVariant,
 } from './config/index.js'
+import type { SubjectPromptConfig, GradeTierConfig } from './config/types.js'
 import { distributeOpenTasks, distributeTestTasks, type TaskDistribution } from './config/task-distribution.js'
 import { sanitizeUserInput } from './sanitize.js'
+
+// Per-subject prompt configs (new config-driven path)
+import { russianPromptConfig, getRussianGradeTier } from './config/subjects/russian/index.js'
+import { mathPromptConfig, getMathGradeTier } from './config/subjects/math/index.js'
+import { algebraPromptConfig, getAlgebraGradeTier } from './config/subjects/algebra/index.js'
+import { geometryPromptConfig, getGeometryGradeTier } from './config/subjects/geometry/index.js'
+
+// Per-subject difficulty prompts (new config-driven path)
+import { getRussianDifficultyPrompt } from './config/subjects/russian/difficulty.js'
+import { getMathDifficultyPrompt } from './config/subjects/math/difficulty.js'
+import { getAlgebraDifficultyPrompt } from './config/subjects/algebra/difficulty.js'
+import { getGeometryDifficultyPrompt } from './config/subjects/geometry/difficulty.js'
+
+// =============================================================================
+// Per-subject config registry
+// =============================================================================
+
+const SUBJECT_PROMPT_CONFIGS: Record<string, SubjectPromptConfig> = {
+  russian: russianPromptConfig,
+  math: mathPromptConfig,
+  algebra: algebraPromptConfig,
+  geometry: geometryPromptConfig,
+}
+
+function getSubjectPromptConfig(subject: string): SubjectPromptConfig | null {
+  return SUBJECT_PROMPT_CONFIGS[subject] ?? null
+}
+
+const GRADE_TIER_GETTERS: Record<string, (grade: number) => GradeTierConfig | null> = {
+  russian: getRussianGradeTier,
+  math: getMathGradeTier,
+  algebra: getAlgebraGradeTier,
+  geometry: getGeometryGradeTier,
+}
+
+function getGradeTierForGrade(subject: string, grade: number): GradeTierConfig | null {
+  const getter = GRADE_TIER_GETTERS[subject]
+  return getter ? getter(grade) : null
+}
+
+const SUBJECT_DIFFICULTY_GETTERS: Record<string, (grade: number, level: DifficultyLevel) => string> = {
+  russian: getRussianDifficultyPrompt,
+  math: getMathDifficultyPrompt,
+  algebra: getAlgebraDifficultyPrompt,
+  geometry: getGeometryDifficultyPrompt,
+}
+
+function getSubjectDifficultyPrompt(subject: string, grade: number, level: DifficultyLevel): string | null {
+  const getter = SUBJECT_DIFFICULTY_GETTERS[subject]
+  return getter ? getter(grade, level) : null
+}
 
 // =============================================================================
 // Types
@@ -43,63 +94,8 @@ const BASE_ROLE_PROMPT = `
 `.trim()
 
 // =============================================================================
-// Block 2: Subject
+// Block 2: Subject (now handled by per-subject configs in buildSystemPrompt)
 // =============================================================================
-
-function getSubjectBlock(subjectId: string): string {
-  const config = getSubjectConfig(subjectId)
-  if (!config) return ''
-
-  // Если systemPrompt заполнен - используем его
-  if (config.systemPrompt) {
-    return `ПРЕДМЕТ: ${config.name}\n\n${config.systemPrompt}`
-  }
-
-  // Базовые блоки по предметам (пока systemPrompt пустой)
-  const basePrompts: Record<string, string> = {
-    math: `
-ПРЕДМЕТ: Математика (1-6 класс)
-
-Особенности:
-- Все вычисления должны быть корректными и проверяемыми
-- Числа соответствуют уровню класса
-- Текстовые задачи на реальные жизненные ситуации
-- Ответы - конкретные числа или выражения
-    `.trim(),
-
-    algebra: `
-ПРЕДМЕТ: Алгебра (7-11 класс)
-
-Особенности:
-- Строгая математическая запись
-- Уравнения и выражения записывать корректно
-- Ответы могут быть числами, выражениями или множествами
-- Использовать стандартные обозначения (x, y, a, b)
-    `.trim(),
-
-    geometry: `
-ПРЕДМЕТ: Геометрия (7-11 класс)
-
-Особенности:
-- Чёткие геометрические формулировки
-- Если нужен чертёж - описать словами условие
-- Теоремы применять строго по программе класса
-- Обозначения точек заглавными буквами (A, B, C)
-    `.trim(),
-
-    russian: `
-ПРЕДМЕТ: Русский язык (1-11 класс)
-
-Особенности:
-- Примеры только из современного литературного языка
-- Все примеры орфографически и пунктуационно верны
-- Термины соответствуют классу
-- Никакого сленга и устаревшей лексики
-    `.trim(),
-  }
-
-  return basePrompts[subjectId] || `ПРЕДМЕТ: ${config.name}`
-}
 
 // =============================================================================
 // Block 3: Grade and Topics
@@ -356,6 +352,12 @@ function getGradeCalibrationBlock(grade: number, level: DifficultyLevel, subject
     }
   }
 
+  // Subject-specific content requirements — HOW tasks should be structured
+  const promptConfig = getSubjectPromptConfig(subject)
+  const subjectContentReqs = promptConfig
+    ? promptConfig.contentRequirements(grade, level)
+    : ''
+
   // Prior knowledge instruction
   let priorKnowledgeInstruction = ''
   if (level === 'easy') {
@@ -377,16 +379,19 @@ function getGradeCalibrationBlock(grade: number, level: DifficultyLevel, subject
 ${forbiddenPatterns}
 
 ${requiredPatterns}
+${subjectContentReqs}
 ${examContext}${priorKnowledgeInstruction}
 `.trim()
 }
+
+// Subject-specific content requirements — now in per-subject configs (contentRequirements)
 
 // =============================================================================
 // Block 6: Difficulty (усиленный, идёт сразу после темы)
 // =============================================================================
 
 function getDifficultyBlock(level: DifficultyLevel, subject: string, grade: number): string {
-  const difficultyContent = getDifficultyPrompt(level, subject, grade)
+  const difficultyContent = getSubjectDifficultyPrompt(subject, grade, level) ?? getDifficultyPrompt(level, subject, grade)
 
   // Определяем название уровня для сообщений
   const levelNames: Record<DifficultyLevel, string> = {
@@ -482,33 +487,9 @@ ${enforcementRules}
 // Block 6.5: Diversity (разнообразие заданий)
 // =============================================================================
 
-function getSubjectDiversityHints(subject: string): string {
-  switch (subject) {
-    case 'math':
-    case 'algebra':
-    case 'geometry':
-      return `
-Для математических предметов обязательно включи:
-• Задания на знание ФОРМУЛ (запиши формулу, выбери правильную формулу)
-• Задания на ПОНИМАНИЕ (что изменится если..., верно ли что..., объясни)
-• Задания на ВЫЧИСЛЕНИЕ (реши, найди, вычисли)
-• Задания на АНАЛИЗ (найди ошибку, сравни способы решения, верно ли утверждение)`
-
-    case 'russian':
-      return `
-Для русского языка обязательно включи:
-• Задания на знание ПРАВИЛ (сформулируй правило, выбери правильное объяснение)
-• Задания на ОПРЕДЕЛЕНИЕ (найди подлежащее, определи часть речи, укажи тип)
-• Задания на ПРИМЕНЕНИЕ (вставь букву, расставь знаки, исправь ошибку)
-• Задания на АНАЛИЗ (объясни написание, сравни предложения, найди ошибку)`
-
-    default:
-      return ''
-  }
-}
-
 function getDiversityBlock(subject: string): string {
-  const subjectHints = getSubjectDiversityHints(subject)
+  const promptConfig = getSubjectPromptConfig(subject)
+  const subjectHints = promptConfig ? promptConfig.diversityHints : ''
 
   return `
 ═══════════════════════════════════════════════════════════════
@@ -615,7 +596,7 @@ const ANTI_PATTERNS_PROMPT = `
 ЗАПРЕЩЕНО:
 • Задания не по указанной теме
 • Задания с неоднозначным или спорным ответом
-• Слишком длинные формулировки (более 2-3 предложений)
+• Слишком длинные формулировки БЕЗ содержательного текста (вопрос без текстового фрагмента не должен быть длиннее 2-3 предложений, но задание С текстовым фрагментом может быть длиннее)
 • Пояснения вне JSON
 • Пустые или null значения
 `.trim()
@@ -637,9 +618,10 @@ const ANTI_PATTERNS_PROMPT = `
  * 7. Антипаттерны (запреты)
  */
 export function buildPrompt(params: PromptParams): string {
+  // For combined prompt, use the new system prompt (includes cognitive contract)
+  const systemBlock = buildSystemPrompt(params.subject, params.grade, params.difficulty)
   const blocks = [
-    BASE_ROLE_PROMPT,
-    getSubjectBlock(params.subject),
+    systemBlock,
     getGradeBlock(params.subject, params.grade),
     getTopicBlock(params.topic),
     getGradeCalibrationBlock(params.grade, params.difficulty, params.subject), // Калибровка по классу!
@@ -654,10 +636,41 @@ export function buildPrompt(params: PromptParams): string {
 }
 
 /**
- * Получить только системный промпт (роль + предмет)
+ * Получить только системный промпт (роль + предмет + когнитивный контракт)
+ *
+ * Новый путь: config-driven — systemPrompt из конфига, cognitiveContract и exampleTask из grade tier.
+ * Старый путь: fallback на getSubjectBlock() если конфиг не найден.
  */
-export function buildSystemPrompt(subjectId: string): string {
-  return [BASE_ROLE_PROMPT, getSubjectBlock(subjectId)].join('\n\n')
+export function buildSystemPrompt(subjectId: string, grade?: number, difficulty?: DifficultyLevel): string {
+  const promptConfig = getSubjectPromptConfig(subjectId)
+  const tier = grade != null ? getGradeTierForGrade(subjectId, grade) : null
+
+  if (promptConfig && tier) {
+    // NEW config-driven path
+    const parts = [
+      BASE_ROLE_PROMPT,
+      promptConfig.systemPrompt,
+    ]
+
+    if (tier.cognitiveContract) {
+      parts.push(`\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+\u26D4 \u041A\u041E\u0413\u041D\u0418\u0422\u0418\u0412\u041D\u042B\u0419 \u041A\u041E\u041D\u0422\u0420\u0410\u041A\u0422 \u0414\u041B\u042F ${grade} \u041A\u041B\u0410\u0421\u0421\u0410 \u26D4
+\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n\n${tier.cognitiveContract}`)
+    }
+
+    if (tier.exampleTask) {
+      parts.push(`\u041F\u0420\u0418\u041C\u0415\u0420 \u0425\u041E\u0420\u041E\u0428\u0415\u0413\u041E \u0417\u0410\u0414\u0410\u041D\u0418\u042F:\n${tier.exampleTask}`)
+    }
+
+    if (tier.examContext) {
+      parts.push(tier.examContext)
+    }
+
+    return parts.filter(Boolean).join('\n\n')
+  }
+
+  // FALLBACK: base role prompt only (no per-subject config found)
+  return BASE_ROLE_PROMPT
 }
 
 /**

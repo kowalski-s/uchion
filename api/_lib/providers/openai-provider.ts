@@ -67,7 +67,7 @@ export class OpenAIProvider implements AIProvider {
       variantIndex
     }
 
-    const systemPrompt = buildSystemPrompt(params.subject)
+    const systemPrompt = buildSystemPrompt(params.subject, params.grade, difficulty)
     const userPrompt = buildUserPrompt(promptParams)
 
     onProgress?.(15)
@@ -473,7 +473,7 @@ export class OpenAIProvider implements AIProvider {
   async regenerateTask(params: RegenerateTaskParams): Promise<RegenerateTaskResult> {
     console.log('[УчиОн] OpenAIProvider.regenerateTask called', params)
 
-    const systemPrompt = buildSystemPrompt(params.subject)
+    const systemPrompt = buildSystemPrompt(params.subject, params.grade, params.difficulty)
     const taskTypeConfig = getTaskType(params.taskType)
     const difficultyPrompt = getDifficultyPrompt(params.difficulty, params.subject, params.grade)
 
@@ -762,7 +762,7 @@ ${minimalConstraints}
 
     const totalNeeded = missingOpen + missingTest
     const difficultyPrompt = getDifficultyPrompt(difficulty, params.subject, params.grade)
-    const systemPrompt = buildSystemPrompt(params.subject)
+    const systemPrompt = buildSystemPrompt(params.subject, params.grade, difficulty)
 
     const retryPrompt = `Создай дополнительные задания по теме "${params.topic}" для ${params.grade} класса.
 Сложность: ${difficultyPrompt}
