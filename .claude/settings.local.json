@@ -56,7 +56,8 @@
       "Bash(git rm:*)",
       "Bash(node --import tsx:*)",
       "Bash(git -C D:githubuchion status -u)",
-      "WebFetch(domain:help.prodamus.ru)"
+      "WebFetch(domain:help.prodamus.ru)",
+      "Bash(node --loader ts-node/esm -e:*)"
     ]
   }
 }
