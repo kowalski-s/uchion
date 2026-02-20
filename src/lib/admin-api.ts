@@ -482,6 +482,84 @@ export async function fetchWebhookEvents(options?: FetchWebhookEventsOptions): P
   return res.json()
 }
 
+// ==================== SUBSCRIPTIONS ====================
+
+export type SubscriptionStatusFilter = 'all' | 'active' | 'past_due' | 'cancelled' | 'expired'
+
+export interface AdminSubscription {
+  id: string
+  userId: string
+  userEmail: string | null
+  userName: string | null
+  plan: string
+  status: string
+  prodamusSubscriptionId: string | null
+  prodamusProfileId: string | null
+  generationsPerPeriod: number
+  currentPeriodStart: string | null
+  currentPeriodEnd: string | null
+  customerEmail: string | null
+  customerPhone: string | null
+  cancelledAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface FetchSubscriptionsOptions {
+  page?: number
+  limit?: number
+  status?: SubscriptionStatusFilter
+  search?: string
+}
+
+export interface FetchSubscriptionsResponse {
+  subscriptions: AdminSubscription[]
+  pagination: Pagination
+}
+
+export async function fetchSubscriptions(options?: FetchSubscriptionsOptions): Promise<FetchSubscriptionsResponse> {
+  const params = new URLSearchParams()
+
+  if (options?.page) params.set('page', String(options.page))
+  if (options?.limit) params.set('limit', String(options.limit))
+  if (options?.status) params.set('status', options.status)
+  if (options?.search) params.set('search', options.search)
+
+  const url = `/api/admin/subscriptions${params.toString() ? `?${params}` : ''}`
+
+  const res = await fetch(url, {
+    credentials: 'include',
+  })
+
+  if (!res.ok) {
+    if (res.status === 401) throw new Error('Требуется авторизация')
+    if (res.status === 403) throw new Error('Нет доступа к админ-панели')
+    throw new Error('Не удалось загрузить подписки')
+  }
+
+  return res.json()
+}
+
+export function formatSubscriptionStatus(status: string): string {
+  switch (status) {
+    case 'active': return 'Активна'
+    case 'past_due': return 'Просрочена'
+    case 'cancelled': return 'Отменена'
+    case 'expired': return 'Истекла'
+    default: return status
+  }
+}
+
+export function formatPlanName(plan: string): string {
+  switch (plan) {
+    case 'starter': return 'Начинающий'
+    case 'teacher': return 'Методист'
+    case 'expert': return 'Эксперт'
+    case 'free': return 'Бесплатный'
+    default: return plan
+  }
+}
+
 // ==================== TRENDS ====================
 
 export interface TrendPoint {

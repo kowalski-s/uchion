@@ -5,13 +5,17 @@ import {
   fetchAdminPayments,
   fetchPaymentIntents,
   fetchWebhookEvents,
+  fetchSubscriptions,
   applyPaymentIntent,
   formatPaymentStatus,
   formatPaymentIntentStatus,
+  formatSubscriptionStatus,
+  formatPlanName,
   formatAmount,
   formatDateTime,
   type PaymentStatusFilter,
   type PaymentIntentStatusFilter,
+  type SubscriptionStatusFilter,
 } from '../../lib/admin-api'
 
 // Icon components
@@ -63,7 +67,15 @@ function ArchiveIcon({ className = "w-5 h-5" }: { className?: string }) {
   )
 }
 
-type ViewMode = 'intents' | 'webhooks' | 'legacy'
+function SubscriptionIcon({ className = "w-5 h-5" }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182" />
+    </svg>
+  )
+}
+
+type ViewMode = 'intents' | 'subscriptions' | 'webhooks' | 'legacy'
 
 // ==================== PAYMENT INTENTS STATUS CONFIG ====================
 
@@ -526,6 +538,245 @@ function WebhookEventsTab() {
   )
 }
 
+// ==================== SUBSCRIPTIONS TAB ====================
+
+const subStatusTabs: { value: SubscriptionStatusFilter; label: string; color: string }[] = [
+  { value: 'all', label: 'Все', color: 'bg-slate-700' },
+  { value: 'active', label: 'Активные', color: 'bg-emerald-500' },
+  { value: 'past_due', label: 'Просроченные', color: 'bg-amber-500' },
+  { value: 'cancelled', label: 'Отменённые', color: 'bg-red-500' },
+  { value: 'expired', label: 'Истёкшие', color: 'bg-slate-500' },
+]
+
+function getSubStatusBadgeStyle(status: string) {
+  switch (status) {
+    case 'active': return 'bg-emerald-100 text-emerald-700'
+    case 'past_due': return 'bg-amber-100 text-amber-700'
+    case 'cancelled': return 'bg-red-100 text-red-700'
+    case 'expired': return 'bg-slate-100 text-slate-600'
+    default: return 'bg-slate-100 text-slate-600'
+  }
+}
+
+function getPlanBadgeStyle(plan: string) {
+  switch (plan) {
+    case 'expert': return 'bg-purple-100 text-purple-700'
+    case 'teacher': return 'bg-blue-100 text-blue-700'
+    case 'starter': return 'bg-teal-100 text-teal-700'
+    default: return 'bg-slate-100 text-slate-600'
+  }
+}
+
+function SubscriptionsTab() {
+  const [page, setPage] = useState(1)
+  const [search, setSearch] = useState('')
+  const [searchInput, setSearchInput] = useState('')
+  const [statusFilter, setStatusFilter] = useState<SubscriptionStatusFilter>('all')
+  const limit = 20
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['admin-subscriptions', page, search, statusFilter],
+    queryFn: () => fetchSubscriptions({ page, limit, search, status: statusFilter }),
+    staleTime: 30 * 1000,
+  })
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault()
+    setSearch(searchInput)
+    setPage(1)
+  }
+
+  const handleClearSearch = () => {
+    setSearchInput('')
+    setSearch('')
+    setPage(1)
+  }
+
+  const handleStatusChange = (status: SubscriptionStatusFilter) => {
+    setStatusFilter(status)
+    setPage(1)
+  }
+
+  if (error) {
+    return (
+      <div className="glass-container p-6 text-center">
+        <p className="text-red-500">Ошибка загрузки подписок</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Summary */}
+      {data && (
+        <div className="glass-container p-4 flex items-center gap-4">
+          <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
+            <SubscriptionIcon className="w-6 h-6 text-purple-600" />
+          </div>
+          <div>
+            <p className="text-sm text-slate-500">Всего подписок</p>
+            <p className="text-xl font-bold text-slate-700">
+              {data.pagination.total}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Status Tabs */}
+      <div className="flex flex-wrap gap-2">
+        {subStatusTabs.map((tab) => (
+          <button
+            key={tab.value}
+            onClick={() => handleStatusChange(tab.value)}
+            className={`px-4 py-2 rounded-xl font-medium transition-colors ${
+              statusFilter === tab.value
+                ? `${tab.color} text-white`
+                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Search */}
+      <div className="glass-container p-4">
+        <form onSubmit={handleSearch} className="flex gap-3">
+          <div className="flex-1 relative">
+            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+            <input
+              type="text"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Поиск по email пользователя..."
+              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#8C52FF]/20 focus:border-[#8C52FF]"
+            />
+          </div>
+          <button
+            type="submit"
+            className="px-5 py-2.5 bg-[#8C52FF] text-white rounded-xl font-medium hover:bg-purple-700 transition-colors"
+          >
+            Найти
+          </button>
+          {search && (
+            <button
+              type="button"
+              onClick={handleClearSearch}
+              className="px-5 py-2.5 bg-slate-100 text-slate-600 rounded-xl font-medium hover:bg-slate-200 transition-colors"
+            >
+              Сбросить
+            </button>
+          )}
+        </form>
+      </div>
+
+      {/* Table */}
+      <div className="glass-container overflow-hidden">
+        {isLoading ? (
+          <Spinner />
+        ) : !data?.subscriptions.length ? (
+          <div className="text-center py-12">
+            <div className="mb-4">
+              <SubscriptionIcon className="w-12 h-12 text-slate-300 mx-auto" />
+            </div>
+            <p className="text-slate-500">
+              {search || statusFilter !== 'all' ? 'Подписки не найдены' : 'Нет подписок'}
+            </p>
+            <p className="text-sm text-slate-400 mt-1">
+              Подписки появятся после оплаты через Prodamus
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-slate-200">
+                    <th className="text-left px-6 py-4 text-sm font-semibold text-slate-600">Дата</th>
+                    <th className="text-left px-6 py-4 text-sm font-semibold text-slate-600">Пользователь</th>
+                    <th className="text-left px-6 py-4 text-sm font-semibold text-slate-600">Тариф</th>
+                    <th className="text-left px-6 py-4 text-sm font-semibold text-slate-600">Статус</th>
+                    <th className="text-right px-6 py-4 text-sm font-semibold text-slate-600">Генераций</th>
+                    <th className="text-left px-6 py-4 text-sm font-semibold text-slate-600">Период до</th>
+                    <th className="text-left px-6 py-4 text-sm font-semibold text-slate-600">Prodamus ID</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.subscriptions.map((sub) => (
+                    <tr
+                      key={sub.id}
+                      className={`border-b border-slate-100 hover:bg-slate-50/50 ${
+                        sub.status === 'past_due' ? 'bg-amber-50/30' :
+                        sub.status === 'expired' ? 'bg-slate-50/50' :
+                        sub.status === 'cancelled' ? 'bg-red-50/20' : ''
+                      }`}
+                    >
+                      <td className="px-6 py-4">
+                        <span className="text-sm text-slate-600">
+                          {formatDateTime(sub.createdAt)}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <Link
+                          to={`/admin/users/${sub.userId}`}
+                          className="text-sm font-medium text-[#8C52FF] hover:underline"
+                        >
+                          {sub.userEmail || sub.customerEmail || 'Неизвестно'}
+                        </Link>
+                        {sub.userName && (
+                          <p className="text-xs text-slate-500">{sub.userName}</p>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getPlanBadgeStyle(sub.plan)}`}>
+                          {formatPlanName(sub.plan)}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getSubStatusBadgeStyle(sub.status)}`}>
+                          {formatSubscriptionStatus(sub.status)}
+                        </span>
+                        {sub.cancelledAt && (
+                          <p className="text-xs text-red-500 mt-0.5">
+                            Отменена: {formatDateTime(sub.cancelledAt)}
+                          </p>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <span className="text-sm font-semibold text-slate-700">
+                          {sub.generationsPerPeriod}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="text-sm text-slate-600">
+                          {sub.currentPeriodEnd ? formatDateTime(sub.currentPeriodEnd) : '—'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="text-sm font-mono text-slate-400" title={sub.prodamusSubscriptionId || ''}>
+                          {sub.prodamusSubscriptionId || '—'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <Pagination
+              page={page}
+              totalPages={data.pagination.totalPages}
+              total={data.pagination.total}
+              limit={limit}
+              onPageChange={setPage}
+            />
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ==================== LEGACY PAYMENTS TAB ====================
 
 function LegacyPaymentsTab() {
@@ -774,6 +1025,17 @@ export default function AdminPaymentsPage() {
           Платежи
         </button>
         <button
+          onClick={() => handleViewModeChange('subscriptions')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+            viewMode === 'subscriptions'
+              ? 'bg-[#8C52FF] text-white'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <SubscriptionIcon className="w-5 h-5" />
+          Подписки
+        </button>
+        <button
           onClick={() => handleViewModeChange('webhooks')}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
             viewMode === 'webhooks'
@@ -798,6 +1060,7 @@ export default function AdminPaymentsPage() {
       </div>
 
       {viewMode === 'intents' && <PaymentIntentsTab />}
+      {viewMode === 'subscriptions' && <SubscriptionsTab />}
       {viewMode === 'webhooks' && <WebhookEventsTab />}
       {viewMode === 'legacy' && <LegacyPaymentsTab />}
     </div>

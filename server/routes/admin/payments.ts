@@ -3,7 +3,7 @@ import type { Response } from 'express'
 import { eq, and, desc, count, like, inArray } from 'drizzle-orm'
 import { z } from 'zod'
 import { db } from '../../../db/index.js'
-import { users, payments, paymentIntents, webhookEvents } from '../../../db/schema.js'
+import { users, payments, paymentIntents, webhookEvents, subscriptions } from '../../../db/schema.js'
 import { withAdminAuth } from '../../middleware/auth.js'
 import { ApiError } from '../../middleware/error-handler.js'
 import { requireRateLimit } from '../../middleware/rate-limit.js'
@@ -288,6 +288,100 @@ webhookEventsRouter.get('/', withAdminAuth(async (req: AuthenticatedRequest, res
 
   return res.status(200).json({
     webhookEvents: eventsList,
+    pagination: {
+      page,
+      limit,
+      total: totalResult.count,
+      totalPages: Math.ceil(totalResult.count / limit),
+    }
+  })
+}))
+
+// ==================== SUBSCRIPTIONS ====================
+
+export const subscriptionsRouter = Router()
+
+const SubscriptionsQuerySchema = z.object({
+  page: z.string().optional().transform(v => Math.max(1, parseInt(v || '1'))),
+  limit: z.string().optional().transform(v => Math.min(100, Math.max(1, parseInt(v || '20')))),
+  status: z.enum(['all', 'active', 'past_due', 'cancelled', 'expired']).optional().default('all'),
+  search: z.string().optional(),
+})
+
+subscriptionsRouter.get('/', withAdminAuth(async (req: AuthenticatedRequest, res: Response) => {
+  await requireRateLimit(req, {
+    maxRequests: 30,
+    windowSeconds: 60,
+    identifier: `admin:subscriptions:${req.user.id}`,
+  })
+
+  const parse = SubscriptionsQuerySchema.safeParse(req.query)
+  if (!parse.success) {
+    throw ApiError.validation(parse.error.flatten().fieldErrors)
+  }
+
+  const { page, limit, status, search } = parse.data
+  const offset = (page - 1) * limit
+
+  const conditions: ReturnType<typeof eq>[] = []
+
+  if (status !== 'all') {
+    conditions.push(eq(subscriptions.status, status))
+  }
+
+  if (search && search.trim()) {
+    const searchPattern = `%${escapeLike(search.trim())}%`
+    const matchedUsers = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(like(users.email, searchPattern))
+      .limit(100)
+
+    const userIds = matchedUsers.map(u => u.id)
+    if (userIds.length === 0) {
+      return res.status(200).json({
+        subscriptions: [],
+        pagination: { page, limit, total: 0, totalPages: 0 }
+      })
+    }
+    conditions.push(inArray(subscriptions.userId, userIds))
+  }
+
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined
+
+  const [totalResult] = await db
+    .select({ count: count() })
+    .from(subscriptions)
+    .where(whereClause)
+
+  const subscriptionsList = await db
+    .select({
+      id: subscriptions.id,
+      userId: subscriptions.userId,
+      userEmail: users.email,
+      userName: users.name,
+      plan: subscriptions.plan,
+      status: subscriptions.status,
+      prodamusSubscriptionId: subscriptions.prodamusSubscriptionId,
+      prodamusProfileId: subscriptions.prodamusProfileId,
+      generationsPerPeriod: subscriptions.generationsPerPeriod,
+      currentPeriodStart: subscriptions.currentPeriodStart,
+      currentPeriodEnd: subscriptions.currentPeriodEnd,
+      customerEmail: subscriptions.customerEmail,
+      customerPhone: subscriptions.customerPhone,
+      cancelledAt: subscriptions.cancelledAt,
+      createdAt: subscriptions.createdAt,
+      updatedAt: subscriptions.updatedAt,
+    })
+    .from(subscriptions)
+    .leftJoin(users, eq(subscriptions.userId, users.id))
+    .where(whereClause)
+    .orderBy(desc(subscriptions.createdAt))
+    .limit(limit)
+    .offset(offset)
+
+  return res.status(200).json({
+    subscriptions: subscriptionsList,
     pagination: {
       page,
       limit,
