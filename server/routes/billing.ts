@@ -488,6 +488,7 @@ router.post('/create-subscription-link', withAuth(async (req, res) => {
       productCode: `sub_${plan}`,
       amount: getPlanConfig(plan).price * 100, // kopecks
       status: 'created',
+      providerOrderId: `SUB_${generateOrderId()}`,
       metadata: JSON.stringify({ plan, type: 'subscription' }),
       expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000), // 2 hours
     })
