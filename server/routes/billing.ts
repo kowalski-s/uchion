@@ -160,10 +160,13 @@ async function tryMarkEventProcessed(
       rawPayloadHash,
     })
     return true  // Successfully inserted - first time processing
-  } catch (error) {
+  } catch (error: unknown) {
     // Check if it's a unique constraint violation (PostgreSQL error code 23505)
-    const pgError = error as { code?: string }
-    if (pgError.code === '23505') {
+    // Drizzle wraps PG errors: error.cause may contain the actual PostgresError
+    const pgCode =
+      (error as { code?: string })?.code ||
+      (error as { cause?: { code?: string } })?.cause?.code
+    if (pgCode === '23505') {
       return false  // Already exists - duplicate
     }
     // Re-throw other errors
@@ -478,6 +481,18 @@ router.post('/create-subscription-link', withAuth(async (req, res) => {
 
     console.log(`[Subscription] Got short link for user ${userId}, plan: ${plan}`)
 
+    // Store pending subscription intent so webhook can look up userId/plan
+    // (Prodamus does NOT forward _param_* fields in subscription webhooks)
+    await db.insert(paymentIntents).values({
+      userId,
+      productCode: `sub_${plan}`,
+      amount: getPlanConfig(plan).price * 100, // kopecks
+      status: 'created',
+      providerOrderId: null,
+      metadata: JSON.stringify({ plan, type: 'subscription' }),
+      expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000), // 2 hours
+    })
+
     return res.status(201).json({
       success: true,
       paymentUrl,
@@ -662,15 +677,81 @@ async function handleSubscriptionWebhook(
   const prodamusSubId = sub.id || ''
   const prodamusProfileId = sub.profile_id || ''
 
-  // Get userId and plan from pass-through params
-  // Prodamus sends these as top-level fields with _param_ prefix in the webhook body
-  // Use bracket notation to be safe with field names starting with underscore
-  const userId = (payload['_param_userId'] ?? payload._param_userId) as string | undefined
-  const planFromParam = (payload['_param_plan'] ?? payload._param_plan) as string | undefined
+  // ==================== RESOLVE USER ID ====================
+  // Prodamus does NOT forward _param_* fields in subscription webhooks,
+  // so we need a fallback chain to identify the user.
+  let userId = (payload['_param_userId'] ?? payload._param_userId) as string | undefined
+  let planFromParam = (payload['_param_plan'] ?? payload._param_plan) as string | undefined
+  const customerEmail = payload.customer_email as string | undefined
+  const customerPhone = payload.customer_phone as string | undefined
 
-  // Debug: log payload keys to diagnose missing params
-  console.log(`[Subscription Webhook] Payload keys: ${JSON.stringify(Object.keys(payload))}`)
-  console.log(`[Subscription Webhook] _param_userId=${JSON.stringify(payload['_param_userId'])}, _param_plan=${JSON.stringify(payload['_param_plan'])}`)
+  console.log(`[Subscription Webhook] Resolving user: _param_userId=${userId}, email=${customerEmail}, phone=${customerPhone}`)
+
+  // Fallback 1: look up pending subscription intent by email
+  if (!userId && customerEmail) {
+    const [intent] = await db
+      .select({ userId: paymentIntents.userId, productCode: paymentIntents.productCode })
+      .from(paymentIntents)
+      .where(
+        and(
+          sql`${paymentIntents.productCode} LIKE 'sub_%'`,
+          eq(paymentIntents.status, 'created'),
+          sql`${paymentIntents.userId} IN (SELECT id FROM users WHERE email = ${customerEmail})`
+        )
+      )
+      .orderBy(sql`${paymentIntents.createdAt} DESC`)
+      .limit(1)
+
+    if (intent) {
+      userId = intent.userId
+      // Extract plan from productCode: "sub_starter" -> "starter"
+      if (!planFromParam) planFromParam = intent.productCode.replace('sub_', '')
+      console.log(`[Subscription Webhook] Resolved by email intent: userId=${userId}, plan=${planFromParam}`)
+    }
+  }
+
+  // Fallback 2: look up user directly by email
+  if (!userId && customerEmail) {
+    const [userByEmail] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, customerEmail))
+      .limit(1)
+
+    if (userByEmail) {
+      userId = userByEmail.id
+      console.log(`[Subscription Webhook] Resolved by email in users: userId=${userId}`)
+    }
+  }
+
+  // Fallback 3: look up by existing subscription with this prodamus profile/sub ID
+  if (!userId && prodamusProfileId) {
+    const [existingSub] = await db
+      .select({ userId: subscriptions.userId, plan: subscriptions.plan })
+      .from(subscriptions)
+      .where(eq(subscriptions.prodamusProfileId, prodamusProfileId))
+      .limit(1)
+
+    if (existingSub) {
+      userId = existingSub.userId
+      if (!planFromParam) planFromParam = existingSub.plan
+      console.log(`[Subscription Webhook] Resolved by prodamusProfileId: userId=${userId}`)
+    }
+  }
+
+  if (!userId && prodamusSubId) {
+    const [existingSub] = await db
+      .select({ userId: subscriptions.userId, plan: subscriptions.plan })
+      .from(subscriptions)
+      .where(eq(subscriptions.prodamusSubscriptionId, prodamusSubId))
+      .limit(1)
+
+    if (existingSub) {
+      userId = existingSub.userId
+      if (!planFromParam) planFromParam = existingSub.plan
+      console.log(`[Subscription Webhook] Resolved by prodamusSubId: userId=${userId}`)
+    }
+  }
 
   // Build idempotency key using subscription ID + payment_num + status
   const paymentNum = sub.payment_num || '0'
@@ -686,9 +767,9 @@ async function handleSubscriptionWebhook(
 
   console.log(`[Subscription Webhook] Event: status=${paymentStatus}, autopayment=${isAutopayment}, active_user=${sub.active_user}, active_manager=${sub.active_manager}, payment_num=${sub.payment_num}, subId=${prodamusSubId}, profileId=${prodamusProfileId}, user=${userId}`)
 
-  // Validate userId exists
+  // Validate userId resolved
   if (!userId) {
-    console.error('[Subscription Webhook] Missing _param_userId')
+    console.error(`[Subscription Webhook] Cannot resolve userId. email=${customerEmail}, phone=${customerPhone}, profileId=${prodamusProfileId}, subId=${prodamusSubId}`)
     return res.status(200).json({ status: 'missing_user_id' })
   }
 
@@ -702,6 +783,18 @@ async function handleSubscriptionWebhook(
     console.error(`[Subscription Webhook] User not found: ${userId}`)
     return res.status(200).json({ status: 'user_not_found' })
   }
+
+  // Mark subscription intent as paid (if one exists)
+  await db
+    .update(paymentIntents)
+    .set({ status: 'paid', paidAt: new Date() })
+    .where(
+      and(
+        eq(paymentIntents.userId, userId),
+        sql`${paymentIntents.productCode} LIKE 'sub_%'`,
+        eq(paymentIntents.status, 'created')
+      )
+    )
 
   // Determine plan from param or existing subscription
   let plan = planFromParam
