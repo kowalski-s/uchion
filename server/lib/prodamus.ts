@@ -28,13 +28,26 @@ export interface ProdamusPaymentData {
   customer_email?: string
   customer_fio?: string  // Customer full name (ФИО)
   products: ProdamusProduct[]
-  do: 'pay'
+  do: 'pay' | 'link'
   urlReturn?: string
   urlSuccess?: string
   urlNotification?: string
   payment_method?: string  // AC, SBP, etc.
   customer_extra?: string
   link_expired?: string  // Format: dd.mm.yyyy hh:mm or yyyy-mm-dd hh:mm
+}
+
+export interface ProdamusSubscriptionData {
+  subscription: string  // Subscription product ID from Prodamus panel
+  customer_email?: string
+  customer_fio?: string
+  customer_phone?: string
+  do: 'link'
+  urlReturn?: string
+  urlSuccess?: string
+  callbackType?: 'json'
+  _param_userId?: string  // Pass-through param for webhook
+  _param_plan?: string    // Pass-through param for webhook
 }
 
 type JsonValue = string | JsonObject | JsonArray
@@ -344,4 +357,39 @@ export function formatExpirationDate(date: Date): string {
   const minutes = getPart('minute')
 
   return `${year}-${month}-${day} ${hours}:${minutes}`
+}
+
+/**
+ * Generates a Prodamus subscription link URL.
+ * Uses `subscription` parameter instead of `products`.
+ */
+export function generateSubscriptionLink(
+  payformUrl: string,
+  data: ProdamusSubscriptionData,
+  secretKey: string
+): string {
+  const linkData: Record<string, unknown> = {
+    subscription: data.subscription,
+    do: data.do,
+    callbackType: data.callbackType || 'json',
+  }
+
+  if (data.customer_email) linkData.customer_email = data.customer_email
+  if (data.customer_fio) linkData.customer_fio = data.customer_fio
+  if (data.customer_phone) linkData.customer_phone = data.customer_phone
+  if (data.urlReturn) linkData.urlReturn = data.urlReturn
+  if (data.urlSuccess) linkData.urlSuccess = data.urlSuccess
+  if (data._param_userId) linkData._param_userId = data._param_userId
+  if (data._param_plan) linkData._param_plan = data._param_plan
+
+  // Generate signature
+  const signature = createProdamusSignature(linkData, secretKey)
+  const signedData = { ...linkData, signature }
+
+  // Convert to string data for URL building
+  const stringData = deepToStringObject(signedData as InputObject)
+  const queryString = buildQueryString(stringData)
+
+  const baseUrl = payformUrl.endsWith('/') ? payformUrl : payformUrl + '/'
+  return `${baseUrl}?${queryString}`
 }

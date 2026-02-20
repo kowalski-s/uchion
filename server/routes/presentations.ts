@@ -119,7 +119,7 @@ router.post('/generate', withAuth(async (req: AuthenticatedRequest, res: Respons
       .where(eq(subscriptions.userId, userId))
       .limit(1)
 
-    const isPaid = (subscription && subscription.plan !== 'free' && subscription.status === 'active') || req.user.role === 'admin'
+    const isPaid = (subscription && subscription.plan !== 'free' && (subscription.status === 'active' || subscription.status === 'past_due')) || req.user.role === 'admin'
 
     // 6. Call generatePresentation - prefer Claude for presentations
     const provider = claudeProvider || fallbackProvider

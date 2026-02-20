@@ -6,7 +6,7 @@ import { formatPlanName, formatSubjectName } from '../lib/dashboard-api'
 import { fetchPresentations, deletePresentation } from '../lib/presentation-api'
 import Header from '../components/Header'
 import WorksheetManager from '../components/WorksheetManager'
-import BuyGenerationsModal from '../components/BuyGenerationsModal'
+import SubscriptionPlansModal from '../components/SubscriptionPlansModal'
 import type { PresentationListItem } from '../../shared/types'
 
 // Icon components (used in stats cards)
@@ -70,14 +70,10 @@ function LoadingSpinner() {
   )
 }
 
-// Get max generations based on plan
-function getMaxGenerations(plan: string): number {
-  switch (plan) {
-    case 'premium': return 100
-    case 'pro': return 50
-    case 'basic': return 10
-    default: return 3 // free
-  }
+function formatDate(dateStr: string | null): string {
+  if (!dateStr) return ''
+  const date = new Date(dateStr)
+  return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
 }
 
 export default function DashboardPage() {
@@ -125,10 +121,13 @@ export default function DashboardPage() {
     return null
   }
 
-  const subscriptionPlan = user.subscription?.plan || 'free'
-  const maxGenerations = getMaxGenerations(subscriptionPlan)
-  const generationsUsed = maxGenerations - user.generationsLeft
-  const progressPercent = Math.min((generationsUsed / maxGenerations) * 100, 100)
+  const subscription = user.subscription
+  const subscriptionPlan = subscription?.plan ?? 'free'
+  const subStatus = subscription?.status ?? 'active'
+  const isPaidPlan = subscriptionPlan !== 'free'
+  const generationsTotal = subscription?.generationsTotal ?? 5
+  const generationsUsed = generationsTotal - user.generationsLeft
+  const progressPercent = Math.min((generationsUsed / Math.max(generationsTotal, 1)) * 100, 100)
   const isLimitExhausted = user.generationsLeft <= 0
 
   // Progress bar color based on usage
@@ -187,13 +186,29 @@ export default function DashboardPage() {
           </div>
 
           {/* Subscription / Tariff */}
-          <div className="stat-card flex items-center gap-3 px-5 py-4 rounded-2xl cursor-pointer group">
+          <div
+            className="stat-card flex items-center gap-3 px-5 py-4 rounded-2xl cursor-pointer group hover:shadow-lg hover:border-purple-200 transition-all"
+            onClick={() => setShowBuyModal(true)}
+          >
             <div className="p-2 bg-purple-100 rounded-lg group-hover:bg-purple-200 transition-colors">
               <DocumentIcon className="w-5 h-5 text-[#8C52FF]" />
             </div>
             <div className="flex-1 min-w-0">
               <span className="text-xs text-slate-400 uppercase tracking-wider font-semibold">Тариф</span>
               <p className="text-lg font-bold text-slate-900">{formatPlanName(subscriptionPlan)}</p>
+              {isPaidPlan && subStatus === 'active' && subscription?.currentPeriodEnd && (
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Продление: {formatDate(subscription.currentPeriodEnd)}
+                </p>
+              )}
+              {subStatus === 'past_due' && (
+                <p className="text-xs text-amber-600 font-semibold mt-0.5">Проблема с оплатой</p>
+              )}
+              {subStatus === 'cancelled' && subscription?.currentPeriodEnd && (
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Отменена, активна до {formatDate(subscription.currentPeriodEnd)}
+                </p>
+              )}
             </div>
           </div>
 
@@ -212,6 +227,25 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
+
+        {/* past_due warning banner */}
+        {subStatus === 'past_due' && (
+          <div className="flex items-center gap-3 p-4 mb-6 bg-amber-50 border border-amber-200 rounded-2xl text-amber-800">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 flex-shrink-0 text-amber-500">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+            </svg>
+            <div className="flex-1">
+              <p className="font-semibold text-sm">Проблема с оплатой подписки</p>
+              <p className="text-xs text-amber-700 mt-0.5">Обновите платёжные данные, чтобы продолжить пользоваться сервисом.</p>
+            </div>
+            <button
+              onClick={() => setShowBuyModal(true)}
+              className="flex-shrink-0 px-3 py-1.5 text-xs font-semibold bg-amber-100 hover:bg-amber-200 text-amber-800 rounded-lg transition-colors"
+            >
+              Управление
+            </button>
+          </div>
+        )}
 
         {/* Worksheets Section */}
         <section className="mb-8">
@@ -328,8 +362,8 @@ export default function DashboardPage() {
         </div>
       </main>
 
-      {/* Buy Generations Modal */}
-      <BuyGenerationsModal
+      {/* Subscription / Buy Generations Modal */}
+      <SubscriptionPlansModal
         isOpen={showBuyModal}
         onClose={() => setShowBuyModal(false)}
       />

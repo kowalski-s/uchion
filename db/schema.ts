@@ -24,6 +24,7 @@ export const users = pgTable('users', {
   image: text('image'),
   role: userRoleEnum('role').notNull().default('user'),
   generationsLeft: integer('generations_left').notNull().default(5),
+  subscriptionPlan: varchar('subscription_plan', { length: 20 }).notNull().default('free'), // 'free' | 'starter' | 'teacher' | 'expert'
   // OAuth provider info
   provider: varchar('provider', { length: 50 }),  // 'yandex' | 'email'
   providerId: varchar('provider_id', { length: 255 }),
@@ -104,19 +105,26 @@ export const generations = pgTable('generations', {
 }))
 
 // ==================== SUBSCRIPTIONS TABLE ====================
+// Tracks Prodamus recurring subscriptions
 
 export const subscriptions = pgTable('subscriptions', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }).unique(),
-  plan: subscriptionPlanEnum('plan').notNull().default('free'),
-  status: subscriptionStatusEnum('status').notNull().default('active'),
-  expiresAt: timestamp('expires_at', { withTimezone: true }),
+  prodamusSubscriptionId: varchar('prodamus_subscription_id', { length: 50 }), // Subscription product ID from Prodamus
+  plan: varchar('plan_v2', { length: 20 }).notNull().default('free'), // 'free' | 'starter' | 'teacher' | 'expert'
+  status: varchar('status_v2', { length: 20 }).notNull().default('active'), // 'active' | 'past_due' | 'cancelled' | 'expired'
+  generationsPerPeriod: integer('generations_per_period').notNull().default(0),
+  currentPeriodStart: timestamp('current_period_start', { withTimezone: true }),
+  currentPeriodEnd: timestamp('current_period_end', { withTimezone: true }),
+  customerEmail: varchar('customer_email', { length: 255 }),
+  customerPhone: varchar('customer_phone', { length: 20 }),
+  cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
   userIdIdx: index('subscriptions_user_id_idx').on(table.userId),
-  statusIdx: index('subscriptions_status_idx').on(table.status),
-  expiresAtIdx: index('subscriptions_expires_at_idx').on(table.expiresAt),
+  statusIdx: index('subscriptions_status_v2_idx').on(table.status),
+  planIdx: index('subscriptions_plan_v2_idx').on(table.plan),
 }))
 
 // ==================== PAYMENTS TABLE ====================

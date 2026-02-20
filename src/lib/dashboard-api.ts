@@ -209,6 +209,10 @@ export async function deleteFolder(id: string): Promise<void> {
 export function formatPlanName(plan: string): string {
   const names: Record<string, string> = {
     free: 'Бесплатный',
+    starter: 'Начинающий',
+    teacher: 'Методист',
+    expert: 'Эксперт',
+    // Legacy
     basic: 'Базовый',
     premium: 'Премиум',
   }

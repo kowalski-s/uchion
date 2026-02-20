@@ -1,9 +1,9 @@
 import { Router } from 'express'
 import type { Request, Response } from 'express'
 import * as crypto from 'crypto'
-import { eq, and } from 'drizzle-orm'
+import { eq, and, sql } from 'drizzle-orm'
 import { db } from '../../db/index.js'
-import { paymentIntents, webhookEvents } from '../../db/schema.js'
+import { paymentIntents, webhookEvents, subscriptions, users } from '../../db/schema.js'
 import { withAuth } from '../middleware/auth.js'
 import {
   checkBillingCreateLinkRateLimit,
@@ -12,6 +12,7 @@ import {
 } from '../middleware/rate-limit.js'
 import {
   generatePaymentLink,
+  generateSubscriptionLink,
   verifyWebhookSignature,
   formatExpirationDate,
   type ProdamusPaymentData,
@@ -23,6 +24,8 @@ import {
   applyProductEffect,
   type ProductInfo,
 } from '../lib/billing-effects.js'
+import { SUBSCRIPTION_PLANS, isPaidPlan, getPlanConfig, type PaidPlanId } from '../../shared/plans.js'
+import { sendAdminAlert } from '../../api/_lib/telegram/bot.js'
 
 const router = Router()
 
@@ -41,6 +44,13 @@ if (IS_PRODUCTION) {
   if (!PRODAMUS_PAYFORM_URL) {
     console.error('[FATAL] PRODAMUS_PAYFORM_URL is required in production mode')
   }
+}
+
+// Prodamus subscription product IDs (from Prodamus panel)
+const PRODAMUS_SUBSCRIPTION_IDS: Record<PaidPlanId, string | undefined> = {
+  starter: process.env.PRODAMUS_SUBSCRIPTION_STARTER_ID,
+  teacher: process.env.PRODAMUS_SUBSCRIPTION_TEACHER_ID,
+  expert: process.env.PRODAMUS_SUBSCRIPTION_EXPERT_ID,
 }
 
 // ==================== TYPES ====================
@@ -67,6 +77,26 @@ interface ProdamusWebhookPayload {
   currency?: string
   date?: string
   sign?: string
+  // Subscription-specific fields
+  subscription?: {
+    id?: string
+    profile_id?: string
+    active?: string  // '0' or '1'
+    status?: string  // 'active' | 'non-active'
+    date_next_payment?: string
+    date_last_payment?: string
+    date_first_payment?: string
+    autopayment?: string  // '0' = purchase, '1' = auto-debit
+    payment_num?: string
+    autopayments_num?: string
+    current_attempt?: string
+    max_attempts?: string
+    cost?: string
+    [key: string]: unknown
+  }
+  // Pass-through params
+  _param_userId?: string
+  _param_plan?: string
   [key: string]: unknown
 }
 
@@ -120,6 +150,24 @@ async function tryMarkEventProcessed(
 }
 
 // ==================== ROUTES ====================
+
+/**
+ * GET /api/billing/subscription-plans
+ *
+ * Returns available subscription plans
+ */
+router.get('/subscription-plans', (_req, res) => {
+  const plans = Object.entries(SUBSCRIPTION_PLANS).map(([id, plan]) => ({
+    id,
+    name: plan.name,
+    price: plan.price,
+    generationsPerPeriod: plan.generationsPerPeriod,
+    isRecurring: plan.isRecurring,
+    folders: plan.folders,
+    paidModel: plan.paidModel,
+  }))
+  return res.json({ plans })
+})
 
 /**
  * GET /api/billing/products
@@ -305,6 +353,103 @@ router.post('/prodamus/create-link', withAuth(async (req, res) => {
 }))
 
 /**
+ * POST /api/billing/create-subscription-link
+ *
+ * Creates a Prodamus subscription payment link
+ * Requires authentication, validates no active subscription exists
+ */
+router.post('/create-subscription-link', withAuth(async (req, res) => {
+  const userId = req.user.id
+  const userEmail = req.user.email
+  const userName = req.user.name
+
+  // Rate limiting (same as create-link)
+  const rateLimitResult = await checkBillingCreateLinkRateLimit(req, userId)
+  if (!rateLimitResult.success) {
+    const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000)
+    console.warn(`[Subscription] Rate limit exceeded for user ${userId}`)
+    return res
+      .status(429)
+      .setHeader('Retry-After', retryAfter.toString())
+      .json({ error: 'Слишком много запросов. Попробуйте позже.' })
+  }
+
+  try {
+    const { plan } = req.body as { plan?: string }
+
+    // Validate plan
+    if (!plan || !isPaidPlan(plan)) {
+      return res.status(400).json({ error: 'Укажите корректный тариф: starter, teacher или expert' })
+    }
+
+    // Check for existing active subscription
+    const [existingSub] = await db
+      .select({ id: subscriptions.id, status: subscriptions.status, plan: subscriptions.plan })
+      .from(subscriptions)
+      .where(eq(subscriptions.userId, userId))
+      .limit(1)
+
+    if (existingSub && (existingSub.status === 'active' || existingSub.status === 'past_due')) {
+      return res.status(409).json({
+        error: 'У вас уже есть активная подписка. Сначала отмените текущую.',
+        currentPlan: existingSub.plan,
+      })
+    }
+
+    // Get Prodamus subscription ID
+    const subscriptionId = PRODAMUS_SUBSCRIPTION_IDS[plan]
+
+    // Check configuration
+    if (!PRODAMUS_SECRET || !PRODAMUS_PAYFORM_URL) {
+      if (IS_PRODUCTION) {
+        console.error('[Subscription] Missing Prodamus configuration')
+        return res.status(500).json({ error: 'Платежная система не настроена' })
+      }
+      // Development mode
+      return res.status(201).json({
+        success: true,
+        paymentUrl: `${APP_URL}/payment/success?plan=${plan}`,
+        testMode: true,
+      })
+    }
+
+    if (!subscriptionId) {
+      console.error(`[Subscription] Missing Prodamus subscription ID for plan: ${plan}`)
+      return res.status(500).json({ error: 'Тариф не настроен в платежной системе' })
+    }
+
+    // Build subscription link
+    const email = userEmail && !userEmail.endsWith('@telegram') && EMAIL_REGEX.test(userEmail) ? userEmail : undefined
+
+    const paymentUrl = generateSubscriptionLink(
+      PRODAMUS_PAYFORM_URL,
+      {
+        subscription: subscriptionId,
+        do: 'link',
+        callbackType: 'json',
+        customer_email: email,
+        customer_fio: userName || undefined,
+        urlSuccess: `${APP_URL}/payment/success?type=subscription&plan=${plan}`,
+        urlReturn: `${APP_URL}/payment/cancel`,
+        _param_userId: userId,
+        _param_plan: plan,
+      },
+      PRODAMUS_SECRET
+    )
+
+    console.log(`[Subscription] Created subscription link for user ${userId}, plan: ${plan}`)
+
+    return res.status(201).json({
+      success: true,
+      paymentUrl,
+    })
+  } catch (error) {
+    console.error('[Subscription] Create link error:', error)
+    return res.status(500).json({ error: 'Не удалось создать ссылку на подписку' })
+  }
+}))
+
+/**
  * POST /api/billing/prodamus/webhook
  *
  * Receives payment notifications from Prodamus
@@ -348,6 +493,15 @@ router.post('/prodamus/webhook', async (req: Request, res: Response) => {
         return res.status(400).json({ error: 'Invalid signature' })
       }
     }
+
+    // Determine if this is a subscription webhook
+    const hasSubscription = payload.subscription && typeof payload.subscription === 'object'
+
+    if (hasSubscription) {
+      return await handleSubscriptionWebhook(payload, res)
+    }
+
+    // ==================== ONE-TIME PAYMENT HANDLING ====================
 
     // Get order_id (Prodamus may send it as order_id or order_num)
     const orderId = payload.order_id || payload.order_num
@@ -437,6 +591,331 @@ router.post('/prodamus/webhook', async (req: Request, res: Response) => {
     return res.status(500).json({ error: 'Processing failed' })
   }
 })
+
+// ==================== SUBSCRIPTION WEBHOOK HANDLER ====================
+
+/**
+ * Handle subscription-specific webhook from Prodamus.
+ * Determines event type from subscription block fields and processes accordingly.
+ */
+async function handleSubscriptionWebhook(
+  payload: ProdamusWebhookPayload,
+  res: Response
+): Promise<Response> {
+  const sub = payload.subscription!
+  const paymentStatus = payload.payment_status || 'unknown'
+  const isAutopayment = sub.autopayment === '1'
+  const subscriptionActive = sub.active === '1' || sub.status === 'active'
+  const subscriptionInactive = sub.active === '0' || sub.status === 'non-active'
+  const prodamusSubId = sub.id || ''
+
+  // Get userId from pass-through params
+  const userId = payload._param_userId as string
+  const planFromParam = payload._param_plan as string
+
+  // Build idempotency key using subscription ID + payment_num + status
+  const paymentNum = sub.payment_num || '0'
+  const eventKey = `sub:${prodamusSubId}:${paymentNum}:${paymentStatus}`
+  const rawBody = JSON.stringify(payload)
+  const payloadHash = hashPayload(rawBody)
+
+  const isFirstProcessing = await tryMarkEventProcessed('prodamus_subscription', eventKey, payloadHash)
+  if (!isFirstProcessing) {
+    console.log(`[Subscription Webhook] Already processed: ${eventKey}`)
+    return res.status(200).json({ status: 'already_processed' })
+  }
+
+  console.log(`[Subscription Webhook] Event: status=${paymentStatus}, autopayment=${isAutopayment}, active=${sub.active}, subId=${prodamusSubId}, user=${userId}`)
+
+  // Validate userId exists
+  if (!userId) {
+    console.error('[Subscription Webhook] Missing _param_userId')
+    return res.status(200).json({ status: 'missing_user_id' })
+  }
+
+  const [user] = await db
+    .select({ id: users.id, email: users.email })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1)
+
+  if (!user) {
+    console.error(`[Subscription Webhook] User not found: ${userId}`)
+    return res.status(200).json({ status: 'user_not_found' })
+  }
+
+  // Determine plan from param or existing subscription
+  let plan = planFromParam
+  if (!plan || !isPaidPlan(plan)) {
+    // Try to get from existing subscription
+    const [existingSub] = await db
+      .select({ plan: subscriptions.plan })
+      .from(subscriptions)
+      .where(eq(subscriptions.userId, userId))
+      .limit(1)
+    plan = existingSub?.plan || 'starter'
+  }
+
+  const planConfig = getPlanConfig(plan)
+
+  // Calculate period dates
+  const now = new Date()
+  const nextPaymentDate = sub.date_next_payment ? new Date(sub.date_next_payment) : null
+  const periodEnd = nextPaymentDate || new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000) // 30 days default
+
+  // ==================== EVENT ROUTING ====================
+
+  const isSuccess = paymentStatus === 'success'
+
+  if (isSuccess && !isAutopayment) {
+    // FIRST PAYMENT (user-initiated purchase)
+    console.log(`[Subscription Webhook] First payment for user ${userId}, plan: ${plan}`)
+
+    await db.transaction(async (tx) => {
+      // Upsert subscription record
+      const [existing] = await tx
+        .select({ id: subscriptions.id })
+        .from(subscriptions)
+        .where(eq(subscriptions.userId, userId))
+        .limit(1)
+
+      if (existing) {
+        await tx
+          .update(subscriptions)
+          .set({
+            prodamusSubscriptionId: prodamusSubId,
+            plan: plan,
+            status: 'active',
+            generationsPerPeriod: planConfig.generationsPerPeriod,
+            currentPeriodStart: now,
+            currentPeriodEnd: periodEnd,
+            customerEmail: user.email,
+            cancelledAt: null,
+            updatedAt: now,
+          })
+          .where(eq(subscriptions.id, existing.id))
+      } else {
+        await tx
+          .insert(subscriptions)
+          .values({
+            userId,
+            prodamusSubscriptionId: prodamusSubId,
+            plan: plan,
+            status: 'active',
+            generationsPerPeriod: planConfig.generationsPerPeriod,
+            currentPeriodStart: now,
+            currentPeriodEnd: periodEnd,
+            customerEmail: user.email,
+          })
+      }
+
+      // Update user: set plan + reset generations to plan limit
+      await tx
+        .update(users)
+        .set({
+          subscriptionPlan: plan,
+          generationsLeft: planConfig.generationsPerPeriod,
+          updatedAt: now,
+        })
+        .where(eq(users.id, userId))
+    })
+
+    // Send admin alert (non-blocking)
+    sendAdminAlert({
+      message: `Новая подписка: ${planConfig.name} (${planConfig.price}₽/мес)\nПользователь: ${user.email}\nГенераций: ${planConfig.generationsPerPeriod}`,
+      level: 'info',
+    }).catch(err => console.error('[Subscription Webhook] Alert error:', err))
+
+    return res.status(200).json({ status: 'subscription_activated' })
+  }
+
+  if (isSuccess && isAutopayment) {
+    // AUTO-RENEWAL (successful recurring payment)
+    console.log(`[Subscription Webhook] Auto-renewal for user ${userId}, plan: ${plan}`)
+
+    await db.transaction(async (tx) => {
+      await tx
+        .update(subscriptions)
+        .set({
+          status: 'active',
+          currentPeriodStart: now,
+          currentPeriodEnd: periodEnd,
+          updatedAt: now,
+        })
+        .where(eq(subscriptions.userId, userId))
+
+      // Reset generations to plan limit for new period
+      await tx
+        .update(users)
+        .set({
+          generationsLeft: planConfig.generationsPerPeriod,
+          updatedAt: now,
+        })
+        .where(eq(users.id, userId))
+    })
+
+    sendAdminAlert({
+      message: `Автопродление: ${planConfig.name}\nПользователь: ${user.email}\nГенераций начислено: ${planConfig.generationsPerPeriod}`,
+      level: 'info',
+    }).catch(err => console.error('[Subscription Webhook] Alert error:', err))
+
+    return res.status(200).json({ status: 'subscription_renewed' })
+  }
+
+  if (!isSuccess && isAutopayment) {
+    // FAILED AUTO-PAYMENT
+    console.log(`[Subscription Webhook] Failed auto-payment for user ${userId}`)
+
+    await db
+      .update(subscriptions)
+      .set({
+        status: 'past_due',
+        updatedAt: now,
+      })
+      .where(eq(subscriptions.userId, userId))
+
+    // Do NOT reset generations — grace period while Prodamus retries
+
+    sendAdminAlert({
+      message: `Неудачное автосписание: ${planConfig.name}\nПользователь: ${user.email}\nПопытка: ${sub.current_attempt || '?'}/${sub.max_attempts || '?'}`,
+      level: 'warning',
+    }).catch(err => console.error('[Subscription Webhook] Alert error:', err))
+
+    return res.status(200).json({ status: 'payment_failed_noted' })
+  }
+
+  if (subscriptionInactive) {
+    // SUBSCRIPTION ENDED (final notification — deactivated or expired)
+    console.log(`[Subscription Webhook] Subscription ended for user ${userId}`)
+
+    await db.transaction(async (tx) => {
+      await tx
+        .update(subscriptions)
+        .set({
+          status: 'expired',
+          updatedAt: now,
+        })
+        .where(eq(subscriptions.userId, userId))
+
+      // Downgrade user to free
+      await tx
+        .update(users)
+        .set({
+          subscriptionPlan: 'free',
+          generationsLeft: 0,
+          updatedAt: now,
+        })
+        .where(eq(users.id, userId))
+    })
+
+    sendAdminAlert({
+      message: `Подписка завершена: ${planConfig.name}\nПользователь: ${user.email}\nСтатус: free, 0 генераций`,
+      level: 'warning',
+    }).catch(err => console.error('[Subscription Webhook] Alert error:', err))
+
+    return res.status(200).json({ status: 'subscription_expired' })
+  }
+
+  // Unknown event type — log and acknowledge
+  console.warn(`[Subscription Webhook] Unhandled event: payment_status=${paymentStatus}, autopayment=${sub.autopayment}, active=${sub.active}`)
+  return res.status(200).json({ status: 'noted' })
+}
+
+/**
+ * POST /api/billing/cancel-subscription
+ *
+ * Cancels the user's active subscription.
+ * Subscription remains active until currentPeriodEnd.
+ * When period ends, Prodamus won't charge → webhook will downgrade to free.
+ */
+router.post('/cancel-subscription', withAuth(async (req, res) => {
+  const userId = req.user.id
+
+  // Rate limiting
+  const rateLimitResult = await checkBillingCreateLinkRateLimit(req, userId)
+  if (!rateLimitResult.success) {
+    return res.status(429).json({ error: 'Слишком много запросов. Попробуйте позже.' })
+  }
+
+  try {
+    // Find active subscription
+    const [sub] = await db
+      .select()
+      .from(subscriptions)
+      .where(eq(subscriptions.userId, userId))
+      .limit(1)
+
+    if (!sub || (sub.status !== 'active' && sub.status !== 'past_due')) {
+      return res.status(404).json({ error: 'Активная подписка не найдена' })
+    }
+
+    if (sub.cancelledAt) {
+      return res.status(409).json({
+        error: 'Подписка уже отменена',
+        cancelledAt: sub.cancelledAt.toISOString(),
+        activeUntil: sub.currentPeriodEnd?.toISOString() || null,
+      })
+    }
+
+    const now = new Date()
+
+    // Try to deactivate via Prodamus API (best effort)
+    let prodamusDeactivated = false
+    if (PRODAMUS_SECRET && PRODAMUS_PAYFORM_URL && sub.prodamusSubscriptionId) {
+      try {
+        const deactivateData: Record<string, unknown> = {
+          subscription: sub.prodamusSubscriptionId,
+          do: 'deactivate',
+        }
+        const deactivateSignature = (await import('../lib/prodamus.js')).createProdamusSignature(
+          deactivateData,
+          PRODAMUS_SECRET
+        )
+        deactivateData.signature = deactivateSignature
+
+        const baseUrl = PRODAMUS_PAYFORM_URL.endsWith('/') ? PRODAMUS_PAYFORM_URL : PRODAMUS_PAYFORM_URL + '/'
+        const params = new URLSearchParams()
+        for (const [key, value] of Object.entries(deactivateData)) {
+          params.append(key, String(value))
+        }
+
+        const response = await fetch(`${baseUrl}?${params.toString()}`)
+        prodamusDeactivated = response.ok
+        console.log(`[Subscription] Prodamus deactivation response: ${response.status}`)
+      } catch (err) {
+        console.warn('[Subscription] Prodamus deactivation failed (will handle via period end):', err)
+      }
+    }
+
+    // Mark as cancelled locally (subscription stays active until period end)
+    await db
+      .update(subscriptions)
+      .set({
+        status: 'cancelled',
+        cancelledAt: now,
+        updatedAt: now,
+      })
+      .where(eq(subscriptions.id, sub.id))
+
+    // Do NOT change user's subscriptionPlan or generationsLeft yet
+    // They keep access until period end
+
+    sendAdminAlert({
+      message: `Подписка отменена: ${sub.plan}\nПользователь: ${req.user.email}\nАктивна до: ${sub.currentPeriodEnd?.toISOString() || 'N/A'}\nProdamus деактивация: ${prodamusDeactivated ? 'OK' : 'не удалось'}`,
+      level: 'info',
+    }).catch(err => console.error('[Subscription] Alert error:', err))
+
+    return res.status(200).json({
+      success: true,
+      message: 'Подписка отменена. Доступ сохраняется до конца оплаченного периода.',
+      activeUntil: sub.currentPeriodEnd?.toISOString() || null,
+      prodamusDeactivated,
+    })
+  } catch (error) {
+    console.error('[Subscription] Cancel error:', error)
+    return res.status(500).json({ error: 'Не удалось отменить подписку' })
+  }
+}))
 
 /**
  * GET /api/billing/payment-status/:orderId

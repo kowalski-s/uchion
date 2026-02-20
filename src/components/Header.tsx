@@ -120,6 +120,19 @@ export default function Header() {
               >
                 <UserIcon className="w-4 h-4" />
                 <span className="hidden sm:inline">Личный кабинет</span>
+                {/* Paid plan badge */}
+                {user.subscription && user.subscription.plan !== 'free' && (
+                  <span className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-gradient-to-r from-[#8C52FF] to-[#A16BFF] text-white leading-none ml-0.5">
+                    {user.subscription.plan === 'starter' ? 'START' : user.subscription.plan === 'teacher' ? 'PRO' : 'EXPERT'}
+                  </span>
+                )}
+                {/* Remaining generations */}
+                <span className="hidden sm:inline-flex items-center gap-0.5 text-xs font-semibold text-slate-500 ml-0.5">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m3.75 13.5 10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75Z" />
+                  </svg>
+                  {user.generationsLeft}
+                </span>
               </Link>
               {user.role === 'admin' && (
                 <Link

@@ -70,9 +70,12 @@ export interface WorksheetListItem {
 }
 
 export interface UserSubscription {
-  plan: 'free' | 'basic' | 'premium'
-  status: 'active' | 'canceled' | 'expired' | 'trial'
-  expiresAt: string | null
+  plan: 'free' | 'starter' | 'teacher' | 'expert'
+  status: 'active' | 'past_due' | 'cancelled' | 'expired'
+  generationsLeft: number
+  generationsTotal: number
+  currentPeriodEnd: string | null
+  cancelledAt: string | null
 }
 
 // Folder types

@@ -11,11 +11,15 @@ import type { AuthenticatedRequest } from '../types.js'
 
 const router = Router()
 
-const FOLDER_LIMITS = {
+const FOLDER_LIMITS: Record<string, number> = {
   free: 2,
+  starter: 10,
+  teacher: 10,
+  expert: 10,
+  // Legacy plan names (backward compatibility)
   basic: 10,
   premium: 10,
-} as const
+}
 
 const CreateFolderSchema = z.object({
   name: z.string().min(1).max(100),
@@ -124,7 +128,7 @@ router.post('/', withAuth(async (req: AuthenticatedRequest, res: Response) => {
     .limit(1)
 
   const userPlan = subscription?.plan || 'free'
-  const folderLimit = FOLDER_LIMITS[userPlan as keyof typeof FOLDER_LIMITS] || FOLDER_LIMITS.free
+  const folderLimit = FOLDER_LIMITS[userPlan] || FOLDER_LIMITS.free
 
   const [{ value: folderCount }] = await db
     .select({ value: count() })

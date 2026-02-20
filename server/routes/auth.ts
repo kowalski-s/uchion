@@ -91,7 +91,9 @@ router.get('/me', async (req: Request, res: Response) => {
     .select({
       plan: subscriptions.plan,
       status: subscriptions.status,
-      expiresAt: subscriptions.expiresAt,
+      currentPeriodEnd: subscriptions.currentPeriodEnd,
+      cancelledAt: subscriptions.cancelledAt,
+      generationsPerPeriod: subscriptions.generationsPerPeriod,
     })
     .from(subscriptions)
     .where(eq(subscriptions.userId, payload.sub))
@@ -100,7 +102,23 @@ router.get('/me', async (req: Request, res: Response) => {
   return res.status(200).json({
     user: {
       ...user,
-      subscription: subscription || { plan: 'free', status: 'active', expiresAt: null }
+      subscription: subscription
+        ? {
+            plan: subscription.plan,
+            status: subscription.status,
+            generationsLeft: user.generationsLeft,
+            generationsTotal: subscription.generationsPerPeriod,
+            currentPeriodEnd: subscription.currentPeriodEnd?.toISOString() || null,
+            cancelledAt: subscription.cancelledAt?.toISOString() || null,
+          }
+        : {
+            plan: 'free',
+            status: 'active',
+            generationsLeft: user.generationsLeft,
+            generationsTotal: 5,
+            currentPeriodEnd: null,
+            cancelledAt: null,
+          }
     }
   })
 })

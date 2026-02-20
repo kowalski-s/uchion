@@ -66,7 +66,7 @@ router.post('/', withAuth(async (req: AuthenticatedRequest, res: Response) => {
     .where(eq(subscriptions.userId, userId))
     .limit(1)
 
-  const isPaidUser = subscription && subscription.plan !== 'free' && subscription.status === 'active'
+  const isPaidUser = subscription && subscription.plan !== 'free' && (subscription.status === 'active' || subscription.status === 'past_due')
 
   if (isPaidUser) {
     const dailyCheck = await checkDailyGenerationLimit(userId, 20)
@@ -397,7 +397,7 @@ router.post('/regenerate-task', withAuth(async (req: AuthenticatedRequest, res: 
       .where(eq(subscriptions.userId, userId))
       .limit(1)
 
-    const isPaid = (sub && sub.plan !== 'free' && sub.status === 'active') || req.user.role === 'admin'
+    const isPaid = (sub && sub.plan !== 'free' && (sub.status === 'active' || sub.status === 'past_due')) || req.user.role === 'admin'
 
     const ai = getAIProvider()
     const aiSessionId = crypto.randomUUID()

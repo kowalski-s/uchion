@@ -196,7 +196,7 @@ router.get('/:id', withAdminAuth(async (req: AuthenticatedRequest, res: Response
     .select({
       plan: subscriptions.plan,
       status: subscriptions.status,
-      expiresAt: subscriptions.expiresAt,
+      currentPeriodEnd: subscriptions.currentPeriodEnd,
     })
     .from(subscriptions)
     .where(eq(subscriptions.userId, id))
