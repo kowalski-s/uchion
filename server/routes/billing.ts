@@ -725,31 +725,38 @@ async function handleSubscriptionWebhook(
   }
 
   // Fallback 3: look up by existing subscription with this prodamus profile/sub ID
-  if (!userId && prodamusProfileId) {
-    const [existingSub] = await db
-      .select({ userId: subscriptions.userId, plan: subscriptions.plan })
-      .from(subscriptions)
-      .where(eq(subscriptions.prodamusProfileId, prodamusProfileId))
-      .limit(1)
+  // Wrapped in try/catch because prodamus_profile_id column may not exist yet (migration pending)
+  if (!userId && (prodamusProfileId || prodamusSubId)) {
+    try {
+      if (prodamusProfileId) {
+        const [existingSub] = await db
+          .select({ userId: subscriptions.userId, plan: subscriptions.plan })
+          .from(subscriptions)
+          .where(eq(subscriptions.prodamusProfileId, prodamusProfileId))
+          .limit(1)
 
-    if (existingSub) {
-      userId = existingSub.userId
-      if (!planFromParam) planFromParam = existingSub.plan
-      console.log(`[Subscription Webhook] Resolved by prodamusProfileId: userId=${userId}`)
-    }
-  }
+        if (existingSub) {
+          userId = existingSub.userId
+          if (!planFromParam) planFromParam = existingSub.plan
+          console.log(`[Subscription Webhook] Resolved by prodamusProfileId: userId=${userId}`)
+        }
+      }
 
-  if (!userId && prodamusSubId) {
-    const [existingSub] = await db
-      .select({ userId: subscriptions.userId, plan: subscriptions.plan })
-      .from(subscriptions)
-      .where(eq(subscriptions.prodamusSubscriptionId, prodamusSubId))
-      .limit(1)
+      if (!userId && prodamusSubId) {
+        const [existingSub] = await db
+          .select({ userId: subscriptions.userId, plan: subscriptions.plan })
+          .from(subscriptions)
+          .where(eq(subscriptions.prodamusSubscriptionId, prodamusSubId))
+          .limit(1)
 
-    if (existingSub) {
-      userId = existingSub.userId
-      if (!planFromParam) planFromParam = existingSub.plan
-      console.log(`[Subscription Webhook] Resolved by prodamusSubId: userId=${userId}`)
+        if (existingSub) {
+          userId = existingSub.userId
+          if (!planFromParam) planFromParam = existingSub.plan
+          console.log(`[Subscription Webhook] Resolved by prodamusSubId: userId=${userId}`)
+        }
+      }
+    } catch (err) {
+      console.warn(`[Subscription Webhook] Fallback 3 query failed (migration pending?):`, (err as Error).message)
     }
   }
 
