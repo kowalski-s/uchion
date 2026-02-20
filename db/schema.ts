@@ -110,7 +110,8 @@ export const generations = pgTable('generations', {
 export const subscriptions = pgTable('subscriptions', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }).unique(),
-  prodamusSubscriptionId: varchar('prodamus_subscription_id', { length: 50 }), // Subscription product ID from Prodamus
+  prodamusSubscriptionId: varchar('prodamus_subscription_id', { length: 50 }), // Subscription ID from Prodamus (e.g. "2764195")
+  prodamusProfileId: varchar('prodamus_profile_id', { length: 50 }), // Profile ID from Prodamus (e.g. "363350")
   plan: varchar('plan_v2', { length: 20 }).notNull().default('free'), // 'free' | 'starter' | 'teacher' | 'expert'
   status: varchar('status_v2', { length: 20 }).notNull().default('active'), // 'active' | 'past_due' | 'cancelled' | 'expired'
   generationsPerPeriod: integer('generations_per_period').notNull().default(0),

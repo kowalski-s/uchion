@@ -73,25 +73,47 @@ interface ProdamusWebhookPayload {
   order_num?: string
   payment_status?: string
   payment_status_description?: string
+  payment_init?: string  // 'manual' | 'auto'
   sum?: string
   currency?: string
   date?: string
   sign?: string
-  // Subscription-specific fields
+  customer_phone?: string
+  customer_email?: string
+  customer_extra?: string
+  // Subscription-specific fields (real Prodamus structure)
   subscription?: {
     id?: string
     profile_id?: string
-    active?: string  // '0' or '1'
-    status?: string  // 'active' | 'non-active'
-    date_next_payment?: string
-    date_last_payment?: string
-    date_first_payment?: string
-    autopayment?: string  // '0' = purchase, '1' = auto-debit
+    // Active flags are strings "0" or "1"
+    active_user?: string
+    active_user_date?: string
+    active_manager?: string
+    active_manager_date?: string
+    // Payment tracking
+    autopayment?: number | string  // 0 = first/manual, 1 = auto-debit (can be number or string)
     payment_num?: string
     autopayments_num?: string
-    current_attempt?: string
-    max_attempts?: string
+    // Dates
+    date_create?: string
+    date_first_payment?: string
+    date_last_payment?: string
+    date_next_payment?: string
+    date_next_payment_discount?: string
+    date_completion?: string
+    // Pricing
     cost?: string
+    currency?: string
+    name?: string
+    // Limits
+    limit_autopayments?: string
+    first_payment_discount?: string
+    next_payment_discount?: string
+    next_payment_discount_num?: string
+    // Meta
+    demo?: string
+    notification?: string
+    process_started_at?: string
     [key: string]: unknown
   }
   // Pass-through params
@@ -467,12 +489,13 @@ router.post('/create-subscription-link', withAuth(async (req, res) => {
 }))
 
 /**
- * POST /api/billing/prodamus/webhook
+ * POST /api/billing/prodamus/webhook  (legacy path)
+ * POST /api/billing/webhook            (primary path — configured in Prodamus panel)
  *
  * Receives payment notifications from Prodamus
  * Verifies signature, checks idempotency, processes payment
  */
-router.post('/prodamus/webhook', async (req: Request, res: Response) => {
+async function handleProdamusWebhook(req: Request, res: Response) {
   const ip = getClientIp(req)
 
   // Rate limiting
@@ -494,7 +517,13 @@ router.post('/prodamus/webhook', async (req: Request, res: Response) => {
     }
 
     // Get signature from request
-    const signature = payload.sign as string || req.headers['sign'] as string
+    // Prodamus sends Sign header in format "Sign: <hash>" — strip the prefix
+    let signature = payload.sign as string || req.headers['sign'] as string || ''
+    if (signature.startsWith('Sign: ')) {
+      signature = signature.slice(6)
+    } else if (signature.startsWith('Sign:')) {
+      signature = signature.slice(5).trim()
+    }
 
     // Verify configuration
     if (!PRODAMUS_SECRET) {
@@ -607,7 +636,11 @@ router.post('/prodamus/webhook', async (req: Request, res: Response) => {
     console.error('[Prodamus Webhook] Processing error:', error)
     return res.status(500).json({ error: 'Processing failed' })
   }
-})
+}
+
+// Register webhook on both paths (Prodamus panel uses /api/billing/webhook)
+router.post('/webhook', handleProdamusWebhook)
+router.post('/prodamus/webhook', handleProdamusWebhook)
 
 // ==================== SUBSCRIPTION WEBHOOK HANDLER ====================
 
@@ -621,10 +654,13 @@ async function handleSubscriptionWebhook(
 ): Promise<Response> {
   const sub = payload.subscription!
   const paymentStatus = payload.payment_status || 'unknown'
-  const isAutopayment = sub.autopayment === '1'
-  const subscriptionActive = sub.active === '1' || sub.status === 'active'
-  const subscriptionInactive = sub.active === '0' || sub.status === 'non-active'
+  // autopayment can be number 0/1 or string "0"/"1"
+  const isAutopayment = sub.autopayment === 1 || sub.autopayment === '1'
+  // Real Prodamus data uses active_user and active_manager (strings "0"/"1")
+  const subscriptionActive = sub.active_user === '1' && sub.active_manager === '1'
+  const subscriptionInactive = sub.active_user === '0' || sub.active_manager === '0'
   const prodamusSubId = sub.id || ''
+  const prodamusProfileId = sub.profile_id || ''
 
   // Get userId from pass-through params
   const userId = payload._param_userId as string
@@ -642,7 +678,7 @@ async function handleSubscriptionWebhook(
     return res.status(200).json({ status: 'already_processed' })
   }
 
-  console.log(`[Subscription Webhook] Event: status=${paymentStatus}, autopayment=${isAutopayment}, active=${sub.active}, subId=${prodamusSubId}, user=${userId}`)
+  console.log(`[Subscription Webhook] Event: status=${paymentStatus}, autopayment=${isAutopayment}, active_user=${sub.active_user}, active_manager=${sub.active_manager}, payment_num=${sub.payment_num}, subId=${prodamusSubId}, profileId=${prodamusProfileId}, user=${userId}`)
 
   // Validate userId exists
   if (!userId) {
@@ -701,12 +737,14 @@ async function handleSubscriptionWebhook(
           .update(subscriptions)
           .set({
             prodamusSubscriptionId: prodamusSubId,
+            prodamusProfileId: prodamusProfileId,
             plan: plan,
             status: 'active',
             generationsPerPeriod: planConfig.generationsPerPeriod,
             currentPeriodStart: now,
             currentPeriodEnd: periodEnd,
-            customerEmail: user.email,
+            customerEmail: payload.customer_email || user.email,
+            customerPhone: payload.customer_phone || null,
             cancelledAt: null,
             updatedAt: now,
           })
@@ -717,12 +755,14 @@ async function handleSubscriptionWebhook(
           .values({
             userId,
             prodamusSubscriptionId: prodamusSubId,
+            prodamusProfileId: prodamusProfileId,
             plan: plan,
             status: 'active',
             generationsPerPeriod: planConfig.generationsPerPeriod,
             currentPeriodStart: now,
             currentPeriodEnd: periodEnd,
-            customerEmail: user.email,
+            customerEmail: payload.customer_email || user.email,
+            customerPhone: payload.customer_phone || null,
           })
       }
 

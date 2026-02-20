@@ -89,6 +89,9 @@ app.use(cookieParser())
 // ---- CORS: reject cross-origin requests explicitly ----
 const APP_ORIGIN = process.env.APP_URL || `http://localhost:${PORT}`
 app.use((req, res, next) => {
+  // Skip CORS check for webhook endpoints (external providers call these server-to-server)
+  if (req.path.includes('/webhook')) return next()
+
   const origin = req.headers.origin
   // Allow same-origin and requests with no Origin (same-origin navigations, curl, etc.)
   if (origin && origin !== APP_ORIGIN) {

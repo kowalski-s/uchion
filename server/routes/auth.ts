@@ -77,6 +77,7 @@ router.get('/me', async (req: Request, res: Response) => {
       name: users.name,
       role: users.role,
       generationsLeft: users.generationsLeft,
+      subscriptionPlan: users.subscriptionPlan,
       createdAt: users.createdAt,
     })
     .from(users)
