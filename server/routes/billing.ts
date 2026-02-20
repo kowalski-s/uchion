@@ -662,9 +662,15 @@ async function handleSubscriptionWebhook(
   const prodamusSubId = sub.id || ''
   const prodamusProfileId = sub.profile_id || ''
 
-  // Get userId from pass-through params
-  const userId = payload._param_userId as string
-  const planFromParam = payload._param_plan as string
+  // Get userId and plan from pass-through params
+  // Prodamus sends these as top-level fields with _param_ prefix in the webhook body
+  // Use bracket notation to be safe with field names starting with underscore
+  const userId = (payload['_param_userId'] ?? payload._param_userId) as string | undefined
+  const planFromParam = (payload['_param_plan'] ?? payload._param_plan) as string | undefined
+
+  // Debug: log payload keys to diagnose missing params
+  console.log(`[Subscription Webhook] Payload keys: ${JSON.stringify(Object.keys(payload))}`)
+  console.log(`[Subscription Webhook] _param_userId=${JSON.stringify(payload['_param_userId'])}, _param_plan=${JSON.stringify(payload['_param_plan'])}`)
 
   // Build idempotency key using subscription ID + payment_num + status
   const paymentNum = sub.payment_num || '0'
