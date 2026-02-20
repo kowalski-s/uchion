@@ -418,10 +418,10 @@ router.post('/create-subscription-link', withAuth(async (req, res) => {
       return res.status(500).json({ error: 'Тариф не настроен в платежной системе' })
     }
 
-    // Build subscription link
+    // Build subscription link with do=link (Prodamus returns short URL as plain text)
     const email = userEmail && !userEmail.endsWith('@telegram') && EMAIL_REGEX.test(userEmail) ? userEmail : undefined
 
-    const paymentUrl = generateSubscriptionLink(
+    const prodamusUrl = generateSubscriptionLink(
       PRODAMUS_PAYFORM_URL,
       {
         subscription: subscriptionId,
@@ -437,7 +437,24 @@ router.post('/create-subscription-link', withAuth(async (req, res) => {
       PRODAMUS_SECRET
     )
 
-    console.log(`[Subscription] Created subscription link for user ${userId}, plan: ${plan}`)
+    // Fetch the short link from Prodamus (do=link returns plain text URL)
+    console.log(`[Subscription] Fetching short link from Prodamus for user ${userId}, plan: ${plan}`)
+    const prodamusResponse = await fetch(prodamusUrl)
+
+    if (!prodamusResponse.ok) {
+      const errorText = await prodamusResponse.text().catch(() => '')
+      console.error(`[Subscription] Prodamus returned ${prodamusResponse.status}: ${errorText}`)
+      return res.status(502).json({ error: 'Не удалось получить ссылку на оплату от платежной системы' })
+    }
+
+    const paymentUrl = (await prodamusResponse.text()).trim()
+
+    if (!paymentUrl || !paymentUrl.startsWith('http')) {
+      console.error(`[Subscription] Invalid short link from Prodamus: ${paymentUrl}`)
+      return res.status(502).json({ error: 'Платежная система вернула некорректную ссылку' })
+    }
+
+    console.log(`[Subscription] Got short link for user ${userId}, plan: ${plan}`)
 
     return res.status(201).json({
       success: true,
