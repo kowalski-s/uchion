@@ -29,7 +29,7 @@ export const SUBSCRIPTION_PLANS: Record<SubscriptionPlanId, PlanConfig> = {
   starter: {
     id: 'starter',
     name: 'Начинающий',
-    price: 390,
+    price: 50, // TODO: временно для тестирования, вернуть 390
     generationsPerPeriod: 25,
     isRecurring: true,
     folders: 10,
